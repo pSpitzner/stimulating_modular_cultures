@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2020-02-21 12:10:06
+# @Last Modified: 2020-02-24 13:19:13
 # ------------------------------------------------------------------------------ #
 # So we want to load my modular topology from hdf5 and run the simulations in
 # brian. should make it easy for other people to reproduce ?!
@@ -91,19 +91,27 @@ d =  50 * mV  # after-spike reset of inhibitory current u
 
 # synapse
 tD = 500 * ms  # characteristic recovery time, between 0.5 and 20 seconds
-tA = 10 * ms  # decay time of post-synaptic current (AMPA current decay time)
-gA = 10 * mV  # AMPA current strength
+tA =  10 * ms  # decay time of post-synaptic current (AMPA current decay time)
+gA =  10 * mV  # AMPA current strength
+
+# noise
+lam = 0.01 / ms  # rate for the poisson input (shot-noise), between 0.01 - 0.05 1/ms
+gm =  1 * mV    # poisson noise strength, between 10 - 50 mV
+gs = 300 * mV * mV * ms * ms  # white noise strength, via xi = dt**.5 * randn()
 
 beta = 0.8    # D = beta*D after spike, to reduce efficacy, beta < 1
 # fmt:on
 
+# defaultclock.dt = 0.01*ms
+
 G = NeuronGroup(
     N=num_n,
     model="""
-        dv/dt = (k*(v-vr)*(v-vt) -u +I)/tc : volt      # [6] soma potential
+        eta=
+        dv/dt = (k*(v-vr)*(v-vt) -u +I + xi*(gs/tc)**0.5 )/tc : volt  # [6] soma potential
         dI/dt = -I/tA : volt
-        du/dt = (b*(v-vr) -u )/ta : volt               # [7] inhibitory current
-        dD/dt = (1-D)/tD : 1                           # [11] recovery to one
+        du/dt = (b*(v-vr) -u )/ta : volt                 # [7] inhibitory current
+        dD/dt = (1-D)/tD : 1                             # [11] recovery to one
     """,
     threshold="v > vp",
     reset="""
@@ -122,7 +130,9 @@ S = Synapses(
     """,
 )
 
-G.v = 'vc + 5*mV*rand()'
+P = PoissonInput(target=G, target_var="v", N=num_n, rate=lam, weight=gm)
+
+G.v = "vr + 5*mV*rand()"
 
 pre, post = np.where(a_ij == 1)
 for idx, i in enumerate(pre):
