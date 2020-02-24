@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2020-02-20 16:47:26
+# @Last Modified: 2020-02-21 12:10:06
 # ------------------------------------------------------------------------------ #
 # So we want to load my modular topology from hdf5 and run the simulations in
 # brian. should make it easy for other people to reproduce ?!
@@ -72,10 +72,9 @@ def visualise_connectivity(S):
     ylabel("Target neuron index")
 
 
-duration = 1 * second
+duration = 500 * ms
 
 # fmt: off
-
 # membrane potentials
 vr = -60 * mV  # resting potential, neuron relaxes towards this without stimulation
 vt = -45 * mV  # threshold potential
@@ -91,28 +90,20 @@ b = 0.5       # sensitivity to sub-threshold fluctuations
 d =  50 * mV  # after-spike reset of inhibitory current u
 
 # synapse
-tD = 0.5 * s  # characteristic recovery time, between 0.5 and 20 seconds
+tD = 500 * ms  # characteristic recovery time, between 0.5 and 20 seconds
 tA = 10 * ms  # decay time of post-synaptic current (AMPA current decay time)
+gA = 10 * mV  # AMPA current strength
 
 beta = 0.8    # D = beta*D after spike, to reduce efficacy, beta < 1
 # fmt:on
 
-
-syn_eq = """
-"""
-
-on_pre = """
-
-"""
-
 G = NeuronGroup(
     N=num_n,
     model="""
-        dv/dt = (k(v-vr)(v-vt) -u + I )/tc : volt      # [6] soma potential
-        du/dt = (b(v-vr) -u )/ta : volt                # [7] inhibitory current
-        dD/dt = (1-D)/tD                               # [11] short-term depression
-        tc : second
-        ta : second
+        dv/dt = (k*(v-vr)*(v-vt) -u +I)/tc : volt      # [6] soma potential
+        dI/dt = -I/tA : volt
+        du/dt = (b*(v-vr) -u )/ta : volt               # [7] inhibitory current
+        dD/dt = (1-D)/tD : 1                           # [11] recovery to one
     """,
     threshold="v > vp",
     reset="""
@@ -125,15 +116,13 @@ G = NeuronGroup(
 S = Synapses(
     source=G,
     target=G,
-    model="""
-        dD/dt = (1-D)/tD : 1 (event-driven)     # [11] recovery to one
-        tD : second
-    """,
     on_pre="""
-        D_post += -(1-beta)D_post               # [11] delta-function term on spike
+        I_post += gA*D_pre
+        D_pre  -= (1-beta)*D_pre             # [11] delta-function term on spike
     """,
 )
 
+G.v = 'vc + 5*mV*rand()'
 
 pre, post = np.where(a_ij == 1)
 for idx, i in enumerate(pre):
@@ -153,11 +142,11 @@ plot(spikemon.t / ms, spikemon.i, ".k")
 xlabel("Time (ms)")
 ylabel("Neuron index")
 
-figure()
-plot(G.v0 / mV, spikemon.count / duration)
-xlabel("v0 (mV)")
-ylabel("Firing rate (sp/s)")
-show()
+# figure()
+# plot(G.v0 / mV, spikemon.count / duration)
+# xlabel("v0 (mV)")
+# ylabel("Firing rate (sp/s)")
+# show()
 
 
 figure()
