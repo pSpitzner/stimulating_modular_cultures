@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2020-02-24 13:19:13
+# @Last Modified: 2020-02-24 14:33:03
 # ------------------------------------------------------------------------------ #
 # So we want to load my modular topology from hdf5 and run the simulations in
 # brian. should make it easy for other people to reproduce ?!
@@ -95,8 +95,8 @@ tA =  10 * ms  # decay time of post-synaptic current (AMPA current decay time)
 gA =  10 * mV  # AMPA current strength
 
 # noise
-lam = 0.01 / ms  # rate for the poisson input (shot-noise), between 0.01 - 0.05 1/ms
-gm =  1 * mV    # poisson noise strength, between 10 - 50 mV
+lamda = 0.01 / ms  # rate for the poisson input (shot-noise), between 0.01 - 0.05 1/ms
+gm =  10 * mV      # poisson noise strength, between 10 - 50 mV
 gs = 300 * mV * mV * ms * ms  # white noise strength, via xi = dt**.5 * randn()
 
 beta = 0.8    # D = beta*D after spike, to reduce efficacy, beta < 1
@@ -107,7 +107,6 @@ beta = 0.8    # D = beta*D after spike, to reduce efficacy, beta < 1
 G = NeuronGroup(
     N=num_n,
     model="""
-        eta=
         dv/dt = (k*(v-vr)*(v-vt) -u +I + xi*(gs/tc)**0.5 )/tc : volt  # [6] soma potential
         dI/dt = -I/tA : volt
         du/dt = (b*(v-vr) -u )/ta : volt                 # [7] inhibitory current
@@ -130,7 +129,9 @@ S = Synapses(
     """,
 )
 
-P = PoissonInput(target=G, target_var="v", N=num_n, rate=lam, weight=gm)
+
+# by targeting I instead of v, we get the exponential decay of
+P = PoissonInput(target=G, target_var="I", N=num_n, rate=lamda, weight=gm)
 
 G.v = "vr + 5*mV*rand()"
 
