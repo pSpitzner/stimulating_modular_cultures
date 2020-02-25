@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2020-02-24 14:33:03
+# @Last Modified: 2020-02-25 10:25:38
 # ------------------------------------------------------------------------------ #
 # So we want to load my modular topology from hdf5 and run the simulations in
 # brian. should make it easy for other people to reproduce ?!
@@ -128,10 +128,16 @@ S = Synapses(
         D_pre  -= (1-beta)*D_pre             # [11] delta-function term on spike
     """,
 )
+S.run_regularly(
+    """
 
+    """
+)
+
+asser(False)
 
 # by targeting I instead of v, we get the exponential decay of
-P = PoissonInput(target=G, target_var="I", N=num_n, rate=lamda, weight=gm)
+# P = PoissonInput(target=G, target_var="I", N=num_n, rate=lamda, weight=gm)
 
 G.v = "vr + 5*mV*rand()"
 
