@@ -56,14 +56,12 @@ def visualise_connectivity(S):
 # model parameters
 # ------------------------------------------------------------------------------ #
 
-duration = 20 * second
-
 # fmt: off
 # membrane potentials
 vr = -60 * mV  # resting potential, neuron relaxes towards this without stimulation
 vt = -45 * mV  # threshold potential
 vp =  35 * mV  # peak potential, after vt is passed, rapid growth towards this
-vc = -50 * mV  # reset potential
+# vc = -50 * mV  # reset potential
 
 # soma
 tc = 50 * ms  # time scale of membrane potential
@@ -71,16 +69,16 @@ ta = 50 * ms  # time scale of inhibitory current u
 
 k = 0.5 / mV  # resistance over capacity(?), rescaled
 b = 0.5       # sensitivity to sub-threshold fluctuations
-d =  50 * mV  # after-spike reset of inhibitory current u
+# d =  50 * mV  # after-spike reset of inhibitory current u
 
 # synapse
-tD = 10 * second   # characteristic recovery time, between 0.5 and 20 seconds
+tD = 1 *  second   # characteristic recovery time, between 0.5 and 20 seconds
 tA = 10 * ms  # decay time of post-synaptic current (AMPA current decay time)
-gA = 35 * mV  # AMPA current strength, between 10 - 50 mV
+gA = 50 * mV  # AMPA current strength, between 10 - 50 mV
 
 # noise
-rate = 0.00025 / ms  # rate for the poisson input (shot-noise), between 0.01 - 0.05 1/ms
-gm =  20 * mV        # shot noise (minis) strength, between 10 - 50 mV
+rate = 0.01 / ms  # rate for the poisson input (shot-noise), between 0.01 - 0.05 1/ms
+gm =  30 * mV        # shot noise (minis) strength, between 10 - 50 mV
 gs = 300 * mV * mV * ms * ms  # white noise strength, via xi = dt**.5 * randn()
 
 beta = 0.8    # D = beta*D after spike, to reduce efficacy, beta < 1
@@ -107,7 +105,11 @@ if args.gm is not None: gm = args.gm * mV
 if args.rate is not None: rate = args.rate / ms
 
 
-print(f"ga: {gA}\nrate: {rate}\ngm: {gm}")
+print("ga: ", gA)
+print("rate: ", rate)
+print("gm: ", gm)
+
+seed(117)
 
 num_n = int(h5_load(args.input_path, "/meta/topology_num_neur"))
 a_ij = h5_load(args.input_path, "/data/connectivity_matrix")
@@ -121,10 +123,12 @@ mod_sorted = np.argsort(mod_ids)
 G = NeuronGroup(
     N=num_n,
     model="""
-        dv/dt = (k*(v-vr)*(v-vt) -u +I + xi*(gs/tc)**0.5 )/tc : volt  # [6] soma potential
+        dv/dt = (k*(v-vr)*(v-vt) -u +I +xi*(gs/tc)**0.5 )/tc : volt  # [6] soma potential
         dI/dt = -I/tA : volt
         du/dt = (b*(v-vr) -u )/ta : volt                 # [7] inhibitory current
         dD/dt = (1-D)/tD : 1                             # [11] recovery to one
+        vc : volt
+        d  : volt
     """,
     threshold="v > vp",
     reset="""
@@ -137,30 +141,38 @@ G = NeuronGroup(
 S = Synapses(
     source=G,
     target=G,
-    model="""
-        dImini/dt = -Imini/tA : volt
-        # change = int(rand() < dt * rate)
-        # I_post += change * D_pre * Imini
-    """,
     on_pre="""
         I_post += gA*D_pre
-        D_pre  -= (1-beta)*D_pre             # [11] delta-function term on spike
+        D_pre   = beta*D_pre             # [11] delta-function term on spike
     """,
-)
-S.run_regularly(
-    """
-        change = int(rand() < dt * rate)
-        I_post += change * D_pre * Imini
-    """
 )
 
 # initalize to a sensible state
 G.v = "vc + 5*mV*rand()"
+for n in range(0, num_n):
+    r = rand()
+    if r < .05:
+        G.vc[n] = -40 * mV
+        G.d[n]  =  55 * mV
+    elif r < .1:
+        G.vc[n] = -35 * mV
+        G.d[n]  =  60 * mV
+    elif r < .2:
+        G.vc[n] = -45 * mV
+        G.d[n]  =  50 * mV
+    else:
+        G.vc[n] = -50 * mV
+        G.d[n]  =  50 * mV
 
 # shot-noise:
 # by targeting I with poisson, we should get pretty close to javiers version.
 # need to add dependence on the number of synapes/incoming connections
 # P = PoissonInput(target=G, target_var="I", N=num_n, rate=rate, weight=gm)
+
+ratess = 0.01 / ms + (0.04 / ms)* rand(num_n)
+P = PoissonGroup(num_n, ratess)
+Sp = Synapses(P, G, on_pre='I_post+=gm')
+Sp.connect(j='i')
 
 pre, post = np.where(a_ij == 1)
 for idx, i in enumerate(pre):
@@ -174,12 +186,14 @@ run(10 * second, report='stdout') # equilibrate
 # visualise_connectivity(S)
 
 
-# M = StateMonitor(G, ["v", "D"], record=True)
+M = StateMonitor(G, ["v", "I", "u", "D"], record=True)
 spikemon = SpikeMonitor(G)
-run(duration, report='stdout')
+spikemon_p = SpikeMonitor(P)
+run(20 * second, report='stdout')
 
 
 ion()  # interactive plotting
+plot(spikemon_p.t / second, spikemon_p.i, ".y")
 plot(spikemon.t / second, spikemon.i, ".k")
 xlabel("Time (second)")
 ylabel("Neuron index")
@@ -191,12 +205,20 @@ ylabel("Neuron index")
 # show()
 
 
-# figure()
-# plot(M.t / second, M.v[25], label="Neuron 25")
-# plot(M.t / second, M.v[130], label="Neuron 130")
-# xlabel("Time (s)")
-# ylabel("v")
-# legend()
+figure()
+plot(M.t / second, M.v[25], label="Neuron 25")
+plot(M.t / second, M.v[130], label="Neuron 130")
+xlabel("Time (s)")
+ylabel("v")
+legend()
+
+figure()
+# plot(M.t / second, M.I[130], label="130 I")
+# plot(M.t / second, M.u[130], label="130 u")
+plot(M.t / second, M.D[25], label="25 D")
+xlabel("Time (s)")
+ylabel("I")
+legend()
 
 # figure()
 # plot(M.t / second, M.D[25], label="Neuron 25")
