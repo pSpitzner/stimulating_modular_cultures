@@ -31,26 +31,6 @@ def h5_load(filename, dsetname, raise_ex=True):
         else:
             return np.nan
 
-
-parser = argparse.ArgumentParser(description="Brian")
-parser.add_argument("-i", dest="input_path", help="input path", metavar="FILE")
-parser.add_argument("-o", dest="output_path", help="output path", metavar="FILE")
-args = parser.parse_args()
-# if args.input_path == None or args.output_path == None:
-# print("use correct arguments: -i, -o need help? -h")
-# exit()
-
-num_n = int(h5_load(args.input_path, "/meta/topology_num_neur"))
-a_ij = h5_load(args.input_path, "/data/connectivity_matrix")
-mod_ids = h5_load(args.input_path, "/data/neuron_module_id")
-mod_sorted = np.argsort(mod_ids)
-
-
-# ------------------------------------------------------------------------------ #
-# brian
-# ------------------------------------------------------------------------------ #
-
-
 def visualise_connectivity(S):
     Ns = len(S.source)
     Nt = len(S.target)
@@ -72,7 +52,11 @@ def visualise_connectivity(S):
     ylabel("Target neuron index")
 
 
-duration = 500 * ms
+# ------------------------------------------------------------------------------ #
+# model parameters
+# ------------------------------------------------------------------------------ #
+
+duration = 20 * second
 
 # fmt: off
 # membrane potentials
@@ -82,7 +66,7 @@ vp =  35 * mV  # peak potential, after vt is passed, rapid growth towards this
 vc = -50 * mV  # reset potential
 
 # soma
-tc = 50 * ms
+tc = 50 * ms  # time scale of membrane potential
 ta = 50 * ms  # time scale of inhibitory current u
 
 k = 0.5 / mV  # resistance over capacity(?), rescaled
@@ -90,19 +74,50 @@ b = 0.5       # sensitivity to sub-threshold fluctuations
 d =  50 * mV  # after-spike reset of inhibitory current u
 
 # synapse
-tD = 500 * ms  # characteristic recovery time, between 0.5 and 20 seconds
-tA =  10 * ms  # decay time of post-synaptic current (AMPA current decay time)
-gA =  10 * mV  # AMPA current strength
+tD = 10 * second   # characteristic recovery time, between 0.5 and 20 seconds
+tA = 10 * ms  # decay time of post-synaptic current (AMPA current decay time)
+gA = 35 * mV  # AMPA current strength, between 10 - 50 mV
 
 # noise
-lamda = 0.01 / ms  # rate for the poisson input (shot-noise), between 0.01 - 0.05 1/ms
-gm =  10 * mV      # poisson noise strength, between 10 - 50 mV
+rate = 0.00025 / ms  # rate for the poisson input (shot-noise), between 0.01 - 0.05 1/ms
+gm =  20 * mV        # shot noise (minis) strength, between 10 - 50 mV
 gs = 300 * mV * mV * ms * ms  # white noise strength, via xi = dt**.5 * randn()
 
 beta = 0.8    # D = beta*D after spike, to reduce efficacy, beta < 1
 # fmt:on
 
 # defaultclock.dt = 0.01*ms
+
+# ------------------------------------------------------------------------------ #
+# command line arguments
+# ------------------------------------------------------------------------------ #
+
+parser = argparse.ArgumentParser(description="Brian")
+parser.add_argument("-i", dest="input_path", help="input path", metavar="FILE")
+parser.add_argument("-o", dest="output_path", help="output path", metavar="FILE")
+parser.add_argument("-gA", dest="gA", type=float)
+parser.add_argument("-gm", dest="gm", type=float)
+parser.add_argument("-rate", dest="rate", type=float)
+parser.add_argument("-d", dest="d", type=float)
+
+args = parser.parse_args()
+if args.d is not None: duration = args.d * second
+if args.gA is not None: gA = args.gA * mV
+if args.gm is not None: gm = args.gm * mV
+if args.rate is not None: rate = args.rate / ms
+
+print(args)
+
+print(gA, rate, gm)
+
+num_n = int(h5_load(args.input_path, "/meta/topology_num_neur"))
+a_ij = h5_load(args.input_path, "/data/connectivity_matrix")
+mod_ids = h5_load(args.input_path, "/data/neuron_module_id")
+mod_sorted = np.argsort(mod_ids)
+
+# ------------------------------------------------------------------------------ #
+# model
+# ------------------------------------------------------------------------------ #
 
 G = NeuronGroup(
     N=num_n,
@@ -129,11 +144,13 @@ S = Synapses(
     """,
 )
 
+# initalize to a sensible state
+G.v = "vc + 5*mV*rand()"
 
-# by targeting I instead of v, we get the exponential decay of
-P = PoissonInput(target=G, target_var="I", N=num_n, rate=lamda, weight=gm)
-
-G.v = "vr + 5*mV*rand()"
+# shot-noise:
+# by targeting I with poisson, we should get pretty close to javiers version.
+# need to add dependence on the number of synapes/incoming connections
+P = PoissonInput(target=G, target_var="I", N=num_n, rate=rate, weight=gm)
 
 pre, post = np.where(a_ij == 1)
 for idx, i in enumerate(pre):
@@ -143,14 +160,18 @@ for idx, i in enumerate(pre):
     j = np.argwhere(mod_sorted == j)[0, 0]
     S.connect(i=i, j=j)
 
+run(10 * second, report='stdout') # equilibrate
 # visualise_connectivity(S)
 
-M = StateMonitor(G, "v", record=True)
-spikemon = SpikeMonitor(G)
-run(duration)
 
-plot(spikemon.t / ms, spikemon.i, ".k")
-xlabel("Time (ms)")
+# M = StateMonitor(G, ["v", "D"], record=True)
+spikemon = SpikeMonitor(G)
+run(duration, report='stdout')
+
+
+ion()  # interactive plotting
+plot(spikemon.t / second, spikemon.i, ".k")
+xlabel("Time (second)")
 ylabel("Neuron index")
 
 # figure()
@@ -160,9 +181,20 @@ ylabel("Neuron index")
 # show()
 
 
-figure()
-plot(M.t / ms, M.v[25], label="Neuron 25")
-plot(M.t / ms, M.v[130], label="Neuron 130")
-xlabel("Time (ms)")
-ylabel("v")
-legend()
+# figure()
+# plot(M.t / second, M.v[25], label="Neuron 25")
+# plot(M.t / second, M.v[130], label="Neuron 130")
+# xlabel("Time (s)")
+# ylabel("v")
+# legend()
+
+# figure()
+# plot(M.t / second, M.D[25], label="Neuron 25")
+# plot(M.t / second, M.D[130], label="Neuron 130")
+# xlabel("Time (s)")
+# ylabel("D")
+# legend()
+
+show()
+
+
