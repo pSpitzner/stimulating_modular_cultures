@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-01-24 13:43:39
-# @Last Modified: 2020-01-24 22:25:22
+# @Last Modified: 2020-02-26 18:21:34
 # ------------------------------------------------------------------------------- #
 # Create a movie of the network for a given time range and visualize
 # firing neurons. Save to mp4.
@@ -53,6 +53,13 @@ parser.add_argument(
     type=int,
     default=10,
 )
+parser.add_argument(
+    "--tmin",
+    dest="tmin",
+    help="rendering starts after this time point in the eventlist. in seconds",
+    type=float,
+    default=0,
+)
 
 args = parser.parse_args()
 if args.input_path == None or args.output_path == None:
@@ -61,11 +68,11 @@ if args.input_path == None or args.output_path == None:
 if args.title == None:
     args.title = args.input_path
 
-# how many time bins of the eventlist to include in each rendered frame
-bpf = args.bpf
-fps = args.fps
-bdt = args.delta_t
+bpf = args.bpf  # how many time bins of the eventlist to include in each rendered frame
+fps = args.fps  # frames per second shown in the movie
+bdt = args.delta_t  # simulation-time duration of each even-list bin
 num_frames = int(np.floor(args.length * fps))
+frame_offset = int(args.tmin / args.delta_t / bpf)
 decay_s = 0.75  # decay of spike display in seconds
 decay_b = bpf * fps * decay_s  # in time bins
 
@@ -113,6 +120,8 @@ seg_y = np.where(seg_y == 0, np.nan, seg_y)
 
 # assuming integer spiketimes to check if they match frames
 event_list = h5_load(args.input_path, "/data/spiketimes")
+event_list = event_list * 1000  # need to fix this bug
+event_list = event_list.astype(int)
 event_list = np.where(event_list == 0, np.nan, event_list)
 
 # ------------------------------------------------------------------------------ #
@@ -192,7 +201,7 @@ last_s_idx = event_list.shape[1]  # so we do not run out of arrays
 
 with writer.saving(fig=fig, outfile=args.output_path, dpi=100):
     print(f"Rendering {args.length:.0f} seconds with {num_frames} frames ...")
-    for f in tqdm(range(num_frames)):
+    for f in tqdm(range(frame_offset, num_frames + frame_offset)):
         time_stamp = f * bpf
         art_time.set_text(f"t = {time_stamp*bdt:.2f} sec")
 
