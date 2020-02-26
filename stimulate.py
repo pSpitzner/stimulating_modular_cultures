@@ -8,15 +8,13 @@
 # Loads topology from hdf5 or csv and runs the simulations in brian.
 # ------------------------------------------------------------------------------ #
 
-import os
-import sys
-import glob
 import h5py
 import argparse
 
 import numpy as np
 from brian2 import *
 
+from shutil import copy2
 
 def h5_load(filename, dsetname, raise_ex=True):
     try:
@@ -32,7 +30,36 @@ def h5_load(filename, dsetname, raise_ex=True):
             return np.nan
 
 
+def stimulation_pattern(mod_ids, mod_sorted, mod_targets=[0, 1]):
+    # we assume that the neuron ids are sorted according to modules
+    first_idx = []
+    num_in_mod = []
+    mod_ids = sort(mod_ids)
+    for i in mod_targets:
+        assert i in mod_ids
+        first_idx.append( where(mod_ids == i)[0] )
+        num_in_mod.append( sum(mod_ids == i) )
 
+
+def visualise_connectivity(S):
+    Ns = len(S.source)
+    Nt = len(S.target)
+    figure(figsize=(10, 4))
+    subplot(121)
+    plot(zeros(Ns), arange(Ns), "ok", ms=10)
+    plot(ones(Nt), arange(Nt), "ok", ms=10)
+    for i, j in zip(S.i, S.j):
+        plot([0, 1], [i, j], "-k", lw=0.1)
+    xticks([0, 1], ["Source", "Target"])
+    ylabel("Neuron index")
+    xlim(-0.1, 1.1)
+    ylim(-1, max(Ns, Nt))
+    subplot(122)
+    plot(S.i, S.j, "ok")
+    xlim(-1, Ns)
+    ylim(-1, Nt)
+    xlabel("Source neuron index")
+    ylabel("Target neuron index")
 
 
 # ------------------------------------------------------------------------------ #
@@ -62,7 +89,7 @@ gA = 170 * mV      # AMPA current strength, between 10 - 50 mV
 
 # noise
 beta = 0.8         # D = beta*D after spike, to reduce efficacy, beta < 1
-rate = 0.01 / ms   # rate for the poisson input (shot-noise), between 0.01 - 0.05 1/ms
+rate = 0.02 / ms   # rate for the poisson input (shot-noise), between 0.01 - 0.05 1/ms
 gm =  30 * mV      # shot noise (minis) strength, between 10 - 50 mV
 gs = 300 * mV * mV * ms * ms  # white noise strength, via xi = dt**.5 * randn()
 # fmt:on
@@ -108,6 +135,8 @@ G = NeuronGroup(
         dI/dt = -I/tA                   : volt  # [9, 10]
         du/dt = ( b*(v-vr) -u )/ta      : volt  # [7] inhibitory current
         dD/dt = ( 1-D)/tD               : 1     # [11] recovery to one
+        # vc                            : volt  # uncomment for different cell types
+        # d                             : volt  # uncomment for different cell types
     """,
     threshold="v > vp",
     reset="""
@@ -130,6 +159,7 @@ S = Synapses(
 # shot-noise:
 # by targeting I with poisson, we should get pretty close to javiers version.
 mini_g = PoissonGroup(num_n, rate)
+# rates = 0.01 / ms + (0.04 / ms)* rand(num_n) # we could have differen rates
 mini_s = Synapses(mini_g, G, on_pre="I_post+=gm", order=-1, name="Minis")
 mini_s.connect(j="i")
 
@@ -138,55 +168,107 @@ try:
     pre, post = np.where(a_ij == 1)
     for idx, i in enumerate(pre):
         j = post[idx]
-        # group modules close to each other
-        # i = np.argwhere(mod_sorted == i)[0, 0]
-        # j = np.argwhere(mod_sorted == j)[0, 0]
+        # group modules close to each other in the raster plot
+        i = np.argwhere(mod_sorted == i)[0, 0]
+        j = np.argwhere(mod_sorted == j)[0, 0]
         S.connect(i=i, j=j)
 except:
-    print(f"Creating Synapses randomly")
+    print(f"Creating Synapses randomly.")
     S.connect(condition='i != j', p=0.1)
 
 # initalize to a somewhat sensible state. we could have different neuron types
 G.v = "vc + 5*mV*rand()"
+# for n in range(0, num_n):
+#     r = rand()
+#     if r < .05:
+#         G.vc[n] = -40 * mV
+#         G.d[n]  =  55 * mV
+#     elif r < .1:
+#         G.vc[n] = -35 * mV
+#         G.d[n]  =  60 * mV
+#     elif r < .2:
+#         G.vc[n] = -45 * mV
+#         G.d[n]  =  50 * mV
+#     else:
+#         G.vc[n] = -50 * mV
+#         G.d[n]  =  50 * mV
 
 # equilibrate
 run(10 * second, report="stdout")
 
 # ------------------------------------------------------------------------------ #
-# Running and Plotting
+# Running and Writing
 # ------------------------------------------------------------------------------ #
 
 # disable state monitors that are not needed for production
 stat_m = StateMonitor(G, ["v", "I", "u", "D"], record=True)
 spks_m = SpikeMonitor(G)
+rate_m = PopulationRateMonitor(G)
 # mini_m = SpikeMonitor(mini_g)
 
-run(30 * second, report="stdout")
+run(20 * second, report="stdout")
+
+
+try:
+    copy2(args.input_path, args.output_path)
+except Exception as e:
+    print("Could not copy input file\n", e)
+
+try:
+    if args.output_path is None:
+        raise ValueError
+    f = h5py.File(args.output_path, "a")
+
+    trains = spks_m.spike_trains()
+    tmax = 0
+    for tdx in trains.keys():
+        if len(trains[tdx]) > tmax:
+            tmax = len(trains[tdx])
+
+    dset = np.zeros(shape=(num_n, tmax))
+    for n in range(0, num_n):
+        t = trains[n]
+        dset[n, 0:len(t)] = t / second
+
+    f.create_dataset("/data/spiketimes", data=dset)
+    f.close()
+
+
+except Exception as e:
+    print("Unable to save to disk\n", e)
+
+# ------------------------------------------------------------------------------ #
+# Plotting
+# ------------------------------------------------------------------------------ #
 
 
 ion()  # interactive plotting
-n1 = randint(0, num_n)  # some neuron to plot
+n1 = randint(0, num_n)  # some neurons to plot
 
-fig, ax = subplots(4, 1, sharex=True)
+fig, ax = subplots(5, 1, sharex=True)
 
-# ax[0].plot(mini_m.t / second, mini_m.i, ".y")
-ax[0].plot(spks_m.t / second, spks_m.i, ".k")
-sel = where(spks_m.i == n1)[0]
-ax[0].plot(spks_m.t[sel] / second, spks_m.i[sel], ".")
-ax[0].set_ylabel("Neuron index")
+ax[0].plot(rate_m.t / second, rate_m.smooth_rate(width=50*ms)/Hz)
+ax[0].set_ylabel("Pop. Rate (Hz)")
 ax[0].set_title(f"{args.input_path}")
 
+sel = where(spks_m.i == n1)[0]
+# ax[1].plot(mini_m.t / second, mini_m.i, ".y")
+ax[1].plot(spks_m.t / second, spks_m.i, ".k")
+ax[1].plot(spks_m.t[sel] / second, spks_m.i[sel], ".")
+ax[1].set_ylabel("Raster")
 
-ax[1].plot(stat_m.t / second, stat_m.v[n1], label=f"Neuron {n1}")
-ax[1].set_ylabel("v")
-ax[1].legend()
 
-ax[2].plot(stat_m.t / second, stat_m.u[n1], label=f"Neuron {n1}")
-ax[2].set_ylabel("u")
+ax[2].plot(stat_m.t / second, stat_m.v[n1], label=f"Neuron {n1}")
+ax[2].set_ylabel("v")
+ax[2].legend()
 
-ax[3].plot(stat_m.t / second, stat_m.D[n1], label=f"Neuron {n1}")
-ax[3].set_xlabel("Time (s)")
-ax[3].set_ylabel("D")
-ax[3].legend()
+# plot(stat_m.t / second, stat_m.I[n1], label="Neuron n1")
+ax[3].plot(stat_m.t / second, stat_m.u[n1], label=f"Neuron {n1}")
+ax[3].set_ylabel("u")
+
+ax[4].plot(stat_m.t / second, stat_m.D[n1], label=f"Neuron {n1}")
+ax[4].set_ylabel("D")
+ax[4].set_xlabel("Time (s)")
+ax[4].legend()
 
 show()
