@@ -51,7 +51,6 @@ def visualise_connectivity(S):
     xlabel("Source neuron index")
     ylabel("Target neuron index")
 
-
 # ------------------------------------------------------------------------------ #
 # model parameters
 # ------------------------------------------------------------------------------ #
@@ -61,7 +60,7 @@ def visualise_connectivity(S):
 vr = -60 * mV  # resting potential, neuron relaxes towards this without stimulation
 vt = -45 * mV  # threshold potential
 vp =  35 * mV  # peak potential, after vt is passed, rapid growth towards this
-# vc = -50 * mV  # reset potential
+vc = -50 * mV  # reset potential
 
 # soma
 tc = 50 * ms  # time scale of membrane potential
@@ -69,22 +68,22 @@ ta = 50 * ms  # time scale of inhibitory current u
 
 k = 0.5 / mV  # resistance over capacity(?), rescaled
 b = 0.5       # sensitivity to sub-threshold fluctuations
-# d =  50 * mV  # after-spike reset of inhibitory current u
+d =  50 * mV  # after-spike reset of inhibitory current u
 
 # synapse
-tD = 1 *  second   # characteristic recovery time, between 0.5 and 20 seconds
-tA = 10 * ms  # decay time of post-synaptic current (AMPA current decay time)
-gA = 50 * mV  # AMPA current strength, between 10 - 50 mV
+tD =   1 * second  # characteristic recovery time, between 0.5 and 20 seconds
+tA =  10 * ms      # decay time of post-synaptic current (AMPA current decay time)
+gA = 170 * mV      # AMPA current strength, between 10 - 50 mV
+                   # 170.612 value in javiers neurondyn
 
 # noise
-rate = 0.01 / ms  # rate for the poisson input (shot-noise), between 0.01 - 0.05 1/ms
-gm =  30 * mV        # shot noise (minis) strength, between 10 - 50 mV
+beta = 0.8         # D = beta*D after spike, to reduce efficacy, beta < 1
+rate = 0.01 / ms   # rate for the poisson input (shot-noise), between 0.01 - 0.05 1/ms
+gm =  30 * mV      # shot noise (minis) strength, between 10 - 50 mV
 gs = 300 * mV * mV * ms * ms  # white noise strength, via xi = dt**.5 * randn()
-
-beta = 0.8    # D = beta*D after spike, to reduce efficacy, beta < 1
 # fmt:on
 
-# defaultclock.dt = 0.01*ms
+defaultclock.dt = 0.05*ms
 
 # ------------------------------------------------------------------------------ #
 # command line arguments
@@ -93,28 +92,25 @@ beta = 0.8    # D = beta*D after spike, to reduce efficacy, beta < 1
 parser = argparse.ArgumentParser(description="Brian")
 parser.add_argument("-i", dest="input_path", help="input path", metavar="FILE")
 parser.add_argument("-o", dest="output_path", help="output path", metavar="FILE")
-parser.add_argument("-gA", dest="gA", type=float)
-parser.add_argument("-gm", dest="gm", type=float)
-parser.add_argument("-rate", dest="rate", type=float)
-parser.add_argument("-d", dest="d", type=float)
-
+parser.add_argument("-s", dest="seed", default=117, help="rng", type=int)
 args = parser.parse_args()
-if args.d is not None: duration = args.d * second
-if args.gA is not None: gA = args.gA * mV
-if args.gm is not None: gm = args.gm * mV
-if args.rate is not None: rate = args.rate / ms
 
+print(f"seed: {args.seed}")
+seed(args.seed)
 
-print("ga: ", gA)
-print("rate: ", rate)
-print("gm: ", gm)
-
-seed(117)
-
-num_n = int(h5_load(args.input_path, "/meta/topology_num_neur"))
-a_ij = h5_load(args.input_path, "/data/connectivity_matrix")
-mod_ids = h5_load(args.input_path, "/data/neuron_module_id")
-mod_sorted = np.argsort(mod_ids)
+try:
+    # load from hdf5
+    a_ij = h5_load(args.input_path, "/data/connectivity_matrix")
+    num_n = int(h5_load(args.input_path, "/meta/topology_num_neur"))
+    mod_ids = h5_load(args.input_path, "/data/neuron_module_id")
+    mod_sorted = np.argsort(mod_ids)
+except:
+    # or a csv
+    try:
+        a_ij = loadtxt(args.input_path)
+        num_n = a_ij.shape[0]
+    except:
+        print("Unable to load toplogy from {args.input_path}")
 
 # ------------------------------------------------------------------------------ #
 # model
@@ -123,12 +119,13 @@ mod_sorted = np.argsort(mod_ids)
 G = NeuronGroup(
     N=num_n,
     model="""
-        dv/dt = (k*(v-vr)*(v-vt) -u +I +xi*(gs/tc)**0.5 )/tc : volt  # [6] soma potential
-        dI/dt = -I/tA : volt
-        du/dt = (b*(v-vr) -u )/ta : volt                 # [7] inhibitory current
-        dD/dt = (1-D)/tD : 1                             # [11] recovery to one
-        vc : volt
-        d  : volt
+        dv/dt = ( k*(v-vr)*(v-vt) -u +I         # [6] soma potential
+                +xi*(gs/tc)**0.5 )/tc   : volt  # white noise term
+        dI/dt = -I/tA                   : volt  # [9, 10]
+        du/dt = ( b*(v-vr) -u )/ta      : volt  # [7] inhibitory current
+        dD/dt = ( 1-D)/tD               : 1     # [11] recovery to one
+        # vc                            : volt  # uncomment for different cell types
+        # d                             : volt  # uncomment for different cell types
     """,
     threshold="v > vp",
     reset="""
@@ -142,90 +139,88 @@ S = Synapses(
     source=G,
     target=G,
     on_pre="""
-        I_post += gA*D_pre
-        D_pre   = beta*D_pre             # [11] delta-function term on spike
+        I_post += D_pre * gA    # [10]
+        D_pre   = D_pre * beta  # [11] delta-function term on spike
     """,
+    order = 0,
 )
-
-# initalize to a sensible state
-G.v = "vc + 5*mV*rand()"
-for n in range(0, num_n):
-    r = rand()
-    if r < .05:
-        G.vc[n] = -40 * mV
-        G.d[n]  =  55 * mV
-    elif r < .1:
-        G.vc[n] = -35 * mV
-        G.d[n]  =  60 * mV
-    elif r < .2:
-        G.vc[n] = -45 * mV
-        G.d[n]  =  50 * mV
-    else:
-        G.vc[n] = -50 * mV
-        G.d[n]  =  50 * mV
 
 # shot-noise:
 # by targeting I with poisson, we should get pretty close to javiers version.
-# need to add dependence on the number of synapes/incoming connections
-# P = PoissonInput(target=G, target_var="I", N=num_n, rate=rate, weight=gm)
+mini_g = PoissonGroup(num_n, rate)
+# rates = 0.01 / ms + (0.04 / ms)* rand(num_n) # we could have differen rates
+mini_s = Synapses(mini_g, G, on_pre='I_post+=gm', order=-1, name='Minis')
+mini_s.connect(j='i')
 
-ratess = 0.01 / ms + (0.04 / ms)* rand(num_n)
-P = PoissonGroup(num_n, ratess)
-Sp = Synapses(P, G, on_pre='I_post+=gm')
-Sp.connect(j='i')
+# connect synapses from loaded matrix or randomly
+try:
+    pre, post = np.where(a_ij == 1)
+    for idx, i in enumerate(pre):
+        j = post[idx]
+        # group modules close to each other
+        # i = np.argwhere(mod_sorted == i)[0, 0]
+        # j = np.argwhere(mod_sorted == j)[0, 0]
+        S.connect(i=i, j=j)
+except:
+    print(f"Creating Synapses randomly.")
+    S.connect(p=0.3)
 
-pre, post = np.where(a_ij == 1)
-for idx, i in enumerate(pre):
-    j = post[idx]
-    # group modules close to each other
-    i = np.argwhere(mod_sorted == i)[0, 0]
-    j = np.argwhere(mod_sorted == j)[0, 0]
-    S.connect(i=i, j=j)
-
-run(10 * second, report='stdout') # equilibrate
 # visualise_connectivity(S)
 
+# initalize to a somewhat sensible state. we could have different neuron types
+G.v = "vc + 5*mV*rand()"
+# for n in range(0, num_n):
+#     r = rand()
+#     if r < .05:
+#         G.vc[n] = -40 * mV
+#         G.d[n]  =  55 * mV
+#     elif r < .1:
+#         G.vc[n] = -35 * mV
+#         G.d[n]  =  60 * mV
+#     elif r < .2:
+#         G.vc[n] = -45 * mV
+#         G.d[n]  =  50 * mV
+#     else:
+#         G.vc[n] = -50 * mV
+#         G.d[n]  =  50 * mV
 
-M = StateMonitor(G, ["v", "I", "u", "D"], record=True)
-spikemon = SpikeMonitor(G)
-spikemon_p = SpikeMonitor(P)
-run(20 * second, report='stdout')
+# equilibrate
+run(10 * second, report='stdout')
+
+# ------------------------------------------------------------------------------ #
+# Running and Plotting
+# ------------------------------------------------------------------------------ #
+
+stat_m = StateMonitor(G, ["v", "I", "u", "D"], record=True)
+spks_m = SpikeMonitor(G)
+# spkm_m = SpikeMonitor(P)
+run(30 * second, report='stdout')
 
 
 ion()  # interactive plotting
-plot(spikemon_p.t / second, spikemon_p.i, ".y")
-plot(spikemon.t / second, spikemon.i, ".k")
-xlabel("Time (second)")
-ylabel("Neuron index")
 
-# figure()
-# plot(G.v0 / mV, spikemon.count / duration)
-# xlabel("v0 (mV)")
-# ylabel("Firing rate (sp/s)")
-# show()
+fig, ax = subplots(4, 1, sharex=True)
+
+# ax[0].plot(spkm_m.t / second, spkm_m.i, ".y")
+ax[0].plot(spks_m.t / second, spks_m.i, ".k")
+sel = where(spks_m.i == 130)[0]
+ax[0].plot(spks_m.t[sel] / second, spks_m.i[sel], ".C0")
+ax[0].set_ylabel("Neuron index")
 
 
-figure()
-plot(M.t / second, M.v[25], label="Neuron 25")
-plot(M.t / second, M.v[130], label="Neuron 130")
-xlabel("Time (s)")
-ylabel("v")
-legend()
+ax[1].plot(stat_m.t / second, stat_m.v[25], label="Neuron 25", color="C1")
+ax[1].plot(stat_m.t / second, stat_m.v[130], label="Neuron 130", color="C0")
+ax[1].set_ylabel("v")
+ax[1].legend()
 
-figure()
-# plot(M.t / second, M.I[130], label="130 I")
-# plot(M.t / second, M.u[130], label="130 u")
-plot(M.t / second, M.D[25], label="25 D")
-xlabel("Time (s)")
-ylabel("I")
-legend()
+# plot(stat_m.t / second, stat_m.I[130], label="Neuron 130")
+ax[2].plot(stat_m.t / second, stat_m.u[130], label="Neuron 130")
+ax[2].set_ylabel("u")
 
-# figure()
-# plot(M.t / second, M.D[25], label="Neuron 25")
-# plot(M.t / second, M.D[130], label="Neuron 130")
-# xlabel("Time (s)")
-# ylabel("D")
-# legend()
+ax[3].plot(stat_m.t / second, stat_m.D[130], label="Neuron 130")
+ax[3].set_xlabel("Time (s)")
+ax[3].set_ylabel("D")
+ax[3].legend()
 
 show()
 
