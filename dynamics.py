@@ -2,10 +2,10 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2020-02-25 10:40:49
+# @Last Modified: 2020-02-26 14:30:46
 # ------------------------------------------------------------------------------ #
-# So we want to load my modular topology from hdf5 and run the simulations in
-# brian. should make it easy for other people to reproduce ?!
+# Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
+# Loads topology from hdf5 or csv and runs the simulations in brian.
 # ------------------------------------------------------------------------------ #
 
 import os
@@ -30,26 +30,6 @@ def h5_load(filename, dsetname, raise_ex=True):
             raise e
         else:
             return np.nan
-
-def visualise_connectivity(S):
-    Ns = len(S.source)
-    Nt = len(S.target)
-    figure(figsize=(10, 4))
-    subplot(121)
-    plot(zeros(Ns), arange(Ns), "ok", ms=10)
-    plot(ones(Nt), arange(Nt), "ok", ms=10)
-    for i, j in zip(S.i, S.j):
-        plot([0, 1], [i, j], "-k")
-    xticks([0, 1], ["Source", "Target"])
-    ylabel("Neuron index")
-    xlim(-0.1, 1.1)
-    ylim(-1, max(Ns, Nt))
-    subplot(122)
-    plot(S.i, S.j, "ok")
-    xlim(-1, Ns)
-    ylim(-1, Nt)
-    xlabel("Source neuron index")
-    ylabel("Target neuron index")
 
 # ------------------------------------------------------------------------------ #
 # model parameters
@@ -165,8 +145,6 @@ except:
     print(f"Creating Synapses randomly.")
     S.connect(p=0.3)
 
-# visualise_connectivity(S)
-
 # initalize to a somewhat sensible state. we could have different neuron types
 G.v = "vc + 5*mV*rand()"
 # for n in range(0, num_n):
@@ -191,6 +169,7 @@ run(10 * second, report='stdout')
 # Running and Plotting
 # ------------------------------------------------------------------------------ #
 
+# disable state monitors that are not needed for production
 stat_m = StateMonitor(G, ["v", "I", "u", "D"], record=True)
 spks_m = SpikeMonitor(G)
 # spkm_m = SpikeMonitor(P)
