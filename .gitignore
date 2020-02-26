@@ -1,0 +1,11 @@
+dat/*
+mov/*
+ana/*
+exe/*
+log/*
+__pycache__
+.DS_Store
+*.zip
+*.pyc
+*.svg
+*.pdf

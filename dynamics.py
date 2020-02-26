@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2020-02-26 14:30:46
+# @Last Modified: 2020-02-26 15:01:56
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 or csv and runs the simulations in brian.
@@ -30,6 +30,7 @@ def h5_load(filename, dsetname, raise_ex=True):
             raise e
         else:
             return np.nan
+
 
 # ------------------------------------------------------------------------------ #
 # model parameters
@@ -63,7 +64,7 @@ gm =  30 * mV      # shot noise (minis) strength, between 10 - 50 mV
 gs = 300 * mV * mV * ms * ms  # white noise strength, via xi = dt**.5 * randn()
 # fmt:on
 
-defaultclock.dt = 0.05*ms
+defaultclock.dt = 0.05 * ms
 
 # ------------------------------------------------------------------------------ #
 # command line arguments
@@ -122,15 +123,15 @@ S = Synapses(
         I_post += D_pre * gA    # [10]
         D_pre   = D_pre * beta  # [11] delta-function term on spike
     """,
-    order = 0,
+    order=0,
 )
 
 # shot-noise:
 # by targeting I with poisson, we should get pretty close to javiers version.
 mini_g = PoissonGroup(num_n, rate)
 # rates = 0.01 / ms + (0.04 / ms)* rand(num_n) # we could have differen rates
-mini_s = Synapses(mini_g, G, on_pre='I_post+=gm', order=-1, name='Minis')
-mini_s.connect(j='i')
+mini_s = Synapses(mini_g, G, on_pre="I_post+=gm", order=-1, name="Minis")
+mini_s.connect(j="i")
 
 # connect synapses from loaded matrix or randomly
 try:
@@ -163,7 +164,7 @@ G.v = "vc + 5*mV*rand()"
 #         G.d[n]  =  50 * mV
 
 # equilibrate
-run(10 * second, report='stdout')
+run(10 * second, report="stdout")
 
 # ------------------------------------------------------------------------------ #
 # Running and Plotting
@@ -172,35 +173,34 @@ run(10 * second, report='stdout')
 # disable state monitors that are not needed for production
 stat_m = StateMonitor(G, ["v", "I", "u", "D"], record=True)
 spks_m = SpikeMonitor(G)
-# spkm_m = SpikeMonitor(P)
-run(30 * second, report='stdout')
+# mini_m = SpikeMonitor(mini_g)
+
+run(30 * second, report="stdout")
 
 
 ion()  # interactive plotting
+n1 = randint(0, num_n)  # some neuron to plot
 
 fig, ax = subplots(4, 1, sharex=True)
 
-# ax[0].plot(spkm_m.t / second, spkm_m.i, ".y")
+# ax[0].plot(mini_m.t / second, mini_m.i, ".y")
 ax[0].plot(spks_m.t / second, spks_m.i, ".k")
-sel = where(spks_m.i == 130)[0]
+sel = where(spks_m.i == n1)[0]
 ax[0].plot(spks_m.t[sel] / second, spks_m.i[sel], ".C0")
 ax[0].set_ylabel("Neuron index")
 
 
-ax[1].plot(stat_m.t / second, stat_m.v[25], label="Neuron 25", color="C1")
-ax[1].plot(stat_m.t / second, stat_m.v[130], label="Neuron 130", color="C0")
+ax[1].plot(stat_m.t / second, stat_m.v[n1], label=f"Neuron {n1}")
 ax[1].set_ylabel("v")
 ax[1].legend()
 
-# plot(stat_m.t / second, stat_m.I[130], label="Neuron 130")
-ax[2].plot(stat_m.t / second, stat_m.u[130], label="Neuron 130")
+# plot(stat_m.t / second, stat_m.I[n1], label="Neuron n1")
+ax[2].plot(stat_m.t / second, stat_m.u[n1], label=f"Neuron {n1}")
 ax[2].set_ylabel("u")
 
-ax[3].plot(stat_m.t / second, stat_m.D[130], label="Neuron 130")
+ax[3].plot(stat_m.t / second, stat_m.D[n1], label=f"Neuron {n1}")
 ax[3].set_xlabel("Time (s)")
 ax[3].set_ylabel("D")
 ax[3].legend()
 
 show()
-
-
