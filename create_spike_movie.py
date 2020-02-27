@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-01-24 13:43:39
-# @Last Modified: 2020-02-26 18:21:34
+# @Last Modified: 2020-02-27 12:20:34
 # ------------------------------------------------------------------------------- #
 # Create a movie of the network for a given time range and visualize
 # firing neurons. Save to mp4.
@@ -36,16 +36,6 @@ parser.add_argument(
     "--fps", dest="fps", help="frames per second for the movie", type=int, default=30
 )
 parser.add_argument(
-    "--bpf", dest="bpf", help="number of time bins per frame", type=int, default=10
-)
-parser.add_argument(
-    "--dt",
-    dest="delta_t",
-    help="time bin size in the input, in seconds, default assumes miliseconds",
-    type=float,
-    default=0.001,
-)
-parser.add_argument(
     "-l",
     "--length",
     dest="length",
@@ -54,11 +44,32 @@ parser.add_argument(
     default=10,
 )
 parser.add_argument(
+    "--tunit",
+    dest="tunit",
+    help="time unit of the ('--rescale'd) bins in the eventlist. only used for displaying the time index in the movie. default: 'sec'",
+    type=str,
+    default='sec',
+)
+parser.add_argument(
+    "--rescale",
+    dest="rescale",
+    help="multiply eventlist by a factor e.g. to convert from s to ms, or to create a timelapse",
+    type=float,
+    default=1.0,
+)
+parser.add_argument(
     "--tmin",
     dest="tmin",
-    help="rendering starts after this time point in the eventlist. in seconds",
+    help="rendering starts at this time point in the eventlist. in units of the ('--rescale'd) eventlist",
     type=float,
     default=0,
+)
+parser.add_argument(
+    "--tmax",
+    dest="tmax",
+    help="rendering ends at this time point in the eventlist. in units of the ('--rescale'd) eventlist",
+    type=float,
+    default=1000,
 )
 
 args = parser.parse_args()
@@ -68,11 +79,16 @@ if args.input_path == None or args.output_path == None:
 if args.title == None:
     args.title = args.input_path
 
-bpf = args.bpf  # how many time bins of the eventlist to include in each rendered frame
+
 fps = args.fps  # frames per second shown in the movie
-bdt = args.delta_t  # simulation-time duration of each even-list bin
 num_frames = int(np.floor(args.length * fps))
-frame_offset = int(args.tmin / args.delta_t / bpf)
+
+rescale = args.rescale  # factor by which to rescale the event list
+
+# how many time bins of the eventlist to include in each rendered frame
+bpf = ((args.tmax - args.tmin) / num_frames)
+
+frame_offset = int(args.tmin / bpf)
 decay_s = 0.75  # decay of spike display in seconds
 decay_b = bpf * fps * decay_s  # in time bins
 
@@ -120,8 +136,8 @@ seg_y = np.where(seg_y == 0, np.nan, seg_y)
 
 # assuming integer spiketimes to check if they match frames
 event_list = h5_load(args.input_path, "/data/spiketimes")
-event_list = event_list * 1000  # need to fix this bug
-event_list = event_list.astype(int)
+event_list = event_list * rescale
+# event_list = event_list.astype(int)
 event_list = np.where(event_list == 0, np.nan, event_list)
 
 # ------------------------------------------------------------------------------ #
@@ -203,7 +219,7 @@ with writer.saving(fig=fig, outfile=args.output_path, dpi=100):
     print(f"Rendering {args.length:.0f} seconds with {num_frames} frames ...")
     for f in tqdm(range(frame_offset, num_frames + frame_offset)):
         time_stamp = f * bpf
-        art_time.set_text(f"t = {time_stamp*bdt:.2f} sec")
+        art_time.set_text(f"t = {time_stamp :.2f} {args.tunit}")
 
         for n in range(num_n):
             idx = prev_s_idx[n]
@@ -213,7 +229,6 @@ with writer.saving(fig=fig, outfile=args.output_path, dpi=100):
             # prev_spike[n] = spike_time
             prev_s_idx[n] = idx
             time_ago = time_stamp - spike_time
-            # time_ago = time_stamp - spike_time
 
             if time_ago >= 0 and time_ago < decay_b:  # paint something cool
                 ax_edge = render_spike_axon(time_ago, decay_b)
