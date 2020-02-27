@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2020-02-26 15:01:56
+# @Last Modified: 2020-02-27 12:28:24
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 or csv and runs the simulations in brian.
@@ -16,24 +16,6 @@ import argparse
 
 import numpy as np
 from brian2 import *
-
-
-def h5_load(filename, dsetname, raise_ex=True):
-    try:
-        file = h5py.File(filename, "r")
-        res = file[dsetname][:]
-        file.close()
-        return res
-    except Exception as e:
-        print(f"failed to load {dsetname} from {filename}")
-        if raise_ex:
-            raise e
-        else:
-            return np.nan
-
-
-
-
 
 # ------------------------------------------------------------------------------ #
 # model parameters
@@ -59,6 +41,7 @@ tD =   1 * second  # characteristic recovery time, between 0.5 and 20 seconds
 tA =  10 * ms      # decay time of post-synaptic current (AMPA current decay time)
 gA = 170 * mV      # AMPA current strength, between 10 - 50 mV
                    # 170.612 value in javiers neurondyn
+                   # this needs to scale with tc/tA
 
 # noise
 beta = 0.8         # D = beta*D after spike, to reduce efficacy, beta < 1
@@ -68,6 +51,46 @@ gs = 300 * mV * mV * ms * ms  # white noise strength, via xi = dt**.5 * randn()
 # fmt:on
 
 defaultclock.dt = 0.05 * ms
+
+# ------------------------------------------------------------------------------ #
+# helper
+# ------------------------------------------------------------------------------ #
+
+
+def h5_load(filename, dsetname, raise_ex=True):
+    try:
+        file = h5py.File(filename, "r")
+        res = file[dsetname][:]
+        file.close()
+        return res
+    except Exception as e:
+        print(f"failed to load {dsetname} from {filename}")
+        if raise_ex:
+            raise e
+        else:
+            return np.nan
+
+
+def visualise_connectivity(S):
+    Ns = len(S.source)
+    Nt = len(S.target)
+    figure(figsize=(10, 4))
+    subplot(121)
+    plot(zeros(Ns), arange(Ns), "ok", ms=10)
+    plot(ones(Nt), arange(Nt), "ok", ms=10)
+    for i, j in zip(S.i, S.j):
+        plot([0, 1], [i, j], "-k", lw=0.1)
+    xticks([0, 1], ["Source", "Target"])
+    ylabel("Neuron index")
+    xlim(-0.1, 1.1)
+    ylim(-1, max(Ns, Nt))
+    subplot(122)
+    plot(S.i, S.j, "ok")
+    xlim(-1, Ns)
+    ylim(-1, Nt)
+    xlabel("Source neuron index")
+    ylabel("Target neuron index")
+
 
 # ------------------------------------------------------------------------------ #
 # command line arguments
@@ -80,7 +103,7 @@ parser.add_argument("-s", dest="seed", default=117, help="rng", type=int)
 args = parser.parse_args()
 
 print(f"seed: {args.seed}")
-seed(args.seed)
+numpy.random.seed(args.seed)
 
 try:
     # load from hdf5
@@ -103,16 +126,17 @@ except:
 G = NeuronGroup(
     N=num_n,
     model="""
-        dv/dt = ( k*(v-vr)*(v-vt) -u +I         # [6] soma potential
-                +xi*(gs/tc)**0.5 )/tc   : volt  # white noise term
-        dI/dt = -I/tA                   : volt  # [9, 10]
-        du/dt = ( b*(v-vr) -u )/ta      : volt  # [7] inhibitory current
-        dD/dt = ( 1-D)/tD               : 1     # [11] recovery to one
+        dv/dt = ( k*(v-vr)*(v-vt) -u +I            # [6] soma potential
+                +xi*(gs/tc)**0.5 )/tc   : volt     # white noise term
+        dI/dt = -I/tA                   : volt     # [9, 10]
+        du/dt = ( b*(v-vr) -u )/ta      : volt     # [7] inhibitory current
+        dD/dt = ( 1-D )/tD              : 1        # [11] recovery to one
     """,
     threshold="v > vp",
     reset="""
-        v = vc        # [8]
-        u = u + d     # [8]
+        v = vc           # [8]
+        u = u + d        # [8]
+        D = D * beta     # [11] delta-function term on spike
     """,
     method="euler",
 )
@@ -122,16 +146,13 @@ S = Synapses(
     target=G,
     on_pre="""
         I_post += D_pre * gA    # [10]
-        D_pre   = D_pre * beta  # [11] delta-function term on spike
     """,
-    order=0,
 )
 
 # shot-noise:
 # by targeting I with poisson, we should get pretty close to javiers version.
-mini_g = PoissonGroup(num_n, rate)
-mini_s = Synapses(mini_g, G, on_pre="I_post+=gm", order=-1, name="Minis")
-mini_s.connect(j="i")
+# here, N=1 is input per neuron
+mini_g = PoissonInput(target=G, target_var="I", N=1, rate=rate, weight=gm)
 
 # connect synapses from loaded matrix or randomly
 try:
@@ -139,12 +160,12 @@ try:
     for idx, i in enumerate(pre):
         j = post[idx]
         # group modules close to each other
-        # i = np.argwhere(mod_sorted == i)[0, 0]
-        # j = np.argwhere(mod_sorted == j)[0, 0]
+        i = np.argwhere(mod_sorted == i)[0, 0]
+        j = np.argwhere(mod_sorted == j)[0, 0]
         S.connect(i=i, j=j)
 except:
     print(f"Creating Synapses randomly")
-    S.connect(condition='i != j', p=0.1)
+    S.connect(condition="i != j", p=0.1)
 
 # initalize to a somewhat sensible state. we could have different neuron types
 G.v = "vc + 5*mV*rand()"
@@ -163,15 +184,14 @@ spks_m = SpikeMonitor(G)
 
 run(30 * second, report="stdout")
 
-
 ion()  # interactive plotting
-n1 = randint(0, num_n)  # some neuron to plot
-
 fig, ax = subplots(4, 1, sharex=True)
+
+n1 = randint(0, num_n)  # some neuron to highlight
+sel = where(spks_m.i == n1)[0]
 
 # ax[0].plot(mini_m.t / second, mini_m.i, ".y")
 ax[0].plot(spks_m.t / second, spks_m.i, ".k")
-sel = where(spks_m.i == n1)[0]
 ax[0].plot(spks_m.t[sel] / second, spks_m.i[sel], ".")
 ax[0].set_ylabel("Neuron index")
 ax[0].set_title(f"{args.input_path}")
