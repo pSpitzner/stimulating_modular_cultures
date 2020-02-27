@@ -6,6 +6,8 @@
 # ------------------------------------------------------------------------------- #
 # Create a movie of the network for a given time range and visualize
 # firing neurons. Save to mp4.
+#
+# conda install h5py matplotlib ffmpeg tqdm
 # ------------------------------------------------------------------------------- #
 
 import os
@@ -33,7 +35,7 @@ parser.add_argument("-i", dest="input_path", help="input path", metavar="FILE")
 parser.add_argument("-o", dest="output_path", help="output path", metavar="FILE")
 parser.add_argument("-t", "--title", dest="title", help="movie title")
 parser.add_argument(
-    "--fps", dest="fps", help="frames per second for the movie", type=int, default=30
+    "-fps", dest="fps", help="frames per second for the movie", type=int, default=30
 )
 parser.add_argument(
     "-l",
@@ -44,6 +46,7 @@ parser.add_argument(
     default=10,
 )
 parser.add_argument(
+    "-tunit",
     "--tunit",
     dest="tunit",
     help="time unit of the ('--rescale'd) bins in the eventlist. only used for displaying the time index in the movie. default: 'sec'",
@@ -51,6 +54,7 @@ parser.add_argument(
     default='sec',
 )
 parser.add_argument(
+    "-r",
     "--rescale",
     dest="rescale",
     help="multiply eventlist by a factor e.g. to convert from s to ms, or to create a timelapse",
@@ -58,6 +62,7 @@ parser.add_argument(
     default=1.0,
 )
 parser.add_argument(
+    "-tmin",
     "--tmin",
     dest="tmin",
     help="rendering starts at this time point in the eventlist. in units of the ('--rescale'd) eventlist",
@@ -65,6 +70,7 @@ parser.add_argument(
     default=0,
 )
 parser.add_argument(
+    "-tmax",
     "--tmax",
     dest="tmax",
     help="rendering ends at this time point in the eventlist. in units of the ('--rescale'd) eventlist",
