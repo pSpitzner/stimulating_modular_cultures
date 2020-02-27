@@ -6,6 +6,8 @@
 # ------------------------------------------------------------------ #
 # script that takes a hdf5 as produced by my cpp simulation
 # as first argument and visualizes the topological features
+#
+# conda install matplotlib h5py seaborn networkx
 # ------------------------------------------------------------------ #
 
 import os
@@ -13,15 +15,13 @@ import sys
 import glob
 import h5py
 import matplotlib
+import argparse
 
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 
 import networkx as nx
-
-file = ""
-axes = []
 
 # interactive plotting
 plt.ion()
@@ -120,53 +120,64 @@ def circles(x, y, s, c="b", vmin=None, vmax=None, ax=None, **kwargs):
     return collection
 
 
-if __name__ == "__main__":
-    if file == "":
-        file = sys.argv[1]
-    else:
-        os.chdir(os.path.dirname(__file__))
+parser = argparse.ArgumentParser(description="Brian")
+parser.add_argument("-i", dest="input_path", help="input path", metavar="FILE")
+parser.add_argument("-o", dest="output_path", help="output path", metavar="FILE")
+args = parser.parse_args()
+file = args.input_path
 
-    print(f"file path set to {file}")
+# ------------------------------------------------------------------------------ #
+# setup merged figure
+# ------------------------------------------------------------------------------ #
+
+fig, axes = plt.subplots(nrows=2, ncols=3, figsize=[12, 8])
 
 # ------------------------------------------------------------------ #
 # distributions
 # ------------------------------------------------------------------ #
 
 print("plotting distributions")
+
+# dendritic tree radius
+ax = axes[0, 0]
 try:
     n_R_d = h5_load(file, "/data/neuron_radius_dendritic_tree")
-    fig, ax = plt.subplots()
+    # fig, ax = plt.subplots()
     sns.distplot(n_R_d, ax=ax, label="radius", hist=True, kde_kws={"alpha": 1})
     ax.set_xlabel(f"Distance $l\,[\mu m]$")
     ax.set_ylabel(f"Probability $p(l)$")
     ax.set_title("Dendritic tree size distribution")
     ax.legend()
-    axes.append(ax)
+    # axes.append(ax)
     # fig.savefig(f"./fig/degree_distribution.pdf", transparent=True, pad_inches=0.0)
 except Exception as e:
     print("plotting dendritic tree size distribution failed")
 
 
+# neuron positions
+ax = axes[0, 1]
 try:
     n_x = h5_load(file, "/data/neuron_pos_x")
     n_y = h5_load(file, "/data/neuron_pos_y")
-    fig, ax = plt.subplots()
+    # fig, ax = plt.subplots()
     sns.distplot(n_x, ax=ax, label="x", hist=True, kde_kws={"alpha": 1})
     sns.distplot(n_y, ax=ax, label="y", hist=True, kde_kws={"alpha": 1})
     ax.set_xlabel(f"Position $l\,[\mu m]$")
     ax.set_ylabel(f"Probability $p(l)$")
     ax.set_title("Neuron position distribution")
     ax.legend()
-    axes.append(ax)
+    # axes.append(ax)
     # fig.savefig(f"./fig/degree_distribution.pdf", transparent=True, pad_inches=0.0)
 except Exception as e:
     print("plotting neuron position distribution failed")
 
 
+# in and out degree
+ax = axes[1, 1]
 try:
     k_in = h5_load(file, "/data/neuron_k_in")
     k_out = h5_load(file, "/data/neuron_k_out")
-    fig, ax = plt.subplots()
+    # fig, ax = plt.subplots()
     maxbin = np.nanmax([k_in, k_out])
     bins = np.arange(0, maxbin, 1)
     sns.distplot(
@@ -191,23 +202,24 @@ try:
     ax.set_ylabel(f"Probability $p(k)$")
     ax.set_title("Degree distribution")
     ax.legend()
-    axes.append(ax)
+    # axes.append(ax)
     # fig.savefig(f"./fig/degree_distribution.pdf", transparent=True, pad_inches=0.0)
 except Exception as e:
     print("plotting in/out-degree distribution failed")
 
-
+# axon length distribution
+ax = axes[1,0]
 try:
     k_len = h5_load(file, "/data/neuron_axon_length")
     k_ee = h5_load(file, "/data/neuron_axon_end_to_end_distance")
-    fig, ax = plt.subplots()
+    # fig, ax = plt.subplots()
     sns.distplot(k_len, ax=ax, label="length", hist=True, kde_kws={"alpha": 1})
     sns.distplot(k_ee, ax=ax, label="end to end", hist=True, kde_kws={"alpha": 1})
     ax.set_xlabel(f"Distance $l\,[\mu m]$")
     ax.set_ylabel(f"Probability $p(l)$")
     ax.set_title("Axon length distribution")
     ax.legend()
-    axes.append(ax)
+    # axes.append(ax)
     # fig.savefig(f"./fig/degree_distribution.pdf", transparent=True, pad_inches=0.0)
 except Exception as e:
     print("plotting axon length distribution failed")
@@ -218,6 +230,8 @@ except Exception as e:
 # ------------------------------------------------------------------ #
 
 print("creating network map")
+
+# neuron positions
 try:
     n_x
     n_y
@@ -228,6 +242,7 @@ except NameError:
     except:
         print("failed to load neuron positions for network map")
 
+# dendritic tree
 try:
     n_R_s = 7.5
     n_R_d
@@ -237,6 +252,7 @@ except NameError:
     except:
         print("failed to load dendritic radius")
 
+# axons
 try:
     axon_segments_x = h5_load(file, "/data/neuron_axon_segments_x")
     axon_segments_y = h5_load(file, "/data/neuron_axon_segments_y")
@@ -246,12 +262,31 @@ try:
 except:
     print("failed to load axon segments")
 
-
+# connectivity matrix
 try:
-    mtx = h5_load(file, "/data/connectivity_matrix")
+    a_ij = h5_load(file, "/data/connectivity_matrix")
 except:
     print("failed to load connectivity matrix")
 
+# fraction of inter-module connections
+try:
+    mod_ids = h5_load(file, "/data/neuron_module_id")
+    intra = 0
+    inter = 0
+    for i in range(0, a_ij.shape[0]):
+        outgoing = np.where(a_ij[i,:] == 1)[0]
+        for j in outgoing:
+            if mod_ids[j] == mod_ids[i]:
+                intra += 1
+            else:
+                inter += 1
+
+    assert intra + inter == np.sum(a_ij == 1)
+    print(f"Connections between modules: {inter}")
+    print(f"Connections within modules:  {intra}")
+    print(f"Ratio:                       {inter/intra*100 :.2f}%")
+except:
+    pass
 
 # using networkx for connectivity plotting
 G = nx.DiGraph()
@@ -316,7 +351,7 @@ def plot_graph_nodes(ax, with_labels=False):
 def plot_graph_edges(ax, tar=np.arange(len(n_x))):
     try:
         for n in tar:
-            connected = np.where(mtx[n] == 1)
+            connected = np.where(a_ij[n] == 1)
             for c in connected[0]:
                 G.add_edge(n, c, weight=1)
     except:
@@ -385,21 +420,33 @@ def highlight_single(ax=ax, stay=False):
 # plotting
 # ------------------------------------------------------------------ #
 
-fig, ax = plt.subplots(figsize=[6.4, 6.4])
-plt.axis("off")
-ax.set_aspect(1)
-plot_soma(ax)
-plot_axons(ax)
-ax.set_title("Axons")
-axes.append(ax)
-
-fig, ax = plt.subplots(figsize=[6.4, 6.4])
-plt.axis("off")
+# fig, ax = plt.subplots(figsize=[6.4, 6.4])
+ax = axes[0,2]
+ax.set_title("Connectivity")
+# plt.axis("off")
 ax.set_aspect(1)
 plot_soma(ax)
 plot_graph_nodes(ax)
 plot_graph_edges(ax)
-ax.set_title("Connectivity")
-axes.append(ax)
+# axes.append(ax)
+
+# share the zooming
+ax.get_shared_x_axes().join(ax, axes[1,2])
+ax.get_shared_y_axes().join(ax, axes[1,2])
+
+ax = axes[1,2]
+ax.set_title("Axons")
+plot_soma(ax)
+plot_axons(ax)
+ax.set_aspect(1)
+ax.spines['right'].set_visible(False)
+ax.spines['top'].set_visible(False)
+ax.spines['left'].set_visible(False)
+ax.set_yticks([])
+ax.set_aspect(1)
+ax.autoscale()
+ax.set_xlabel(f"Position $l\,[\mu m]$")
+
+fig.tight_layout()
 
 plt.show()
