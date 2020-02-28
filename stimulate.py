@@ -38,14 +38,14 @@ d =  50 * mV  # after-spike reset of inhibitory current u
 # synapse
 tD =   1 * second  # characteristic recovery time, between 0.5 and 20 seconds
 tA =  10 * ms      # decay time of post-synaptic current (AMPA current decay time)
-gA = 170 * mV      # AMPA current strength, between 10 - 50 mV
+gA =  50 * mV      # AMPA current strength, between 10 - 50 mV
                    # 170.612 value in javiers neurondyn
                    # this needs to scale with tc/tA
 
 # noise
 beta = 0.8         # D = beta*D after spike, to reduce efficacy, beta < 1
-rate = 0.02 / ms   # rate for the poisson input (shot-noise), between 0.01 - 0.05 1/ms
-gm =  30 * mV      # shot noise (minis) strength, between 10 - 50 mV
+rate = 0.03 / ms   # rate for the poisson input (shot-noise), between 0.01 - 0.05 1/ms
+gm =  25 * mV      # shot noise (minis) strength, between 10 - 50 mV
 gs = 300 * mV * mV * ms * ms  # white noise strength, via xi = dt**.5 * randn()
 # fmt:on
 
