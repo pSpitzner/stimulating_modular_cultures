@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2020-02-27 12:28:24
+# @Last Modified: 2020-03-04 13:53:21
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 or csv and runs the simulations in brian.
@@ -40,8 +40,6 @@ d =  50 * mV  # after-spike reset of inhibitory current u
 tD =   1 * second  # characteristic recovery time, between 0.5 and 20 seconds
 tA =  10 * ms      # decay time of post-synaptic current (AMPA current decay time)
 gA =  50 * mV      # AMPA current strength, between 10 - 50 mV
-                   # 170.612 value in javiers neurondyn
-                   # this needs to scale with tc/tA
 
 # noise
 beta = 0.8         # D = beta*D after spike, to reduce efficacy, beta < 1
