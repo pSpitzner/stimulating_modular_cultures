@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2020-07-02 11:31:31
+# @Last Modified: 2020-07-15 13:50:01
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 or csv and runs the simulations in brian.
@@ -18,9 +18,21 @@
 
 import h5py
 import argparse
+import os
 
 import numpy as np
 from brian2 import *
+
+# we want to run this on a cluster, assign a custom cache directory to each thread
+cache_dir = os.path.expanduser(f'~/.cython/brian-pid-{os.getpid()}')
+prefs.codegen.runtime.cython.cache_dir = cache_dir
+prefs.codegen.runtime.cython.multiprocess_safe = False
+
+# Log level needs to be set in ~/.brian/user_preferences to work for all steps
+prefs.logging.console_log_level = 'INFO'
+
+# we want enforce simulation with c
+prefs.codegen.target = 'cython'
 
 from shutil import copy2
 
@@ -260,6 +272,10 @@ gA = args.gA * mV
 gm = args.gm * mV
 rate = args.r / ms
 
+print(f"-------------------------")
+print(f"running dynamics in brian")
+print(f"-------------------------")
+print(f"input topology: ", args.input_path)
 print(f"seed: ", args.seed)
 print(f"gA: ", gA)
 print(f"gm: ", gm)
@@ -365,6 +381,9 @@ run(args.duration * second, report="stdout")
 
 
 try:
+    # make sure directory exists
+    outdir = os.path.abspath(os.path.expanduser(args.output_path + "/../"))
+    os.makedirs(outdir, exist_ok=True)
     copy2(args.input_path, args.output_path)
 except Exception as e:
     print("Could not copy input file\n", e)
@@ -380,11 +399,32 @@ try:
     for tdx in trains.keys():
         if len(trains[tdx]) > tmax:
             tmax = len(trains[tdx])
-    dset = np.zeros(shape=(num_n, tmax))
+    spiketimes = np.zeros(shape=(num_n, tmax))
     for n in range(0, num_n):
         t = trains[n]
-        dset[n, 0 : len(t)] = t / second - args.equil_duration
-    f.create_dataset("/data/spiketimes", data=dset)
+        spiketimes[n, 0 : len(t)] = t / second - args.equil_duration
+    dset = f.create_dataset("/data/spiketimes", data=spiketimes)
+    dset.attrs["description"] = "2d array of spiketimes, neuron x spiketime in seconds"
+
+    try:
+        bursts = burst_times(spks_m)
+        ibi = args.duration * second / len(bursts)
+    except Exception as e:
+        print("Setting ibi to nan: ", e)
+        ibi = np.nan
+    dset = f.create_dataset("/data/ibi", data=ibi / second)
+    dset.attrs["description"] = "inter burst interval in seconds"
+
+
+    # meta data of this simulation
+    dset = f.create_dataset("/meta/dynamics_gA", data= gA / mV)
+    dset.attrs["description"] = "AMPA current strength, in mV"
+
+    dset = f.create_dataset("/meta/dynamics_gm", data= gm / mV)
+    dset.attrs["description"] = "shot noise (minis) strength, in mV"
+
+    dset = f.create_dataset("/meta/dynamics_rate", data=  rate * ms)
+    dset.attrs["description"] = "rate for the (global) poisson input (shot-noise), in 1/ms"
 
     f.close()
 
@@ -411,14 +451,14 @@ ax[1].plot(spks_m.t[sel] / second, mod_sort(spks_m.i[sel]), ".")
 ax[1].set_ylabel("Raster")
 
 
-bursts = burst_times(spks_m)
-bursts, time_series, summed_series, window = burst_times(spks_m, debug=True)
-ax[0].scatter(bursts / second, np.ones(len(bursts)))
+# bursts = burst_times(spks_m)
+# # bursts, time_series, summed_series, window = burst_times(spks_m, debug=True)
+# ax[0].scatter(bursts / second, np.ones(len(bursts)))
 
-bin_size = 50*ms
-ax[4].plot(np.arange(len(summed_series)) * bin_size / second, summed_series)
+# bin_size = 50*ms
+# ax[4].plot(np.arange(len(summed_series)) * bin_size / second, summed_series)
 
-ibi = args.duration * second / len(bursts)
-print("ibi: ", ibi)
+# ibi = args.duration * second / len(bursts)
+# print("ibi: ", ibi)
 
 show()
