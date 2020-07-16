@@ -17,10 +17,9 @@ export OMP_NUM_THREADS=1
 export NUMBA_NUM_THREADS=1
 
 date
-if [ $id -eq 0 ]; then
-  ssh -t sohrab001 "/home/pspitzner/bin/notify started $JOB_NAME.$TASK_ID.$JOB_ID"
-fi
 
+source /home/pspitzner/.bashrc
+conda activate brian
 
 vargs=$(awk "NR==$(($SGE_TASK_ID + 1))" ./run/parameters_topo.tsv)
 echo "${vargs[$id]}"
@@ -31,6 +30,3 @@ echo "${vargs[$id]}"
 ${vargs[$id]}
 
 date
-if [ $id -eq 809 ]; then
-  ssh -t sohrab001 "/home/pspitzner/bin/notify finished $JOB_NAME.$TASK_ID.$JOB_ID"
-fi
