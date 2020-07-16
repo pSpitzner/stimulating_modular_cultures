@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2020-07-15 13:50:01
+# @Last Modified: 2020-07-16 11:18:27
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 or csv and runs the simulations in brian.
@@ -369,7 +369,7 @@ G.v = "vc + 5*mV*rand()"
 
 # assert False
 # equilibrate
-run(args.equil_duration * second, report="stdout")
+run(args.equil_duration * second, report="stdout", report_period=1*60*second)
 
 # disable state monitors that are not needed for production
 # stat_m = StateMonitor(G, ["v", "I", "u", "D"], record=True)
@@ -377,7 +377,7 @@ spks_m = SpikeMonitor(G)
 # rate_m = PopulationRateMonitor(G)
 # mini_m = SpikeMonitor(mini_g)
 
-run(args.duration * second, report="stdout")
+run(args.duration * second, report="stdout", report_period=20*60*second)
 
 
 try:
