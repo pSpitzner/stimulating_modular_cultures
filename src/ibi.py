@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2020-07-16 11:18:27
+# @Last Modified: 2020-07-16 11:54:32
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 or csv and runs the simulations in brian.
@@ -438,17 +438,17 @@ except Exception as e:
 # ------------------------------------------------------------------------------ #
 
 
-ion()  # interactive plotting
-fig, ax = subplots(5, 1, sharex=True)
+# ion()  # interactive plotting
+# fig, ax = subplots(5, 1, sharex=True)
 
-n1 = randint(0, num_n)  # some neuron ton highlight
-sel = where(spks_m.i == n1)[0]
+# n1 = randint(0, num_n)  # some neuron ton highlight
+# sel = where(spks_m.i == n1)[0]
 
 # ax[1].plot(mini_m.t / second, mini_m.i, ".y")
-ax[1].plot(spks_m.t / second, mod_sort(spks_m.i), ".k")
-ax[1].plot(spks_m.t[sel] / second, mod_sort(spks_m.i[sel]), ".")
+# ax[1].plot(spks_m.t / second, mod_sort(spks_m.i), ".k")
+# ax[1].plot(spks_m.t[sel] / second, mod_sort(spks_m.i[sel]), ".")
 # ax[1].plot(stim_m.t / second, mod_sort(stim_m.i), ".", color="orange")
-ax[1].set_ylabel("Raster")
+# ax[1].set_ylabel("Raster")
 
 
 # bursts = burst_times(spks_m)
@@ -461,4 +461,4 @@ ax[1].set_ylabel("Raster")
 # ibi = args.duration * second / len(bursts)
 # print("ibi: ", ibi)
 
-show()
+# show()

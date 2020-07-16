@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-01-24 14:13:56
-# @Last Modified: 2020-02-26 14:21:30
+# @Last Modified: 2020-07-16 12:19:02
 # ------------------------------------------------------------------ #
 # script that takes a hdf5 as produced by my cpp simulation
 # as first argument and visualizes the topological features
@@ -120,7 +120,7 @@ def circles(x, y, s, c="b", vmin=None, vmax=None, ax=None, **kwargs):
     return collection
 
 
-parser = argparse.ArgumentParser(description="Brian")
+parser = argparse.ArgumentParser(description="Topology Overview")
 parser.add_argument("-i", dest="input_path", help="input path", metavar="FILE")
 parser.add_argument("-o", dest="output_path", help="output path", metavar="FILE")
 args = parser.parse_args()
