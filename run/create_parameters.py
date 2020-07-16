@@ -9,7 +9,7 @@ os.chdir(os.path.dirname(__file__))
 seed = 10_000
 
 # parameters to scan, noise rate, gaba strength, and a few repetitons for statistics
-l_topo = ['2x2merged', '2x2_fixed']
+l_topo = ['2x2merged', '2x2_fixed', '2x2merged_lower_alpha']
 l_rate = np.arange(0.01, 0.051, 0.005)
 l_gaba = np.arange(10, 51, 5)
 l_rep = range(0, 5)
@@ -34,6 +34,9 @@ with open("./parameters_topo.tsv", "w") as f_topo:
             topo_path = f"./dat/topo/{topo}/gaba={gaba:04.2f}_rate={rate:.4f}_rep={rep:02d}.hdf5"
             dyn_path = f"./dat/dyn/{topo}/gaba={gaba:04.2f}_rate={rate:.4f}_rep={rep:02d}.hdf5"
 
+            # here wo go again, ductaping additions into place
+            if topo == "2x2merged_lower_alpha":
+                topo = "2x2merged -a 0.15"
             f_topo.write(
                 # topology command
                 f"/data.nst/share/projects/paul_brian_modular_cultures/topology_orlandi_standalone/exe/orlandi_standalone -N 100 -s {seed:d} -o {topo_path} -f {topo}\n"
