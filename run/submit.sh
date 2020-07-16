@@ -22,9 +22,12 @@ if [ $id -eq 0 ]; then
 fi
 
 
-vargs=$(awk "NR==$(($SGE_TASK_ID + 1))" ./run/parameters.tsv)
+vargs=$(awk "NR==$(($SGE_TASK_ID + 1))" ./run/parameters_topo.tsv)
 echo "${vargs[$id]}"
+${vargs[$id]}
 
+vargs=$(awk "NR==$(($SGE_TASK_ID + 1))" ./run/parameters_dyn.tsv)
+echo "${vargs[$id]}"
 ${vargs[$id]}
 
 date
