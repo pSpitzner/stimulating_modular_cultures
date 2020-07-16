@@ -34,7 +34,7 @@ with open("./parameters.tsv", "w") as f:
 
         f.write(
             # topology command
-            f"/Users/paul/mpi/simulation/modular_cultures/_latest/exe/orlandi_standalone -N 100 -s {seed:d} -o {topo_path} -f {topo}; " +
+            f"/data.nst/share/projects/paul_brian_modular_cultures/topology_orlandi_standalone/exe/orlandi_standalone -N 100 -s {seed:d} -o {topo_path} -f {topo}; " +
             # dynamic command
             f"python ./src/ibi.py -i {topo_path} " +
             f"-o {dyn_path} " +
