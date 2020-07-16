@@ -29,14 +29,15 @@ with open("./parameters.tsv", "w") as f:
         rate = i[1]
         gaba = i[2]
         rep  = i[3]
-        path = f"./dat/{topo}/gaba={gaba:04.2f}_rate={rate:.4f}_rep={rep:d}.hdf5"
+        topo_path = f"./dat/topo/{topo}/gaba={gaba:04.2f}_rate={rate:.4f}_rep={rep:02d}.hdf5"
+        dyn_path = f"./dat/dyn/{topo}/gaba={gaba:04.2f}_rate={rate:.4f}_rep={rep:02d}.hdf5"
 
         f.write(
             # topology command
-            f"/Users/paul/mpi/simulation/modular_cultures/_latest/exe/orlandi_standalone -N 100 -s {seed:d} -o {path} -f {topo}; " +
+            f"/Users/paul/mpi/simulation/modular_cultures/_latest/exe/orlandi_standalone -N 100 -s {seed:d} -o {topo_path} -f {topo}; " +
             # dynamic command
-            f"python ./src/ibi.py -i {path} " +
-            f"-o {path} " +
+            f"python ./src/ibi.py -i {topo_path} " +
+            f"-o {dyn_path} " +
             f"-d 3600 -equil 300 -s {seed:d} " +
             f"-gA {gaba:04.2f} -r {rate:.4f}\n"
             )
