@@ -2,10 +2,13 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-01-24 14:13:56
-# @Last Modified: 2020-07-17 13:36:22
+# @Last Modified: 2020-07-17 13:53:23
 # ------------------------------------------------------------------ #
 # script that takes a hdf5 as produced by my cpp simulation
 # as first argument and visualizes the topological features
+#
+# can take wildcard input filenames, distributions are calculated from
+# all realizations, network map is plotted from the first file
 #
 # conda install matplotlib h5py seaborn networkx
 # ------------------------------------------------------------------ #
@@ -32,7 +35,6 @@ plt.ion()
 
 
 def h5_load(filenames, dsetname, raise_ex=False):
-
     def load(filename, dsetname, raise_ex):
         try:
             file = h5py.File(filename, "r")
@@ -52,23 +54,12 @@ def h5_load(filenames, dsetname, raise_ex=False):
     files = glob.glob(filenames)
     res = []
     for f in files:
-        res.append( load(f, dsetname, raise_ex) )
+        res.append(load(f, dsetname, raise_ex))
 
     if len(files) == 1:
         return res[0]
     else:
         return res
-
-def h5_load_wildcard(filename, dsetname):
-    # in this case, filename should contain a wildcard.
-    # loads the dsetname from all files and returns a list of dsets
-    files = glob.glob(filename)
-    res = []
-    for file in files:
-        res.append( h5_load(file, dsetname, raise_ex=False) )
-
-    return res
-
 
 
 # https://stackoverflow.com/questions/9081553/python-scatter-plot-size-and-style-of-the-marker
@@ -248,7 +239,7 @@ except Exception as e:
     print("plotting in/out-degree distribution failed")
 
 # axon length distribution
-ax = axes[1,0]
+ax = axes[1, 0]
 try:
     k_len = h5_load(file, "/data/neuron_axon_length")
     k_ee = h5_load(file, "/data/neuron_axon_end_to_end_distance")
@@ -309,7 +300,7 @@ try:
     intra = 0
     inter = 0
     for i in range(0, a_ij.shape[0]):
-        outgoing = np.where(a_ij[i,:] == 1)[0]
+        outgoing = np.where(a_ij[i, :] == 1)[0]
         for j in outgoing:
             if mod_ids[j] == mod_ids[i]:
                 intra += 1
@@ -456,7 +447,7 @@ def highlight_single(ax=ax, stay=False):
 # ------------------------------------------------------------------ #
 
 # fig, ax = plt.subplots(figsize=[6.4, 6.4])
-ax = axes[0,2]
+ax = axes[0, 2]
 ax.set_title("Connectivity")
 # plt.axis("off")
 ax.set_aspect(1)
@@ -466,22 +457,23 @@ plot_graph_edges(ax)
 # axes.append(ax)
 
 # share the zooming
-ax.get_shared_x_axes().join(ax, axes[1,2])
-ax.get_shared_y_axes().join(ax, axes[1,2])
+ax.get_shared_x_axes().join(ax, axes[1, 2])
+ax.get_shared_y_axes().join(ax, axes[1, 2])
 
-ax = axes[1,2]
+ax = axes[1, 2]
 ax.set_title("Axons")
 plot_soma(ax)
 plot_axons(ax)
 ax.set_aspect(1)
-ax.spines['right'].set_visible(False)
-ax.spines['top'].set_visible(False)
-ax.spines['left'].set_visible(False)
+ax.spines["right"].set_visible(False)
+ax.spines["top"].set_visible(False)
+ax.spines["left"].set_visible(False)
 ax.set_yticks([])
 ax.set_aspect(1)
 ax.autoscale()
 ax.set_xlabel(f"Position $l\,[\mu m]$")
 
 fig.tight_layout()
+fig.savefig(args.output_path, dpi=300, transparent=True, bbox_inches=0, pad_inches=0)
 
 plt.show()
