@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-01-24 14:13:56
-# @Last Modified: 2020-07-16 12:19:02
+# @Last Modified: 2020-07-17 13:36:22
 # ------------------------------------------------------------------ #
 # script that takes a hdf5 as produced by my cpp simulation
 # as first argument and visualizes the topological features
@@ -31,18 +31,44 @@ plt.ion()
 # ------------------------------------------------------------------ #
 
 
-def h5_load(filename, dsetname, raise_ex=True):
-    try:
-        file = h5py.File(filename, "r")
-        res = file[dsetname][:]
-        file.close()
+def h5_load(filenames, dsetname, raise_ex=False):
+
+    def load(filename, dsetname, raise_ex):
+        try:
+            file = h5py.File(filename, "r")
+            try:
+                res = file[dsetname][:]
+            except ValueError:
+                res = file[dsetname][()]
+            file.close()
+            return res
+        except Exception as e:
+            print(f"failed to load {dsetname} from {filename}")
+            if raise_ex:
+                raise e
+            else:
+                return np.nan
+
+    files = glob.glob(filenames)
+    res = []
+    for f in files:
+        res.append( load(f, dsetname, raise_ex) )
+
+    if len(files) == 1:
+        return res[0]
+    else:
         return res
-    except Exception as e:
-        print(f"failed to load {dsetname} from {filename}")
-        if raise_ex:
-            raise e
-        else:
-            return np.nan
+
+def h5_load_wildcard(filename, dsetname):
+    # in this case, filename should contain a wildcard.
+    # loads the dsetname from all files and returns a list of dsets
+    files = glob.glob(filename)
+    res = []
+    for file in files:
+        res.append( h5_load(file, dsetname, raise_ex=False) )
+
+    return res
+
 
 
 # https://stackoverflow.com/questions/9081553/python-scatter-plot-size-and-style-of-the-marker
@@ -126,6 +152,19 @@ parser.add_argument("-o", dest="output_path", help="output path", metavar="FILE"
 args = parser.parse_args()
 file = args.input_path
 
+
+# support multiple files and create combined distributions
+num_files = len(glob.glob(file))
+
+if num_files == 0:
+    print(f"File not found {file}")
+    exit()
+elif num_files == 1:
+    multiple_files = False
+else:
+    multiple_files = True
+    print(f"Found {num_files} files to contribute to distributions.")
+
 # ------------------------------------------------------------------------------ #
 # setup merged figure
 # ------------------------------------------------------------------------------ #
@@ -141,7 +180,9 @@ print("plotting distributions")
 # dendritic tree radius
 ax = axes[0, 0]
 try:
+    # n_R_d = h5_load(file, "/data/neuron_radius_dendritic_tree")
     n_R_d = h5_load(file, "/data/neuron_radius_dendritic_tree")
+
     # fig, ax = plt.subplots()
     sns.distplot(n_R_d, ax=ax, label="radius", hist=True, kde_kws={"alpha": 1})
     ax.set_xlabel(f"Distance $l\,[\mu m]$")
@@ -170,7 +211,6 @@ try:
     # fig.savefig(f"./fig/degree_distribution.pdf", transparent=True, pad_inches=0.0)
 except Exception as e:
     print("plotting neuron position distribution failed")
-
 
 # in and out degree
 ax = axes[1, 1]
@@ -224,33 +264,28 @@ try:
 except Exception as e:
     print("plotting axon length distribution failed")
 
-
 # ------------------------------------------------------------------ #
-# load network map data
+# load network map data, now focus on one file, only!
 # ------------------------------------------------------------------ #
 
 print("creating network map")
 
+if multiple_files:
+    file = glob.glob(file)[0]
+
 # neuron positions
 try:
-    n_x
-    n_y
-except NameError:
-    try:
-        n_x = h5_load(file, "/data/neuron_pos_x")
-        n_y = h5_load(file, "/data/neuron_pos_y")
-    except:
-        print("failed to load neuron positions for network map")
+    n_x = h5_load(file, "/data/neuron_pos_x")
+    n_y = h5_load(file, "/data/neuron_pos_y")
+except:
+    print("failed to load neuron positions for network map")
 
 # dendritic tree
 try:
     n_R_s = 7.5
-    n_R_d
-except NameError:
-    try:
-        n_R_d = h5_load(file, "/data/neuron_radius_dendritic_tree")
-    except:
-        print("failed to load dendritic radius")
+    n_R_d = h5_load(file, "/data/neuron_radius_dendritic_tree")
+except:
+    print("failed to load dendritic radius")
 
 # axons
 try:
