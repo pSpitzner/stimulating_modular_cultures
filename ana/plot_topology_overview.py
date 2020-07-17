@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-01-24 14:13:56
-# @Last Modified: 2020-07-17 13:53:23
+# @Last Modified: 2020-07-17 14:10:32
 # ------------------------------------------------------------------ #
 # script that takes a hdf5 as produced by my cpp simulation
 # as first argument and visualizes the topological features
@@ -173,6 +173,7 @@ ax = axes[0, 0]
 try:
     # n_R_d = h5_load(file, "/data/neuron_radius_dendritic_tree")
     n_R_d = h5_load(file, "/data/neuron_radius_dendritic_tree")
+    n_R_d = np.concatenate(n_R_d).ravel()
 
     # fig, ax = plt.subplots()
     sns.distplot(n_R_d, ax=ax, label="radius", hist=True, kde_kws={"alpha": 1})
@@ -183,7 +184,7 @@ try:
     # axes.append(ax)
     # fig.savefig(f"./fig/degree_distribution.pdf", transparent=True, pad_inches=0.0)
 except Exception as e:
-    print("plotting dendritic tree size distribution failed")
+    print("plotting dendritic tree size distribution failed: ", e)
 
 
 # neuron positions
@@ -191,6 +192,8 @@ ax = axes[0, 1]
 try:
     n_x = h5_load(file, "/data/neuron_pos_x")
     n_y = h5_load(file, "/data/neuron_pos_y")
+    n_x = np.concatenate(n_x).ravel()
+    n_y = np.concatenate(n_y).ravel()
     # fig, ax = plt.subplots()
     sns.distplot(n_x, ax=ax, label="x", hist=True, kde_kws={"alpha": 1})
     sns.distplot(n_y, ax=ax, label="y", hist=True, kde_kws={"alpha": 1})
@@ -201,13 +204,15 @@ try:
     # axes.append(ax)
     # fig.savefig(f"./fig/degree_distribution.pdf", transparent=True, pad_inches=0.0)
 except Exception as e:
-    print("plotting neuron position distribution failed")
+    print("plotting neuron position distribution failed: ", e)
 
 # in and out degree
 ax = axes[1, 1]
 try:
     k_in = h5_load(file, "/data/neuron_k_in")
     k_out = h5_load(file, "/data/neuron_k_out")
+    k_in = np.concatenate(k_in).ravel()
+    k_out = np.concatenate(k_out).ravel()
     # fig, ax = plt.subplots()
     maxbin = np.nanmax([k_in, k_out])
     bins = np.arange(0, maxbin, 1)
@@ -236,13 +241,15 @@ try:
     # axes.append(ax)
     # fig.savefig(f"./fig/degree_distribution.pdf", transparent=True, pad_inches=0.0)
 except Exception as e:
-    print("plotting in/out-degree distribution failed")
+    print("plotting in/out-degree distribution failed: ", e)
 
 # axon length distribution
 ax = axes[1, 0]
 try:
     k_len = h5_load(file, "/data/neuron_axon_length")
     k_ee = h5_load(file, "/data/neuron_axon_end_to_end_distance")
+    k_len = np.concatenate(k_len).ravel()
+    k_ee = np.concatenate(k_ee).ravel()
     # fig, ax = plt.subplots()
     sns.distplot(k_len, ax=ax, label="length", hist=True, kde_kws={"alpha": 1})
     sns.distplot(k_ee, ax=ax, label="end to end", hist=True, kde_kws={"alpha": 1})
@@ -253,7 +260,7 @@ try:
     # axes.append(ax)
     # fig.savefig(f"./fig/degree_distribution.pdf", transparent=True, pad_inches=0.0)
 except Exception as e:
-    print("plotting axon length distribution failed")
+    print("plotting axon length distribution failed: ", e)
 
 # ------------------------------------------------------------------ #
 # load network map data, now focus on one file, only!
@@ -268,15 +275,15 @@ if multiple_files:
 try:
     n_x = h5_load(file, "/data/neuron_pos_x")
     n_y = h5_load(file, "/data/neuron_pos_y")
-except:
-    print("failed to load neuron positions for network map")
+except Exception as e:
+    print("failed to load neuron positions for network map: ", e)
 
 # dendritic tree
 try:
     n_R_s = 7.5
     n_R_d = h5_load(file, "/data/neuron_radius_dendritic_tree")
-except:
-    print("failed to load dendritic radius")
+except Exception as e:
+    print("failed to load dendritic radius: ", e)
 
 # axons
 try:
@@ -285,13 +292,13 @@ try:
     # no nans in hdf5, 0 is the default padding
     axon_segments_x = np.where(axon_segments_x == 0, np.nan, axon_segments_x)
     axon_segments_y = np.where(axon_segments_y == 0, np.nan, axon_segments_y)
-except:
-    print("failed to load axon segments")
+except Exception as e:
+    print("failed to load axon segments: ", e)
 
 # connectivity matrix
 try:
     a_ij = h5_load(file, "/data/connectivity_matrix")
-except:
+except Exception as e:
     print("failed to load connectivity matrix")
 
 # fraction of inter-module connections
