@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-21 11:11:40
-# @Last Modified: 2020-07-21 12:27:47
+# @Last Modified: 2020-07-21 12:43:18
 # ------------------------------------------------------------------------------ #
 # Helper functions that are needed in various other scripts
 # ------------------------------------------------------------------------------ #
@@ -228,7 +228,7 @@ def population_activity(spiketimes, bin_size):
     return population_activity
 
 
-def inter_burst_interval(simulation_duration, spiketimes=None, burst_times=None):
+def inter_burst_interval(simulation_duration, spiketimes=None, bursttimes=None):
     """
         calculate inter burst interval
 
@@ -241,22 +241,22 @@ def inter_burst_interval(simulation_duration, spiketimes=None, burst_times=None)
         simulation_duration: float or None
             in same time unit as spiketimes
 
-        burst_times: 1d array or None
+        bursttimes: 1d array or None
             if burst times were alread calculated they can be used to skip calculation
 
 
     """
 
     if spiketimes is not None:
-        assert burst_times is None
+        assert bursttimes is None
 
-    if burst_times is None:
+    if bursttimes is None:
         # replace zero padding with nans
         spiketimes = np.where(spiketimes == 0, np.nan, spiketimes)
-        burst_times = burst_times(spiketimes, bin_size=0.5, threshold=0.75)
+        bursttimes = burst_times(spiketimes, bin_size=0.5, threshold=0.75)
 
     try:
-        ibi = simulation_duration / len(burst_times)
+        ibi = simulation_duration / len(bursttimes)
     except ZeroDivisionError:
         ibi = np.inf
 
