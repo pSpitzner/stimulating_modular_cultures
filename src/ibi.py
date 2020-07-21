@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2020-07-16 11:54:32
+# @Last Modified: 2020-07-21 11:25:15
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 or csv and runs the simulations in brian.
@@ -19,20 +19,23 @@
 import h5py
 import argparse
 import os
-
+import sys
 import numpy as np
 from brian2 import *
 
+sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/../ana/"))
+import utility as ut
+
 # we want to run this on a cluster, assign a custom cache directory to each thread
-cache_dir = os.path.expanduser(f'~/.cython/brian-pid-{os.getpid()}')
+cache_dir = os.path.expanduser(f"~/.cython/brian-pid-{os.getpid()}")
 prefs.codegen.runtime.cython.cache_dir = cache_dir
 prefs.codegen.runtime.cython.multiprocess_safe = False
 
 # Log level needs to be set in ~/.brian/user_preferences to work for all steps
-prefs.logging.console_log_level = 'INFO'
+prefs.logging.console_log_level = "INFO"
 
 # we want enforce simulation with c
-prefs.codegen.target = 'cython'
+prefs.codegen.target = "cython"
 
 from shutil import copy2
 
@@ -176,6 +179,8 @@ def toy_topology(k_intra=8, k_inter=10):
 # helper function to convert a list of time stamps
 # into a (binned) time series of activity
 def bin_spike_times(spike_times, bin_size, pad_right=0):
+    if len(spike_times) == 0:
+        return np.array([])
     last_spike = spike_times[-1]
     num_bins = int(np.ceil(last_spike / bin_size))
     num_bins += int(pad_right)
@@ -227,7 +232,7 @@ def burst_times(spks_m, debug=False):
     bursting_bins = np.where(summed_series >= 0.75 * num_n)[0]
 
     x = bursting_bins
-    bursts = np.delete(x, [np.where(x[:-1] == x[1:] - 1)[0]+1]) * bin_size
+    bursts = np.delete(x, [np.where(x[:-1] == x[1:] - 1)[0] + 1]) * bin_size
 
     if not debug:
         return bursts
@@ -344,6 +349,7 @@ S = Synapses(
 # mini_s = Synapses(mini_g, G, on_pre="I_post+=gm", order=-1, name="Minis")
 # mini_s.connect(j="i")
 
+# treat minis as spikes, add directly to current
 # for homogeneous rates, this is faster. here, N=1 is the input per neuron
 mini_g = PoissonInput(target=G, target_var="I", N=1, rate=rate, weight=gm)
 
@@ -369,7 +375,7 @@ G.v = "vc + 5*mV*rand()"
 
 # assert False
 # equilibrate
-run(args.equil_duration * second, report="stdout", report_period=1*60*second)
+run(args.equil_duration * second, report="stdout", report_period=1 * 60 * second)
 
 # disable state monitors that are not needed for production
 # stat_m = StateMonitor(G, ["v", "I", "u", "D"], record=True)
@@ -377,7 +383,7 @@ spks_m = SpikeMonitor(G)
 # rate_m = PopulationRateMonitor(G)
 # mini_m = SpikeMonitor(mini_g)
 
-run(args.duration * second, report="stdout", report_period=20*60*second)
+run(args.duration * second, report="stdout", report_period=20 * 60 * second)
 
 
 try:
@@ -403,28 +409,44 @@ try:
     for n in range(0, num_n):
         t = trains[n]
         spiketimes[n, 0 : len(t)] = t / second - args.equil_duration
-    dset = f.create_dataset("/data/spiketimes", data=spiketimes)
-    dset.attrs["description"] = "2d array of spiketimes, neuron x spiketime in seconds"
 
     try:
-        bursts = burst_times(spks_m)
-        ibi = args.duration * second / len(bursts)
+        bursts, time_series, summed_series, window = burst_times(spks_m, debug=True)
     except Exception as e:
-        print("Setting ibi to nan: ", e)
-        ibi = np.nan
+        bursts = np.array([])
+        summed_series = np.array([])
+
+    ibi = args.duration * second / len(bursts)
+    print(f"{len(bursts)} bursts occured in {args.duration} seconds. ibi: {ibi}")
+
+    dset = f.create_dataset("/data/spiketimes", data=spiketimes)
+    dset.attrs["description"] = "2d array of spiketimes, neuron x spiketime in seconds"
+    dset = f.create_dataset("/data/bursttimes", data=bursts / second)
+    dset.attrs["description"] = "time of detected busts in seconds"
+    dset = f.create_dataset("/data/summed_series", data=bursts / second)
+    dset.attrs[
+        "description"
+    ] = "timeseries of the number of neurons that spike in a time bin. based on 50 ms time bins. in each bin, a neuron spikes -possibly multiple times- (1) or not (0). In the summed series, in every bin we have an entry between 0 and number of neurons"
     dset = f.create_dataset("/data/ibi", data=ibi / second)
     dset.attrs["description"] = "inter burst interval in seconds"
 
-
     # meta data of this simulation
-    dset = f.create_dataset("/meta/dynamics_gA", data= gA / mV)
+    dset = f.create_dataset("/meta/dynamics_gA", data=gA / mV)
     dset.attrs["description"] = "AMPA current strength, in mV"
 
-    dset = f.create_dataset("/meta/dynamics_gm", data= gm / mV)
+    dset = f.create_dataset("/meta/dynamics_gm", data=gm / mV)
     dset.attrs["description"] = "shot noise (minis) strength, in mV"
 
-    dset = f.create_dataset("/meta/dynamics_rate", data=  rate * ms)
-    dset.attrs["description"] = "rate for the (global) poisson input (shot-noise), in 1/ms"
+    dset = f.create_dataset("/meta/dynamics_rate", data=rate * ms)
+    dset.attrs[
+        "description"
+    ] = "rate for the (global) poisson input (shot-noise), in 1/ms"
+
+    dset = f.create_dataset("/meta/dynamics_simulation_duration", data=args.duration)
+    dset.attrs["description"] = "in seconds"
+
+    dset = f.create_dataset("/meta/dynamics_equilibration_duration", data=args.equil_duration)
+    dset.attrs["description"] = "in seconds"
 
     f.close()
 
@@ -438,27 +460,27 @@ except Exception as e:
 # ------------------------------------------------------------------------------ #
 
 
-# ion()  # interactive plotting
-# fig, ax = subplots(5, 1, sharex=True)
+ion()  # interactive plotting
+fig, ax = subplots(5, 1, sharex=True)
 
-# n1 = randint(0, num_n)  # some neuron ton highlight
-# sel = where(spks_m.i == n1)[0]
+n1 = randint(0, num_n)  # some neuron ton highlight
+sel = where(spks_m.i == n1)[0]
 
 # ax[1].plot(mini_m.t / second, mini_m.i, ".y")
-# ax[1].plot(spks_m.t / second, mod_sort(spks_m.i), ".k")
-# ax[1].plot(spks_m.t[sel] / second, mod_sort(spks_m.i[sel]), ".")
+ax[1].plot(spks_m.t / second, mod_sort(spks_m.i), ".k")
+ax[1].plot(spks_m.t[sel] / second, mod_sort(spks_m.i[sel]), ".")
 # ax[1].plot(stim_m.t / second, mod_sort(stim_m.i), ".", color="orange")
-# ax[1].set_ylabel("Raster")
+ax[1].set_ylabel("Raster")
 
 
 # bursts = burst_times(spks_m)
-# # bursts, time_series, summed_series, window = burst_times(spks_m, debug=True)
-# ax[0].scatter(bursts / second, np.ones(len(bursts)))
+bursts, time_series, summed_series, window = burst_times(spks_m, debug=True)
+ax[0].scatter(bursts / second, np.ones(len(bursts)))
 
-# bin_size = 50*ms
-# ax[4].plot(np.arange(len(summed_series)) * bin_size / second, summed_series)
+bin_size = 50 * ms
+ax[4].plot(np.arange(len(summed_series)) * bin_size / second, summed_series)
 
-# ibi = args.duration * second / len(bursts)
-# print("ibi: ", ibi)
+ibi = args.duration * second / len(bursts)
+print("ibi: ", ibi)
 
-# show()
+show()
