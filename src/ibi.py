@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2020-08-31 09:31:04
+# @Last Modified: 2020-08-31 11:51:14
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 or csv and runs the simulations in brian.
@@ -439,12 +439,16 @@ try:
     dset = f.create_dataset("/data/ibi", data=ibi / second)
     dset.attrs["description"] = "inter burst interval in seconds"
 
+
     # meta data of this simulation
     dset = f.create_dataset("/meta/dynamics_gA", data=gA / mV)
     dset.attrs["description"] = "AMPA current strength, in mV"
 
     dset = f.create_dataset("/meta/dynamics_gm", data=gm / mV)
     dset.attrs["description"] = "shot noise (minis) strength, in mV"
+
+    dset = f.create_dataset("/meta/dynamics_tD", data=tD / second)
+    dset.attrs["description"] = "characteristic decay time, in seconds"
 
     dset = f.create_dataset("/meta/dynamics_rate", data=rate * ms)
     dset.attrs[
