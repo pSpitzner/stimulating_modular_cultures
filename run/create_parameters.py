@@ -48,7 +48,7 @@ with open("./parameters_topo.tsv", "w") as f_topo:
                 f"python ./src/ibi.py -i {topo_path} " +
                 f"-o {dyn_path} " +
                 f"-d 3600 -equil 300 -s {seed:d} " +
-                f"-gA {gampa:04.2f} -r {rate:.4f}\n"
+                f"-gA {gampa:04.2f} -tD {recovery:04.2f} -r {rate:.4f}\n"
             )
 
             seed += 1
