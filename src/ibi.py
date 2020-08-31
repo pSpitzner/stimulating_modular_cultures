@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2020-08-28 10:45:02
+# @Last Modified: 2020-08-31 09:31:04
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 or csv and runs the simulations in brian.
@@ -276,11 +276,13 @@ parser.add_argument(
 parser.add_argument("-gA", dest="gA", default=gA / mV, help="in mV", type=float)
 parser.add_argument("-gm", dest="gm", default=gm / mV, help="in mV", type=float)
 parser.add_argument("-r", dest="r", default=rate * ms, help="in 1/ms", type=float)
+parser.add_argument("-tD", dest="tD", default=tD / second, help="in seconds", type=float)
 args = parser.parse_args()
 
 numpy.random.seed(args.seed)
 gA = args.gA * mV
 gm = args.gm * mV
+tD = args.tD * second
 rate = args.r / ms
 
 print(f"-------------------------")
@@ -290,6 +292,7 @@ print(f"input topology: ", args.input_path)
 print(f"seed: ", args.seed)
 print(f"gA: ", gA)
 print(f"gm: ", gm)
+print(f"tD: ", tD)
 print(f"rate: ", rate)
 
 try:
