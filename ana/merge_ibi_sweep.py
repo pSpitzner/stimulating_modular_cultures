@@ -2,10 +2,11 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2020-07-21 12:01:40
+# @Last Modified: 2020-08-31 09:05:41
 #
 # Scans the provided directory for .hdf5 files and checks if they have the right
 # data to plot a 2d heatmap of ibi = f(gA, rate)
+# uses ut.inter_burst_interval to get ibi from spiketimes
 # ------------------------------------------------------------------------------ #
 
 import os
