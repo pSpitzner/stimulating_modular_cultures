@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2020-07-21 12:19:23
+# @Last Modified: 2020-07-21 15:06:23
 #
 # Scans the provided directory for .hdf5 files and checks if they have the right
 # data to plot a 2d heatmap of ibi = f(gA, rate)
@@ -76,7 +76,7 @@ ibi_not_nan = pd.DataFrame(
 )
 
 plt.ion()
-fig, ax = plt.subplots()
+fig, ax = plt.subplots(figsize=(10,4))
 
 sns.heatmap(
     ibi_mean,
@@ -93,10 +93,10 @@ sns.heatmap(
 ax.set_xlabel("Noise, Rate [Hz]")
 ax.set_ylabel("Ampa strength [mV]")
 ax.invert_yaxis()
-ax.set_title(args.input_path)
+fig.suptitle(args.input_path)
 
 
-fig, ax = plt.subplots()
+fig, ax = plt.subplots(figsize=(10,4))
 sns.heatmap(
     ibi_std,
     ax=ax,
@@ -112,9 +112,9 @@ sns.heatmap(
 ax.set_xlabel("Noise, Rate [Hz]")
 ax.set_ylabel("Ampa strength [mV]")
 ax.invert_yaxis()
-ax.set_title(args.input_path)
+fig.suptitle(args.input_path)
 
-fig, ax = plt.subplots()
+fig, ax = plt.subplots(figsize=(10,4))
 sns.heatmap(
     ibi_not_nan,
     ax=ax,
@@ -128,4 +128,4 @@ sns.heatmap(
 ax.set_xlabel("Noise, Rate [Hz]")
 ax.set_ylabel("Ampa strength [mV]")
 ax.invert_yaxis()
-ax.set_title(args.input_path)
+fig.suptitle(args.input_path)

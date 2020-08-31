@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-17 13:43:10
-# @Last Modified: 2020-07-21 12:36:47
+# @Last Modified: 2020-07-21 15:27:12
 # ------------------------------------------------------------------------------ #
 
 
@@ -31,6 +31,8 @@ parser.add_argument("-i", dest="input_path", help="input path", metavar="FILE")
 parser.add_argument("-o", dest="output_path", help="output path", metavar="FILE")
 args = parser.parse_args()
 file = args.input_path
+
+assert len(glob.glob(args.input_path)) != 0, "Invalid input path"
 
 # we want to plot spikes sorted by module, if they exists
 try:
@@ -75,8 +77,18 @@ bursts, time_series, summed_series = ut.burst_times(
     spikes, bin_size=0.5, threshold=0.75, mark_only_onset=False, debug=True
 )
 ax[2].plot(bursts, np.ones(len(bursts)), "|", markersize=12)
-ibi = ut.inter_burst_interval(simulation_duration=3600, burst_times=bursts)
+ibi = ut.inter_burst_interval(simulation_duration=3600, bursttimes=bursts)
 print(f"IBI: {ibi:.2g} [seconds]")
 ax[2].text(.95, .95, f"IBI: {ibi:.2g}", transform=ax[2].transAxes, ha="right", va="top")
 
+# some more meta data
+for text in args.input_path.split('/'):
+    if '2x2' in text:
+        fig.suptitle(text)
+ga = ut.h5_load(args.input_path, '/meta/dynamics_gA')
+rate = ut.h5_load(args.input_path, '/meta/dynamics_rate') * 1000
+ax[0].set_title(f"Ampa: {ga:.0f} mV", loc='left')
+ax[0].set_title(f"Rate: {rate:.0f} Hz", loc='right')
+
 ax[-1].set_xlabel("Time [seconds]")
+ax[-1].set_xlim(0,3600)

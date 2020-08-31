@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2020-07-21 11:25:15
+# @Last Modified: 2020-08-28 10:45:02
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 or csv and runs the simulations in brian.
@@ -14,6 +14,11 @@
 # 10 Bursts in 20 min; ibi ~ 120s for single-bond cultures
 #
 # Also, F/I curves would be nice.
+#
+# We want to set/get more biologically plausible values in the modules:
+# ampa in vivo <= 1mV, in vitro <= 10mV
+# Bursts do not occur more frequent than every (5-)10s,
+# with around 10 spikes per neuron
 # ------------------------------------------------------------------------------ #
 
 import h5py
@@ -69,6 +74,7 @@ gA =  50 * mV      # AMPA current strength, between 10 - 50 mV
 beta = 0.8         # D = beta*D after spike, to reduce efficacy, beta < 1
 rate = 0.03 / ms   # rate for the poisson input (shot-noise), between 0.01 - 0.05 1/ms
 gm =  25 * mV      # shot noise (minis) strength, between 10 - 50 mV
+                   # (sum of minis arriving at target neuron)
 gs = 300 * mV * mV * ms * ms  # white noise strength, via xi = dt**.5 * randn()
 # fmt:on
 
