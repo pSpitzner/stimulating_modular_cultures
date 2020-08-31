@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2020-08-31 09:05:41
+# @Last Modified: 2020-08-31 12:06:14
 #
 # Scans the provided directory for .hdf5 files and checks if they have the right
 # data to plot a 2d heatmap of ibi = f(gA, rate)
@@ -58,6 +58,7 @@ if os.path.isdir(args.input_path):
 
     candidates = glob.glob(full_path(args.input_path + "/*.hdf5"))
     l_ga = []
+    l_tD = []
     l_rate = []
     l_valid = []
 
@@ -66,6 +67,7 @@ if os.path.isdir(args.input_path):
         try:
             ga = ut.h5_load(candidate, "/meta/dynamics_gA", silent=True)
             rate = ut.h5_load(candidate, "/meta/dynamics_rate", silent=True)
+            tD = ut.h5_load(candidate, "/meta/dynamics_tD", silent=True)
 
             # check all observables are in the files
             # not anymore, now we calculate ibi from spiketimes
@@ -76,40 +78,46 @@ if os.path.isdir(args.input_path):
                 l_ga.append(ga)
             if rate not in l_rate:
                 l_rate.append(rate)
+            if tD not in l_tD:
+                l_tD.append(tD)
             l_valid.append(candidate)
         except Exception as e:
             print(f"incompatible file: {candidate}")
 
     l_ga = np.array(sorted(l_ga))
+    l_tD = np.array(sorted(l_tD))
     l_rate = np.array(sorted(l_rate))
 
     # we might have repetitions
-    num_rep = int(np.ceil(len(l_valid) / len(l_ga) / len(l_rate)))
+    num_rep = int(np.ceil(len(l_valid) / len(l_ga) / len(l_rate) / len(l_tD)))
     sampled = np.zeros(shape=(len(l_ga), len(l_rate)), dtype=int)
 
-    # 3d: x, y, repetition
-    heatmap = np.ones(shape=(len(l_ga), len(l_rate), num_rep)) * np.nan
+    # 4d: x, y, z, repetition
+    heatmap = np.ones(shape=(len(l_ga), len(l_rate), len(l_tD), num_rep)) * np.nan
 
     print(f"found ga: ", l_ga)
     print(f"   rates: ", l_rate)
+    print(f"   recovery times: ", l_tD)
     print(f"   repetitions: ", num_rep)
 
     for candidate in tqdm(l_valid):
         ga = ut.h5_load(candidate, "/meta/dynamics_gA", silent=True)
+        tD = ut.h5_load(candidate, "/meta/dynamics_tD", silent=True)
         rate = ut.h5_load(candidate, "/meta/dynamics_rate", silent=True)
 
         # transform to indices
         ga = np.where(l_ga == ga)[0][0]
+        tD = np.where(l_tD == tD)[0][0]
         rate = np.where(l_rate == rate)[0][0]
 
         # consider repetitions for each data point and stack values
-        rep = sampled[ga, rate]
+        rep = sampled[ga, rate, tD]
         if rep <= num_rep:
-            sampled[ga, rate] += 1
+            sampled[ga, rate, tD] += 1
 
             # load spiketimes and calculate ibi
             spiketimes = ut.h5_load(candidate, "/data/spiketimes", silent=True)
-            heatmap[ga, rate, rep] = ut.inter_burst_interval(
+            heatmap[ga, rate, tD, rep] = ut.inter_burst_interval(
                 spiketimes=spiketimes, simulation_duration=3600
             )
         else:
@@ -128,11 +136,12 @@ if os.path.isdir(args.input_path):
     # this seems broken due to integer division
     dset = f_tar.create_dataset("/data/axis_rate", data=l_rate)
     dset = f_tar.create_dataset("/data/axis_ga", data=l_ga)
+    dset = f_tar.create_dataset("/data/axis_tD", data=l_tD)
     dset = f_tar.create_dataset("/data/num_samples", data=sampled)
     dset.attrs["description"] = "number of repetitions in /data/ibi, same shape"
 
     dset = f_tar.create_dataset("/data/ibi", data=heatmap)
-    dset.attrs["description"] = "3d array with axis_ga x axis_rate x repetition"
+    dset.attrs["description"] = "4d array with axis_ga x axis_rate x axis_tD x repetition"
 
     f_tar.close()
 
