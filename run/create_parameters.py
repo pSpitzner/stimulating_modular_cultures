@@ -10,9 +10,9 @@ seed = 10_000
 
 # parameters to scan, noise rate, ampa strength, and a few repetitons for statistics
 l_topo = ['2x2merged', '2x2_fixed', '2x2merged_lower_alpha']
-l_rate = np.arange(0.01, 0.051, 0.005)
-l_gampa = np.arange(30, 51, 10)
-l_recovery = np.array([0.5, 2.5])
+l_rate = np.arange(0.01, 0.051, 0.01)
+l_gampa = np.array([1, 2, 5, 10, 25, 50])
+l_recovery = np.array([0.1, 0.5, 2.5])
 l_rep = range(0, 5)
 
 arg_list = product(l_topo, l_rate, l_gampa, l_recovery, l_rep)

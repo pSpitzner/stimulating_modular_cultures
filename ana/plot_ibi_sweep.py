@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2020-07-21 15:06:23
+# @Last Modified: 2020-09-01 16:33:15
 #
 # Scans the provided directory for .hdf5 files and checks if they have the right
 # data to plot a 2d heatmap of ibi = f(gA, rate)
@@ -64,10 +64,13 @@ elif os.path.isfile(args.input_path):
 # ------------------------------------------------------------------------------ #
 
 l_ga = ut.h5_load(merge_path, "/data/axis_ga", silent=True)
+l_tD = ut.h5_load(merge_path, "/data/axis_tD", silent=True)
 l_rate = ut.h5_load(merge_path, "/data/axis_rate", silent=True) * 1000  # to convert from 1/ms to Hz
-ibi_3d = ut.h5_load(merge_path, "/data/ibi", silent=True)
+ibi_4d = ut.h5_load(merge_path, "/data/ibi", silent=True)
 sampled = ut.h5_load(merge_path, "/data/num_samples", silent=True)
 
+tD = 2.5
+ibi_3d = ibi_4d[:, :, np.where(l_tD == tD)[0][0], :]
 ibi_median = pd.DataFrame(np.nanmedian(ibi_3d, axis=2), index=l_ga, columns=l_rate)
 ibi_mean = pd.DataFrame(np.nanmean(ibi_3d, axis=2), index=l_ga, columns=l_rate)
 ibi_std = pd.DataFrame(np.nanstd(ibi_3d, axis=2), index=l_ga, columns=l_rate)

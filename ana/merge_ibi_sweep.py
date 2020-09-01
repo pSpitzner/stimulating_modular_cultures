@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2020-08-31 12:06:14
+# @Last Modified: 2020-09-01 15:19:29
 #
 # Scans the provided directory for .hdf5 files and checks if they have the right
 # data to plot a 2d heatmap of ibi = f(gA, rate)
@@ -90,7 +90,7 @@ if os.path.isdir(args.input_path):
 
     # we might have repetitions
     num_rep = int(np.ceil(len(l_valid) / len(l_ga) / len(l_rate) / len(l_tD)))
-    sampled = np.zeros(shape=(len(l_ga), len(l_rate)), dtype=int)
+    sampled = np.zeros(shape=(len(l_ga), len(l_rate), len(l_tD)), dtype=int)
 
     # 4d: x, y, z, repetition
     heatmap = np.ones(shape=(len(l_ga), len(l_rate), len(l_tD), num_rep)) * np.nan
