@@ -9,10 +9,12 @@ os.chdir(os.path.dirname(__file__))
 seed = 10_000
 
 # parameters to scan, noise rate, ampa strength, and a few repetitons for statistics
-l_topo = ['2x2merged', '2x2_fixed', '2x2merged_lower_alpha']
-l_rate = np.arange(0.01, 0.051, 0.01)
-l_gampa = np.array([1, 2, 5, 10, 25, 50])
-l_recovery = np.array([0.1, 0.5, 2.5])
+l_topo = ['2x2merged', '2x2_fixed', '2x2merged_sparse']
+l_rate = np.array([0.035, 0.040, 0.045])
+l_gampa = np.array([30, 33, 34, 35, 36, 37, 40])
+l_recovery = np.array([0.5, 1.0, 1.5,
+    1.75, 2.0, 2.25,
+    2.5, 3.0, 5.0, 10.0, 20.0, 40.0])
 l_rep = range(0, 5)
 
 arg_list = product(l_topo, l_rate, l_gampa, l_recovery, l_rep)
@@ -37,8 +39,8 @@ with open("./parameters_topo.tsv", "w") as f_topo:
             dyn_path = f"./dat/dyn/{topo}/gampa={gampa:04.2f}_rate={rate:.4f}_recovery={recovery:04.2f}_rep={rep:02d}.hdf5"
 
             # here wo go again, ductaping additions into place
-            if topo == "2x2merged_lower_alpha":
-                topo = "2x2merged -a 0.15"
+            if topo == "2x2merged_sparse":
+                topo = "2x2merged -a 0.16"
             f_topo.write(
                 # topology command
                 f"/data.nst/share/projects/paul_brian_modular_cultures/topology_orlandi_standalone/exe/orlandi_standalone -N 100 -s {seed:d} -o {topo_path} -f {topo}\n"

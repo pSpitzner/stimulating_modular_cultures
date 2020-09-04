@@ -2,10 +2,10 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2020-09-01 15:19:29
+# @Last Modified: 2020-09-04 10:42:47
 #
 # Scans the provided directory for .hdf5 files and checks if they have the right
-# data to plot a 2d heatmap of ibi = f(gA, rate)
+# data to plot a 2d ibi_mean_4d of ibi = f(gA, rate)
 # uses ut.inter_burst_interval to get ibi from spiketimes
 # ------------------------------------------------------------------------------ #
 
@@ -93,7 +93,7 @@ if os.path.isdir(args.input_path):
     sampled = np.zeros(shape=(len(l_ga), len(l_rate), len(l_tD)), dtype=int)
 
     # 4d: x, y, z, repetition
-    heatmap = np.ones(shape=(len(l_ga), len(l_rate), len(l_tD), num_rep)) * np.nan
+    ibi_mean_4d = np.ones(shape=(len(l_ga), len(l_rate), len(l_tD), num_rep)) * np.nan
 
     print(f"found ga: ", l_ga)
     print(f"   rates: ", l_rate)
@@ -104,6 +104,7 @@ if os.path.isdir(args.input_path):
         ga = ut.h5_load(candidate, "/meta/dynamics_gA", silent=True)
         tD = ut.h5_load(candidate, "/meta/dynamics_tD", silent=True)
         rate = ut.h5_load(candidate, "/meta/dynamics_rate", silent=True)
+        sim_duration = ut.h5_load(candidate, "/meta/dynamics_simulation_duration")
 
         # transform to indices
         ga = np.where(l_ga == ga)[0][0]
@@ -117,9 +118,10 @@ if os.path.isdir(args.input_path):
 
             # load spiketimes and calculate ibi
             spiketimes = ut.h5_load(candidate, "/data/spiketimes", silent=True)
-            heatmap[ga, rate, tD, rep] = ut.inter_burst_interval(
-                spiketimes=spiketimes, simulation_duration=3600
-            )
+            bursttimes = ut.burst_times(spiketimes, bin_size=0.5, threshold=0.75)
+            ibis = ut.inter_burst_intervals(bursttimes=bursttimes)
+            ibi_mean_4d[ga, rate, tD, rep] = np.mean(ibis) if len(ibis) > 0 else np.inf
+
         else:
             print(
                 f"Error: unexpected repetitions (already read {num_rep}): {candidate}"
@@ -140,8 +142,10 @@ if os.path.isdir(args.input_path):
     dset = f_tar.create_dataset("/data/num_samples", data=sampled)
     dset.attrs["description"] = "number of repetitions in /data/ibi, same shape"
 
-    dset = f_tar.create_dataset("/data/ibi", data=heatmap)
-    dset.attrs["description"] = "4d array with axis_ga x axis_rate x axis_tD x repetition"
+    dset = f_tar.create_dataset("/data/ibi", data=ibi_mean_4d)
+    dset.attrs[
+        "description"
+    ] = "4d array with axis_ga x axis_rate x axis_tD x repetition"
 
     f_tar.close()
 

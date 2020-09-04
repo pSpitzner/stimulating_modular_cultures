@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-17 13:43:10
-# @Last Modified: 2020-07-21 15:27:12
+# @Last Modified: 2020-09-04 10:32:42
 # ------------------------------------------------------------------------------ #
 
 
@@ -52,6 +52,7 @@ except:
 # 2d array, dims: neuron_id x list of spiketime, padded at the end with zeros
 spikes = ut.h5_load(args.input_path, "/data/spiketimes")
 spikes = np.where(spikes == 0, np.nan, spikes)
+sim_duration = ut.h5_load(args.input_path, '/meta/dynamics_simulation_duration')
 
 plt.ion()
 fig, ax = plt.subplots(3, 1, sharex=True)
@@ -77,9 +78,13 @@ bursts, time_series, summed_series = ut.burst_times(
     spikes, bin_size=0.5, threshold=0.75, mark_only_onset=False, debug=True
 )
 ax[2].plot(bursts, np.ones(len(bursts)), "|", markersize=12)
-ibi = ut.inter_burst_interval(simulation_duration=3600, bursttimes=bursts)
-print(f"IBI: {ibi:.2g} [seconds]")
-ax[2].text(.95, .95, f"IBI: {ibi:.2g}", transform=ax[2].transAxes, ha="right", va="top")
+ibis = ut.inter_burst_intervals(bursttimes=bursts)
+print(f"sim duration: {sim_duration} [seconds]")
+print(f"Num bursts: {len(bursts):.2g}")
+print(f"IBI (mean): {np.mean(ibis):.2g} [seconds]")
+print(f"IBI (median): {np.median(ibis):.2g} [seconds]")
+ax[2].text(.95, .95, f"IBI (mean): {np.mean(ibis):.2g}\nIBI (median): {np.median(ibis):.2g}",
+    transform=ax[2].transAxes, ha="right", va="top")
 
 # some more meta data
 for text in args.input_path.split('/'):
@@ -91,4 +96,19 @@ ax[0].set_title(f"Ampa: {ga:.0f} mV", loc='left')
 ax[0].set_title(f"Rate: {rate:.0f} Hz", loc='right')
 
 ax[-1].set_xlabel("Time [seconds]")
-ax[-1].set_xlim(0,3600)
+ax[-1].set_xlim(0,sim_duration)
+
+# plot ibi distribution
+fig, ax = plt.subplots()
+if len(bursts) > 2:
+    ibis = bursts[1:]-bursts[:-1]
+    # bins = np.arange(0, np.nanmax(ibis), 0.5)
+    bins = 10
+    sns.distplot(ibis, ax=ax, bins=bins, label="IBI", hist=True, kde=False)
+ax.set_xlabel("IBI [seconds]")
+ax.set_title(f"Ampa: {ga:.0f} mV", loc='left')
+ax.set_title(f"Rate: {rate:.0f} Hz", loc='right')
+
+
+
+

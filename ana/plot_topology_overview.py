@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-01-24 14:13:56
-# @Last Modified: 2020-07-17 14:10:32
+# @Last Modified: 2020-09-03 18:26:40
 # ------------------------------------------------------------------ #
 # script that takes a hdf5 as produced by my cpp simulation
 # as first argument and visualizes the topological features
@@ -173,7 +173,8 @@ ax = axes[0, 0]
 try:
     # n_R_d = h5_load(file, "/data/neuron_radius_dendritic_tree")
     n_R_d = h5_load(file, "/data/neuron_radius_dendritic_tree")
-    n_R_d = np.concatenate(n_R_d).ravel()
+    if multiple_files:
+        n_R_d = np.concatenate(n_R_d).ravel()
 
     # fig, ax = plt.subplots()
     sns.distplot(n_R_d, ax=ax, label="radius", hist=True, kde_kws={"alpha": 1})
@@ -192,8 +193,9 @@ ax = axes[0, 1]
 try:
     n_x = h5_load(file, "/data/neuron_pos_x")
     n_y = h5_load(file, "/data/neuron_pos_y")
-    n_x = np.concatenate(n_x).ravel()
-    n_y = np.concatenate(n_y).ravel()
+    if multiple_files:
+        n_x = np.concatenate(n_x).ravel()
+        n_y = np.concatenate(n_y).ravel()
     # fig, ax = plt.subplots()
     sns.distplot(n_x, ax=ax, label="x", hist=True, kde_kws={"alpha": 1})
     sns.distplot(n_y, ax=ax, label="y", hist=True, kde_kws={"alpha": 1})
@@ -211,8 +213,10 @@ ax = axes[1, 1]
 try:
     k_in = h5_load(file, "/data/neuron_k_in")
     k_out = h5_load(file, "/data/neuron_k_out")
-    k_in = np.concatenate(k_in).ravel()
-    k_out = np.concatenate(k_out).ravel()
+    if multiple_files:
+        k_in = np.concatenate(k_in).ravel()
+    if multiple_files:
+        k_out = np.concatenate(k_out).ravel()
     # fig, ax = plt.subplots()
     maxbin = np.nanmax([k_in, k_out])
     bins = np.arange(0, maxbin, 1)
@@ -223,7 +227,7 @@ try:
         bins=bins,
         hist=True,
         norm_hist=True,
-        kde_kws={"alpha": 1},
+        kde_kws={"alpha": 1, "bw": 1},
     )
     sns.distplot(
         k_out,
@@ -232,12 +236,27 @@ try:
         bins=bins,
         hist=True,
         norm_hist=True,
-        kde_kws={"alpha": 1},
+        kde_kws={"alpha": 1, "bw": 1},
     )
     ax.set_xlabel(f"Degree $k$")
     ax.set_ylabel(f"Probability $p(k)$")
     ax.set_title("Degree distribution")
     ax.legend()
+
+    ax.text(
+        0.05,
+        0.95,
+        f"median:\n" + r"$k_{in} \sim$" + f"{np.nanmedian(k_in):g}\n"
+        r"$k_{out} \sim$"
+        + f"{np.nanmedian(k_out):g}\n\n"
+        + f"mean:\n"
+        + r"$k_{in} \sim$"
+        + f"{np.nanmean(k_in):g}\n"
+        r"$k_{out} \sim$" + f"{np.nanmean(k_out):g}\n",
+        transform=ax.transAxes,
+        ha="left",
+        va="top",
+    )
     # axes.append(ax)
     # fig.savefig(f"./fig/degree_distribution.pdf", transparent=True, pad_inches=0.0)
 except Exception as e:
@@ -248,8 +267,10 @@ ax = axes[1, 0]
 try:
     k_len = h5_load(file, "/data/neuron_axon_length")
     k_ee = h5_load(file, "/data/neuron_axon_end_to_end_distance")
-    k_len = np.concatenate(k_len).ravel()
-    k_ee = np.concatenate(k_ee).ravel()
+    if multiple_files:
+        k_len = np.concatenate(k_len).ravel()
+    if multiple_files:
+        k_ee = np.concatenate(k_ee).ravel()
     # fig, ax = plt.subplots()
     sns.distplot(k_len, ax=ax, label="length", hist=True, kde_kws={"alpha": 1})
     sns.distplot(k_ee, ax=ax, label="end to end", hist=True, kde_kws={"alpha": 1})
@@ -481,6 +502,11 @@ ax.autoscale()
 ax.set_xlabel(f"Position $l\,[\mu m]$")
 
 fig.tight_layout()
-fig.savefig(args.output_path, dpi=300, transparent=True, bbox_inches=0, pad_inches=0)
+try:
+    fig.savefig(
+        args.output_path, dpi=300, transparent=True, bbox_inches=0, pad_inches=0
+    )
+except:
+    print("no output path provided, not saving figure")
 
 plt.show()

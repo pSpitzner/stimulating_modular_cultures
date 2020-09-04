@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2020-09-01 16:33:15
+# @Last Modified: 2020-09-03 11:51:16
 #
 # Scans the provided directory for .hdf5 files and checks if they have the right
 # data to plot a 2d heatmap of ibi = f(gA, rate)
@@ -46,9 +46,10 @@ parser.add_argument(
     metavar="FILE",
 )
 parser.add_argument("-o", dest="output_path", help="output path", metavar="FILE")
+parser.add_argument("-tD", dest="tD", help="recovery time", metavar="0.5", type=float)
 args = parser.parse_args()
 
-observables = ["/data/ibi"]
+tD = args.tD
 
 # if a directory is provided as input, merge individual hdf5 files down, first
 if os.path.isdir(args.input_path):
@@ -69,7 +70,6 @@ l_rate = ut.h5_load(merge_path, "/data/axis_rate", silent=True) * 1000  # to con
 ibi_4d = ut.h5_load(merge_path, "/data/ibi", silent=True)
 sampled = ut.h5_load(merge_path, "/data/num_samples", silent=True)
 
-tD = 2.5
 ibi_3d = ibi_4d[:, :, np.where(l_tD == tD)[0][0], :]
 ibi_median = pd.DataFrame(np.nanmedian(ibi_3d, axis=2), index=l_ga, columns=l_rate)
 ibi_mean = pd.DataFrame(np.nanmean(ibi_3d, axis=2), index=l_ga, columns=l_rate)
@@ -97,6 +97,8 @@ ax.set_xlabel("Noise, Rate [Hz]")
 ax.set_ylabel("Ampa strength [mV]")
 ax.invert_yaxis()
 fig.suptitle(args.input_path)
+
+fig.savefig(args.output_path, dpi=300)
 
 
 fig, ax = plt.subplots(figsize=(10,4))

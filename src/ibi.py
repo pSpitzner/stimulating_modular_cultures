@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2020-08-31 11:51:14
+# @Last Modified: 2020-09-04 11:05:49
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 or csv and runs the simulations in brian.
@@ -328,7 +328,7 @@ G = NeuronGroup(
     N=num_n,
     model="""
         dv/dt = ( k*(v-vr)*(v-vt) -u +I                     # [6] soma potential
-                +xi*(gs/tc)**0.5 )/tc          : volt       # white noise term
+                  +xi*(gs/tc)**0.5      )/tc   : volt       # white noise term
         dI/dt = -I/tA                          : volt       # [9, 10]
         du/dt = ( b*(v-vr) -u )/ta             : volt       # [7] inhibitory current
         dD/dt = ( 1-D)/tD                      : 1          # [11] recovery to one

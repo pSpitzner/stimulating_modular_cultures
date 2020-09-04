@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-21 11:11:40
-# @Last Modified: 2020-07-21 12:43:18
+# @Last Modified: 2020-09-04 10:31:51
 # ------------------------------------------------------------------------------ #
 # Helper functions that are needed in various other scripts
 # ------------------------------------------------------------------------------ #
@@ -228,21 +228,22 @@ def population_activity(spiketimes, bin_size):
     return population_activity
 
 
-def inter_burst_interval(simulation_duration, spiketimes=None, bursttimes=None):
+def inter_burst_intervals(spiketimes=None, bursttimes=None):
     """
         calculate inter burst interval
 
         Parameters
         ----------
-        spiketimes: 2d array
+        spiketimes: 2d array or None
             zero-or-nan padded spiketimes. first dim are neurons, second time
             spiketrain per neuron
 
-        simulation_duration: float or None
-            in same time unit as spiketimes
-
         bursttimes: 1d array or None
             if burst times were alread calculated they can be used to skip calculation
+
+        Returns
+        -------
+        ibis: array of all ibi that were obsereved
 
 
     """
@@ -255,11 +256,9 @@ def inter_burst_interval(simulation_duration, spiketimes=None, bursttimes=None):
         spiketimes = np.where(spiketimes == 0, np.nan, spiketimes)
         bursttimes = burst_times(spiketimes, bin_size=0.5, threshold=0.75)
 
-    try:
-        ibi = simulation_duration / len(bursttimes)
-    except ZeroDivisionError:
-        ibi = np.inf
+    if len(bursttimes) < 2:
+        return np.array([])
 
-    return ibi
+    return (bursttimes[1:] - bursttimes[:-1])
 
 
