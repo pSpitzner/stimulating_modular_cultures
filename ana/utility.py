@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-21 11:11:40
-# @Last Modified: 2020-09-04 10:31:51
+# @Last Modified: 2020-09-04 13:29:22
 # ------------------------------------------------------------------------------ #
 # Helper functions that are needed in various other scripts
 # ------------------------------------------------------------------------------ #
@@ -163,6 +163,9 @@ def burst_times(
     """
     # assumes 2d spiketimes, np.nan padded with dim 1 the neuron id
 
+    # replace zero padding with nans
+    spiketimes = np.where(spiketimes == 0, np.nan, spiketimes)
+
     num_n = spiketimes.shape[0]
     bin_did_spike = []
     t_index_max = 0
@@ -252,8 +255,6 @@ def inter_burst_intervals(spiketimes=None, bursttimes=None):
         assert bursttimes is None
 
     if bursttimes is None:
-        # replace zero padding with nans
-        spiketimes = np.where(spiketimes == 0, np.nan, spiketimes)
         bursttimes = burst_times(spiketimes, bin_size=0.5, threshold=0.75)
 
     if len(bursttimes) < 2:
