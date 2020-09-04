@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2020-09-04 21:13:40
+# @Last Modified: 2020-09-04 21:18:18
 #
 # Scans the provided directory for .hdf5 files and checks if they have the right
 # data to plot a 2d ibi_mean_4d of ibi = f(gA, rate)
@@ -96,11 +96,11 @@ for candidate in candidates:
         print(f"incompatible file: {candidate}")
 
 # sort axes and count unique axes entries
-axes_size = 0
+axes_size = 1
 axes_shape = ()
 for obs in d_axes.keys():
     d_axes[obs] = np.array(sorted(d_axes[obs]))
-    axes_size += len(d_axes[obs])
+    axes_size *= len(d_axes[obs])
     axes_shape += (len(d_axes[obs]),)
 
 # we might have repetitions
