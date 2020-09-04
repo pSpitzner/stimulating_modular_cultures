@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2020-09-04 13:52:18
+# @Last Modified: 2020-09-04 21:13:40
 #
 # Scans the provided directory for .hdf5 files and checks if they have the right
 # data to plot a 2d ibi_mean_4d of ibi = f(gA, rate)
@@ -67,7 +67,7 @@ else:
 print(f"Checking {len(candidates)} files.")
 
 merge_path = full_path(args.output_path)
-print("Merging (overwriting) to {merge_path}")
+print(f"Merging (overwriting) to {merge_path}")
 
 
 # variables to span axes and how to get them from the hdf5 files
@@ -133,10 +133,10 @@ for candidate in tqdm(l_valid):
         index += (rep,)
 
         # load spiketimes and calculate ibi
-        # spiketimes = ut.h5_load(candidate, "/data/spiketimes", silent=True)
-        # bursttimes = ut.burst_times(spiketimes, bin_size=0.5, threshold=0.75)
-        # ibis = ut.inter_burst_intervals(bursttimes=bursttimes)
-        ibis = []
+        spiketimes = ut.h5_load(candidate, "/data/spiketimes", silent=True)
+        bursttimes = ut.burst_times(spiketimes, bin_size=0.5, threshold=0.75)
+        ibis = ut.inter_burst_intervals(bursttimes=bursttimes)
+        # ibis = []
         res_ndim[index] = np.mean(ibis) if len(ibis) > 0 else np.inf
 
     else:
