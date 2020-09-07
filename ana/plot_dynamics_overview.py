@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-17 13:43:10
-# @Last Modified: 2020-09-04 10:32:42
+# @Last Modified: 2020-09-07 13:29:08
 # ------------------------------------------------------------------------------ #
 
 
@@ -70,6 +70,9 @@ print("Calculating Population Activity")
 ax[1].set_ylabel("Pop. Act.")
 pop_act = ut.population_activity(spikes, bin_size=0.5)
 ax[1].plot(np.arange(0, len(pop_act)) * 0.5, pop_act)
+print(f"Pop. Act. (mean): {np.mean(pop_act):g}")
+ax[1].text(.95, .95, f"Pop. Act. (mean): {np.mean(pop_act):g}",
+    transform=ax[1].transAxes, ha="right", va="top")
 
 print("Detecting Bursts")
 ax[2].set_ylabel("Bursts")
@@ -80,10 +83,10 @@ bursts, time_series, summed_series = ut.burst_times(
 ax[2].plot(bursts, np.ones(len(bursts)), "|", markersize=12)
 ibis = ut.inter_burst_intervals(bursttimes=bursts)
 print(f"sim duration: {sim_duration} [seconds]")
-print(f"Num bursts: {len(bursts):.2g}")
-print(f"IBI (mean): {np.mean(ibis):.2g} [seconds]")
-print(f"IBI (median): {np.median(ibis):.2g} [seconds]")
-ax[2].text(.95, .95, f"IBI (mean): {np.mean(ibis):.2g}\nIBI (median): {np.median(ibis):.2g}",
+print(f"Num bursts: {len(bursts):g}")
+print(f"IBI (mean): {np.mean(ibis):g} [seconds]")
+print(f"IBI (median): {np.median(ibis):g} [seconds]")
+ax[2].text(.95, .95, f"IBI (mean): {np.mean(ibis):g}\nIBI (median): {np.median(ibis):g}",
     transform=ax[2].transAxes, ha="right", va="top")
 
 # some more meta data
@@ -92,8 +95,10 @@ for text in args.input_path.split('/'):
         fig.suptitle(text)
 ga = ut.h5_load(args.input_path, '/meta/dynamics_gA')
 rate = ut.h5_load(args.input_path, '/meta/dynamics_rate') * 1000
-ax[0].set_title(f"Ampa: {ga:.0f} mV", loc='left')
-ax[0].set_title(f"Rate: {rate:.0f} Hz", loc='right')
+tD = ut.h5_load(args.input_path, '/meta/dynamics_tD')
+ax[0].set_title(f"Ampa: {ga:.1f} mV", loc='left')
+ax[0].set_title(f"Rate: {rate:.1f} Hz", loc='right')
+ax[0].set_title(f"tD: {tD:.1f} s", loc='center')
 
 ax[-1].set_xlabel("Time [seconds]")
 ax[-1].set_xlim(0,sim_duration)
@@ -108,6 +113,10 @@ if len(bursts) > 2:
 ax.set_xlabel("IBI [seconds]")
 ax.set_title(f"Ampa: {ga:.0f} mV", loc='left')
 ax.set_title(f"Rate: {rate:.0f} Hz", loc='right')
+ax.set_title(f"tD: {tD:.1f} s", loc='center')
+for text in args.input_path.split('/'):
+    if '2x2' in text:
+        fig.suptitle(text)
 
 
 

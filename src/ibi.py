@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2020-09-04 11:05:49
+# @Last Modified: 2020-09-07 17:14:43
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 or csv and runs the simulations in brian.
@@ -12,6 +12,9 @@
 #
 # 15 Bursts in 20 min; ibi ~ 80s for merged cultures
 # 10 Bursts in 20 min; ibi ~ 120s for single-bond cultures
+#
+# in science advance we have 15+-4 and 9+-3 bursts in 20 min!
+# 46 | 11
 #
 # Also, F/I curves would be nice.
 #

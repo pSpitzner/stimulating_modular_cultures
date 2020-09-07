@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2020-09-04 18:44:42
+# @Last Modified: 2020-09-07 13:30:18
 #
 # Scans the provided directory for .hdf5 files and checks if they have the right
 # data to plot a 2d heatmap of ibi = f(gA, rate)
@@ -137,7 +137,10 @@ sns.heatmap(
 ax.set_xlabel(x_obs)
 ax.set_ylabel(y_obs)
 ax.invert_yaxis()
-fig.suptitle(args.input_path)
+
+for text in args.input_path.split('/'):
+    if '2x2' in text:
+        fig.suptitle(text)
 
 try:
     fig.savefig(args.output_path, dpi=300)
