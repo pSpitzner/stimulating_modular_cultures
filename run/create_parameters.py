@@ -11,8 +11,8 @@ seed = 15_000
 # parameters to scan, noise rate, ampa strength, and a few repetitons for statistics
 # l_topo = ['2x2merged', '2x2_fixed', '2x2merged_sparse']
 l_topo = ['2x2merged']
-l_rate = np.array([0.030, 0.040, 0.045])
-l_gampa = np.array([10, 12.5, 15, 17.5, 20, 22.5, 25, 27.5])
+l_rate = np.array([0.030, 0.035, 0.040, 0.045])
+l_gampa = np.array([10, 12.5, 15, 17.5, 20, 22.5, 25, 27.5, 30, 35])
 l_recovery = np.array([0.5, 1.0, 1.5,
     1.75, 2.0, 2.25,
     2.5, 3.0, 5.0, 10.0, 20.0, 40.0])
