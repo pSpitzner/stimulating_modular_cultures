@@ -64,7 +64,6 @@ else:
     candidates = glob.glob(full_path(args.input_path))
     print(f"{args.input_path} is a (list of) file")
 
-print(f"Checking {len(candidates)} files.")
 
 merge_path = full_path(args.output_path)
 print(f"Merging (overwriting) to {merge_path}")
@@ -83,8 +82,9 @@ for obs in d_obs.keys():
 
 
 # check what's in the files and create axes labels for n-dim tensor
+print(f"Checking {len(candidates)} files.")
 l_valid = []
-for candidate in candidates:
+for candidate in tqdm(candidates):
     try:
         for obs in d_obs:
             temp = ut.h5_load(candidate, d_obs[obs], silent=True)
@@ -115,6 +115,7 @@ for obs in d_axes.keys():
     print(f"\t{obs}: ", d_axes[obs])
 print(f"repetitions: ", num_rep)
 
+print(f"Analysing:")
 for candidate in tqdm(l_valid):
     index = ()
     for obs in d_axes.keys():
