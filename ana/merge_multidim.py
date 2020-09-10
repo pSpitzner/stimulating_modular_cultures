@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2020-09-04 21:18:18
+# @Last Modified: 2020-09-10 11:02:51
 #
 # Scans the provided directory for .hdf5 files and checks if they have the right
 # data to plot a 2d ibi_mean_4d of ibi = f(gA, rate)
@@ -82,7 +82,7 @@ for obs in d_obs.keys():
 
 
 # check what's in the files and create axes labels for n-dim tensor
-print(f"Checking {len(candidates)} files.")
+print(f"Checking {len(candidates)} files:")
 l_valid = []
 for candidate in tqdm(candidates):
     try:
@@ -103,17 +103,31 @@ for obs in d_axes.keys():
     axes_size *= len(d_axes[obs])
     axes_shape += (len(d_axes[obs]),)
 
-# we might have repetitions
-num_rep = int(np.ceil(len(l_valid) / axes_size))
+# we might have repetitions but estimating num_rep proved unreliable.
+print(f"Finding number of repetitions:")
+# num_rep = int(np.ceil(len(l_valid) / axes_size))
+sampled = np.zeros(shape=axes_shape, dtype=int)
+for candidate in tqdm(candidates):
+    index = ()
+    for obs in d_axes.keys():
+        # get value
+        temp = ut.h5_load(candidate, d_obs[obs], silent=True)
+        # transform to index
+        temp = np.where(d_axes[obs] == temp)[0][0]
+        index += (temp,)
+
+    sampled[index] += 1
+
+num_rep = np.max(sampled)
 sampled = np.zeros(shape=axes_shape, dtype=int)
 
 # keep repetitions always as the last axes
 res_ndim = np.ones(shape=axes_shape + (num_rep,)) * np.nan
 
-print(f"found axes:")
+print(f"Found axes:")
 for obs in d_axes.keys():
-    print(f"\t{obs}: ", d_axes[obs])
-print(f"repetitions: ", num_rep)
+    print(f"{obs: >10}: ", d_axes[obs])
+print(f"Repetitions: ", num_rep)
 
 print(f"Analysing:")
 for candidate in tqdm(l_valid):
