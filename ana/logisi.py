@@ -1,3 +1,24 @@
+# ------------------------------------------------------------------------------ #
+# @Author:        F. Paul Spitzner
+# @Email:         paul.spitzner@ds.mpg.de
+# @Created:       2020-09-28 10:36:48
+# @Last Modified: 2020-09-28 10:42:41
+# ------------------------------------------------------------------------------ #
+# My implementation of the logISI historgram burst detection algorithm
+# by Pasuqale et al.
+#
+# Adapted from R-code https://github.com/ellesec/burstanalysis
+# Original Algorithm: DOI 10.1007/s10827-009-0175-1
+# Comparison by Ellese et al: DOI 10.1152/jn.00093.2016
+#
+# Only detects the bursts within each Channel / ROI / Unit. Thus, if we want to
+# include short network bursts (less than 3 spikes per neuron),
+# we need sth else.
+#
+# ToDo: Network-burst detection.
+# ------------------------------------------------------------------------------ #
+
+
 import numpy as np
 from statsmodels.nonparametric.smoothers_lowess import lowess
 from scipy.signal import find_peaks
@@ -53,7 +74,9 @@ def logisi_pasq_method(spike_train, cutoff=0.1):
 
     return result
 
-debug = None
+debug_h = None
+debug_br = None
+
 # Function to find cutoff threshold.
 def find_thresh(h, h_edges, ISITh=100.0):
     void_th = 0.7
@@ -71,8 +94,6 @@ def find_thresh(h, h_edges, ISITh=100.0):
 
     y1 = intra_height
     x1 = peak_idx[intra_idx]
-    global debug
-    debug = h
     print("peak_idx", peak_idx)
     print("peak_heights", peak_heights)
 
@@ -126,6 +147,10 @@ def logisi_break_calc(st, cutoff):
     isi = isi[isi >= 1]
     br = np.logspace(0, max_isi, int(10 * max_isi))
     hist, edges = np.histogram(isi, bins=br)
+    global debug_h
+    global debug_br
+    debug_h = hist
+    debug_br = edges
     hist_smooth = lowess(
         endog=hist / np.sum(hist),
         exog=np.arange(len(hist)),
@@ -394,7 +419,7 @@ for f in files:
     np.savetxt(tar_prefix + f + ".csv", np.vstack((neurons, spikes)).T, fmt="%02d,%.6f")
 
 
-f = files[0]
+f = files[1]
 neurons, spikes = np.loadtxt(tar_prefix + f + ".csv", unpack=True, delimiter=",")
 neurons = neurons.astype(int)
 
