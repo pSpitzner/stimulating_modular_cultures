@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-17 13:43:10
-# @Last Modified: 2020-09-07 13:29:08
+# @Last Modified: 2020-09-29 11:20:25
 # ------------------------------------------------------------------------------ #
 
 
@@ -67,11 +67,11 @@ for n in range(0, spikes.shape[0]):
 # ax[0].plot(spikes[sel], mod_sort(sel) ** np.ones(len(spikes[sel])), "|")
 
 print("Calculating Population Activity")
-ax[1].set_ylabel("Pop. Act.")
-pop_act = ut.population_activity(spikes, bin_size=0.5)
-ax[1].plot(np.arange(0, len(pop_act)) * 0.5, pop_act)
-print(f"Pop. Act. (mean): {np.mean(pop_act):g}")
-ax[1].text(.95, .95, f"Pop. Act. (mean): {np.mean(pop_act):g}",
+ax[1].set_ylabel("ASDR")
+pop_act = ut.population_activity(spikes, bin_size=1.0)
+ax[1].plot(np.arange(0, len(pop_act)) * 1.0, pop_act)
+print(f"ASDR (mean): {np.mean(pop_act):g}")
+ax[1].text(.95, .95, f"ASDR (mean): {np.mean(pop_act):g}",
     transform=ax[1].transAxes, ha="right", va="top")
 
 print("Detecting Bursts")
@@ -104,19 +104,19 @@ ax[-1].set_xlabel("Time [seconds]")
 ax[-1].set_xlim(0,sim_duration)
 
 # plot ibi distribution
-fig, ax = plt.subplots()
-if len(bursts) > 2:
-    ibis = bursts[1:]-bursts[:-1]
-    # bins = np.arange(0, np.nanmax(ibis), 0.5)
-    bins = 10
-    sns.distplot(ibis, ax=ax, bins=bins, label="IBI", hist=True, kde=False)
-ax.set_xlabel("IBI [seconds]")
-ax.set_title(f"Ampa: {ga:.0f} mV", loc='left')
-ax.set_title(f"Rate: {rate:.0f} Hz", loc='right')
-ax.set_title(f"tD: {tD:.1f} s", loc='center')
-for text in args.input_path.split('/'):
-    if '2x2' in text:
-        fig.suptitle(text)
+# fig, ax = plt.subplots()
+# if len(bursts) > 2:
+#     ibis = bursts[1:]-bursts[:-1]
+#     # bins = np.arange(0, np.nanmax(ibis), 0.5)
+#     bins = 10
+#     sns.distplot(ibis, ax=ax, bins=bins, label="IBI", hist=True, kde=False)
+# ax.set_xlabel("IBI [seconds]")
+# ax.set_title(f"Ampa: {ga:.0f} mV", loc='left')
+# ax.set_title(f"Rate: {rate:.0f} Hz", loc='right')
+# ax.set_title(f"tD: {tD:.1f} s", loc='center')
+# for text in args.input_path.split('/'):
+#     if '2x2' in text:
+#         fig.suptitle(text)
 
 
 

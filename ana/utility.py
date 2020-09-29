@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-21 11:11:40
-# @Last Modified: 2020-09-04 13:29:22
+# @Last Modified: 2020-09-29 16:57:39
 # ------------------------------------------------------------------------------ #
 # Helper functions that are needed in various other scripts
 # ------------------------------------------------------------------------------ #
@@ -41,6 +41,31 @@ def h5_load(filenames, dsetname, raise_ex=False, silent=False):
         return res[0]
     else:
         return res
+
+def h5_ls(filename, dsetname = '/'):
+    """
+        list the keys in a dsetname
+
+        Parameters
+        ----------
+        filename: path to h5file
+        dsetname: which dset to list
+
+        Returns
+        -------
+        list: containing the contained keys as strings
+    """
+    try:
+        file = h5py.File(filename, "r")
+        try:
+            res = list(file[dsetname].keys())
+        except Exception as e:
+            res = []
+        file.close()
+    except Exception as e:
+        res = []
+
+    return res
 
 
 # helper function to convert a list of time stamps
@@ -209,6 +234,13 @@ def burst_times(
 
 def population_activity(spiketimes, bin_size):
     """
+        calculate the activity across the whole population. naive binning,
+        no sliding window.
+
+        can be used to get the ASDR (Array wide spike detection rate)
+        if bin_size is set to one second.
+
+        spiketimes: np array with first dim neurons, second dim spiketimes. nan-padded
         bin_size: float, in units of spiketimes
     """
 

@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2020-09-10 11:02:51
+# @Last Modified: 2020-09-29 19:14:26
 #
 # Scans the provided directory for .hdf5 files and checks if they have the right
 # data to plot a 2d ibi_mean_4d of ibi = f(gA, rate)
@@ -25,7 +25,53 @@ from tqdm import tqdm
 sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/../ana/"))
 import utility as ut
 
-parser = argparse.ArgumentParser(description="Plot Ibi Sweep")
+# ------------------------------------------------------------------------------ #
+# settings
+# ------------------------------------------------------------------------------ #
+
+# variables to span axes and how to get them from the hdf5 files
+d_obs = dict()
+d_obs["ga"] = "/meta/dynamics_gA"
+d_obs["rate"] = "/meta/dynamics_rate"
+d_obs["tD"] = "/meta/dynamics_tD"
+
+# functions for analysis. candidate is the hdf5 file
+# need to return a dict where the key becomes the hdf5 data set name
+# and a scalar entry as the value
+def scalar_mean_ibi(candidate):
+    # load spiketimes and calculate ibi
+    spiketimes = ut.h5_load(candidate, "/data/spiketimes", silent=True)
+    bursttimes = ut.burst_times(spiketimes, bin_size=0.5, threshold=0.75)
+    ibis = ut.inter_burst_intervals(bursttimes=bursttimes)
+
+    res = dict()
+    res["ibi_mean"] = np.mean(ibis) if len(ibis) > 0 else np.inf
+    res["ibi_var"] = np.var(ibis) if len(ibis) > 0 else np.inf
+    return res
+
+
+def scalar_asdr(candidate):
+    spiketimes = ut.h5_load(candidate, "/data/spiketimes", silent=True)
+    asdr = ut.population_activity(spiketimes, bin_size=1.0)
+
+    res = dict()
+    res["asdr_mean"] = np.mean(asdr)
+    return res
+
+
+# a list of analysis functions to call on the candidate
+l_ana_functions = list()
+l_ana_functions.append(scalar_mean_ibi)
+l_ana_functions.append(scalar_asdr)
+
+# all the keys that will be returned from above
+l_ana_keys = ["ibi_mean", "ibi_var", "asdr_mean"]
+
+# ------------------------------------------------------------------------------ #
+# arguments
+# ------------------------------------------------------------------------------ #
+
+parser = argparse.ArgumentParser(description="Merge Multidm")
 parser.add_argument(
     "-i",
     dest="input_path",
@@ -36,19 +82,13 @@ parser.add_argument(
 parser.add_argument("-o", dest="output_path", help="output path", metavar="FILE")
 args = parser.parse_args()
 
-
-# ------------------------------------------------------------------ #
-# helper
-# ------------------------------------------------------------------ #
+# ------------------------------------------------------------------------------ #
+# load, calcualte ibi, merge in a new hdf5 file
+# ------------------------------------------------------------------------------ #
 
 
 def full_path(path):
     return os.path.abspath(os.path.expanduser(path))
-
-
-# ------------------------------------------------------------------------------ #
-# load, calcualte ibi, merge in a new hdf5 file
-# ------------------------------------------------------------------------------ #
 
 
 # if a directory is provided as input, merge individual hdf5 files down
@@ -67,13 +107,6 @@ else:
 
 merge_path = full_path(args.output_path)
 print(f"Merging (overwriting) to {merge_path}")
-
-
-# variables to span axes and how to get them from the hdf5 files
-d_obs = dict()
-d_obs["ga"] = "/meta/dynamics_gA"
-d_obs["rate"] = "/meta/dynamics_rate"
-d_obs["tD"] = "/meta/dynamics_tD"
 
 # which values occur across files
 d_axes = dict()
@@ -121,8 +154,12 @@ for candidate in tqdm(candidates):
 num_rep = np.max(sampled)
 sampled = np.zeros(shape=axes_shape, dtype=int)
 
-# keep repetitions always as the last axes
-res_ndim = np.ones(shape=axes_shape + (num_rep,)) * np.nan
+
+# results for all scalars
+res_ndim = dict()
+for key in l_ana_keys:
+    # keep repetitions always as the last axes
+    res_ndim[key] = np.ones(shape=axes_shape + (num_rep,)) * np.nan
 
 print(f"Found axes:")
 for obs in d_axes.keys():
@@ -147,12 +184,11 @@ for candidate in tqdm(l_valid):
         sampled[index] += 1
         index += (rep,)
 
-        # load spiketimes and calculate ibi
-        spiketimes = ut.h5_load(candidate, "/data/spiketimes", silent=True)
-        bursttimes = ut.burst_times(spiketimes, bin_size=0.5, threshold=0.75)
-        ibis = ut.inter_burst_intervals(bursttimes=bursttimes)
-        # ibis = []
-        res_ndim[index] = np.mean(ibis) if len(ibis) > 0 else np.inf
+        # calculate all scalars by calling the right function from d_ana_scalars
+        for f in l_ana_functions:
+            res = f(candidate)
+            for key in res.keys():
+                res_ndim[key][index] = res[key]
 
     else:
         print(f"Error: unexpected repetitions (already read {num_rep}): {candidate}")
@@ -179,8 +215,9 @@ for obs in d_axes.keys():
     desc_axes += obs + ", "
 desc_axes += "repetition"
 
-dset = f_tar.create_dataset("/data/ibi", data=res_ndim)
-dset.attrs["description"] = desc_axes
+for key in res_ndim.keys():
+    dset = f_tar.create_dataset(f"/data/{key}", data=res_ndim[key])
+    dset.attrs["description"] = desc_axes
 
 dset = f_tar.create_dataset("/data/num_samples", data=sampled)
 dset.attrs["description"] = "number of repetitions in /data/ibi, same shape"

@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2020-09-07 13:30:18
+# @Last Modified: 2020-09-29 19:13:56
 #
 # Scans the provided directory for .hdf5 files and checks if they have the right
 # data to plot a 2d heatmap of ibi = f(gA, rate)
@@ -22,6 +22,8 @@ import pandas as pd
 
 sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/../ana/"))
 import utility as ut
+
+from mpl_toolkits.mplot3d import Axes3D
 
 # ------------------------------------------------------------------ #
 # helper
@@ -58,9 +60,24 @@ elif os.path.isfile(args.input_path):
 # load merged and plot
 # ------------------------------------------------------------------------------ #
 
-l_axis_candidates = ut.h5_load(input_path, "/meta/axis_overview", silent=True)
-data_nd = ut.h5_load(input_path, "/data/ibi", silent=True)
+# get all observables that qualify (i.e. are not axis)
+l_obs_candidates = ut.h5_ls(input_path, "/data/")
+l_obs_candidates = [obs for obs in l_obs_candidates if obs.find("axis_") != 0]
+assert len(l_obs_candidates) > 0
 
+while True:
+    txt = input(f"Choose observable to plot {l_obs_candidates}: ")
+    if len(txt) == 0:
+        obs_to_plot = l_obs_candidates[0]
+    else:
+        obs_to_plot = str(txt)
+    if obs_to_plot in l_obs_candidates:
+        print(f"Using {obs_to_plot}")
+        break
+
+data_nd = ut.h5_load(input_path, f"/data/{obs_to_plot}", silent=True)
+
+l_axis_candidates = ut.h5_load(input_path, "/meta/axis_overview", silent=True)
 d_axes = dict()
 for obs in l_axis_candidates:
     d_axes[obs] = ut.h5_load(input_path, "/data/axis_" + obs, silent=True)
@@ -125,6 +142,8 @@ fig, ax = plt.subplots(figsize=(10,4))
 sns.heatmap(
     data_mean,
     ax=ax,
+    # vmin=np.nanmin(data_mean[np.isfinite(data_mean)]),
+    # vmax=np.nanmax(data_mean[np.isfinite(data_mean)]),
     vmin=0,
     vmax=150,
     annot=True,
@@ -132,7 +151,7 @@ sns.heatmap(
     linewidth=2.5,
     cmap="Blues",
     square=False,
-    cbar_kws={"label": "IBI [seconds]"},
+    cbar_kws={"label": obs_to_plot},
 )
 ax.set_xlabel(x_obs)
 ax.set_ylabel(y_obs)
