@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-17 13:43:10
-# @Last Modified: 2020-09-29 11:20:25
+# @Last Modified: 2020-09-29 21:44:46
 # ------------------------------------------------------------------------------ #
 
 
@@ -12,6 +12,7 @@ import glob
 import h5py
 import matplotlib
 import argparse
+import logging
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -19,8 +20,10 @@ import seaborn as sns
 import networkx as nx
 from brian2.units import *
 
+log = logging.getLogger(__name__)
 sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/../ana/"))
 import utility as ut
+import logisi as logisi
 
 # interactive plotting
 plt.ion()
@@ -57,7 +60,7 @@ sim_duration = ut.h5_load(args.input_path, '/meta/dynamics_simulation_duration')
 plt.ion()
 fig, ax = plt.subplots(3, 1, sharex=True)
 
-print("Plotting raster")
+log.info("Plotting raster")
 ax[0].set_ylabel("Raster")
 for n in range(0, spikes.shape[0]):
     ax[0].plot(spikes[n], mod_sort(n) * np.ones(len(spikes[n])), "|k", alpha = 0.1)
@@ -66,15 +69,15 @@ for n in range(0, spikes.shape[0]):
 # sel = np.random.randint(0, num_n)
 # ax[0].plot(spikes[sel], mod_sort(sel) ** np.ones(len(spikes[sel])), "|")
 
-print("Calculating Population Activity")
+log.info("Calculating Population Activity")
 ax[1].set_ylabel("ASDR")
 pop_act = ut.population_activity(spikes, bin_size=1.0)
 ax[1].plot(np.arange(0, len(pop_act)) * 1.0, pop_act)
-print(f"ASDR (mean): {np.mean(pop_act):g}")
+log.info(f"ASDR (mean): {np.mean(pop_act):g}")
 ax[1].text(.95, .95, f"ASDR (mean): {np.mean(pop_act):g}",
     transform=ax[1].transAxes, ha="right", va="top")
 
-print("Detecting Bursts")
+log.info("Detecting Bursts")
 ax[2].set_ylabel("Bursts")
 ax[2].set_yticks([])
 bursts, time_series, summed_series = ut.burst_times(
@@ -82,10 +85,10 @@ bursts, time_series, summed_series = ut.burst_times(
 )
 ax[2].plot(bursts, np.ones(len(bursts)), "|", markersize=12)
 ibis = ut.inter_burst_intervals(bursttimes=bursts)
-print(f"sim duration: {sim_duration} [seconds]")
-print(f"Num bursts: {len(bursts):g}")
-print(f"IBI (mean): {np.mean(ibis):g} [seconds]")
-print(f"IBI (median): {np.median(ibis):g} [seconds]")
+log.info(f"sim duration: {sim_duration} [seconds]")
+log.info(f"Num bursts: {len(bursts):g}")
+log.info(f"IBI (mean): {np.mean(ibis):g} [seconds]")
+log.info(f"IBI (median): {np.median(ibis):g} [seconds]")
 ax[2].text(.95, .95, f"IBI (mean): {np.mean(ibis):g}\nIBI (median): {np.median(ibis):g}",
     transform=ax[2].transAxes, ha="right", va="top")
 
@@ -118,6 +121,11 @@ ax[-1].set_xlim(0,sim_duration)
 #     if '2x2' in text:
 #         fig.suptitle(text)
 
+log.setLevel('DEBUG')
+s = spikes[1]
+s = s[np.isfinite(s)]
+bursts, isi_low, hist, edges = logisi.burst_detection_pasquale(s)
 
+per_neuron_bursts, thr, hist, hist_smooth, edges = logisi.network_burst_detection(spikes)
 
 

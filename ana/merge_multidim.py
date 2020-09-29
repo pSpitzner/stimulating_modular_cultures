@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2020-09-29 19:14:26
+# @Last Modified: 2020-09-29 19:28:43
 #
 # Scans the provided directory for .hdf5 files and checks if they have the right
 # data to plot a 2d ibi_mean_4d of ibi = f(gA, rate)
@@ -24,6 +24,7 @@ from tqdm import tqdm
 
 sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/../ana/"))
 import utility as ut
+import logisi as logisi
 
 # ------------------------------------------------------------------------------ #
 # settings

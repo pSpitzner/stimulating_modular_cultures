@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-21 11:11:40
-# @Last Modified: 2020-09-29 16:57:39
+# @Last Modified: 2020-09-29 19:25:12
 # ------------------------------------------------------------------------------ #
 # Helper functions that are needed in various other scripts
 # ------------------------------------------------------------------------------ #
@@ -12,6 +12,11 @@ import sys
 import glob
 import h5py
 import numpy as np
+
+import logging
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)-8s [%(name)s] %(message)s")
+log = logging.getLogger(__name__)
 
 
 def h5_load(filenames, dsetname, raise_ex=False, silent=False):
