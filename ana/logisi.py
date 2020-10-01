@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-09-28 10:36:48
-# @Last Modified: 2020-10-01 11:05:39
+# @Last Modified: 2020-10-01 11:18:12
 # ------------------------------------------------------------------------------ #
 # My implementation of the logISI historgram burst detection algorithm
 # by Pasuqale et al.
@@ -21,7 +21,6 @@
 import sys
 import os
 import logging
-import peakutils
 import numpy as np
 from statsmodels.nonparametric.smoothers_lowess import lowess
 from scipy.signal import find_peaks
