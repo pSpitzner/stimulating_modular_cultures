@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-21 11:11:40
-# @Last Modified: 2020-09-29 19:25:12
+# @Last Modified: 2020-10-01 11:05:06
 # ------------------------------------------------------------------------------ #
 # Helper functions that are needed in various other scripts
 # ------------------------------------------------------------------------------ #
@@ -299,4 +299,39 @@ def inter_burst_intervals(spiketimes=None, bursttimes=None):
 
     return (bursttimes[1:] - bursttimes[:-1])
 
+
+def spikes_as_matrix_to_spikes_as_list(spikes_as_matrix):
+    """
+        Parameters
+        ----------
+        spikes_as_matrix: 2d np array
+            a zero- or nan-padded 2d array where first index is the neuron id
+            and second index yields the spiketimes
+
+        Returns
+        -------
+        spikes_as_list: 2d np array
+            first column contains the neuron id
+            second column contains the spiketime
+    """
+
+    spikes_as_list = []
+    neurons_as_list = []
+
+    num_neurons = spikes_as_matrix.shape[0]
+    for n in range(num_neurons):
+        train = spikes_as_matrix[n]
+        # filter out zeros or nans
+        train = train[train != 0]
+        train = list(train[np.isfinite(train)])
+        neuron_ids = [n] * len(train)
+
+        neurons_as_list += neuron_ids
+        spikes_as_list += train
+
+    result = np.zeros(shape=(2, len(spikes_as_list)))
+    result[0,:] = neurons_as_list
+    result[1,:] = spikes_as_list
+
+    return result
 

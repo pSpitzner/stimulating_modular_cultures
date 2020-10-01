@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2020-09-07 17:14:43
+# @Last Modified: 2020-09-30 15:29:10
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 or csv and runs the simulations in brian.
@@ -288,9 +288,7 @@ gm = args.gm * mV
 tD = args.tD * second
 rate = args.r / ms
 
-print(f"-------------------------")
-print(f"running dynamics in brian")
-print(f"-------------------------")
+print(f'#{"":#^75}#\n#{"running dynamics in brian":^75}#\n#{"":#^75}#')
 print(f"input topology: ", args.input_path)
 print(f"seed: ", args.seed)
 print(f"gA: ", gA)
@@ -397,6 +395,7 @@ spks_m = SpikeMonitor(G)
 
 run(args.duration * second, report="stdout", report_period=20 * 60 * second)
 
+print(f'#{"":#^75}#\n#{"saving to disk":^75}#\n#{"":#^75}#')
 
 try:
     # make sure directory exists
@@ -411,16 +410,21 @@ try:
         raise ValueError
     f = h5py.File(args.output_path, "a")
 
-    # normal spikes
+    # normal spikes, no stim in two different formats
     trains = spks_m.spike_trains()
     tmax = 0
     for tdx in trains.keys():
         if len(trains[tdx]) > tmax:
             tmax = len(trains[tdx])
     spiketimes = np.zeros(shape=(num_n, tmax))
+    spiketimes_as_list = np.zeros(shape=(2,spks_m.num_spikes))
+    last_idx = 0
     for n in range(0, num_n):
         t = trains[n]
         spiketimes[n, 0 : len(t)] = t / second - args.equil_duration
+        spiketimes_as_list[0, last_idx:last_idx+len(t)] = [n]*len(t)
+        spiketimes_as_list[1, last_idx:last_idx+len(t)] = t / second - args.equil_duration
+        last_idx += len(t)
 
     try:
         bursts, time_series, summed_series, window = burst_times(spks_m, debug=True)
@@ -428,11 +432,18 @@ try:
         bursts = np.array([])
         summed_series = np.array([])
 
+
     ibi = args.duration * second / len(bursts)
     print(f"{len(bursts)} bursts occured in {args.duration} seconds. ibi: {ibi}")
 
     dset = f.create_dataset("/data/spiketimes", data=spiketimes)
-    dset.attrs["description"] = "2d array of spiketimes, neuron x spiketime in seconds"
+    dset.attrs["description"] = "2d array of spiketimes, neuron x spiketime in seconds, zero-padded"
+
+    dset = f.create_dataset("/data/spiketimes_as_list", data=spiketimes_as_list)
+    dset.attrs["description"] = "two-column list of spiketimes. first col is neuron id, second col the spiketime. effectively same data as in '/data/spiketimes'. neuron id will need casting to int for indexing."
+
+
+
     dset = f.create_dataset("/data/bursttimes", data=bursts / second)
     dset.attrs["description"] = "time of detected busts in seconds"
     dset = f.create_dataset("/data/summed_series", data=bursts / second)
@@ -471,32 +482,35 @@ except Exception as e:
     print("Unable to save to disk\n", e)
 
 
+print(f'#{"":#^75}#\n#{"All done!":^75}#\n#{"":#^75}#')
+
+
 # ------------------------------------------------------------------------------ #
 # Plotting
 # ------------------------------------------------------------------------------ #
 
+def plot_overview():
+    ion()  # interactive plotting
+    fig, ax = subplots(5, 1, sharex=True)
 
-ion()  # interactive plotting
-fig, ax = subplots(5, 1, sharex=True)
+    n1 = randint(0, num_n)  # some neuron ton highlight
+    sel = where(spks_m.i == n1)[0]
 
-n1 = randint(0, num_n)  # some neuron ton highlight
-sel = where(spks_m.i == n1)[0]
-
-# ax[1].plot(mini_m.t / second, mini_m.i, ".y")
-ax[1].plot(spks_m.t / second, mod_sort(spks_m.i), ".k")
-ax[1].plot(spks_m.t[sel] / second, mod_sort(spks_m.i[sel]), ".")
-# ax[1].plot(stim_m.t / second, mod_sort(stim_m.i), ".", color="orange")
-ax[1].set_ylabel("Raster")
+    # ax[1].plot(mini_m.t / second, mini_m.i, ".y")
+    ax[1].plot(spks_m.t / second, mod_sort(spks_m.i), ".k")
+    ax[1].plot(spks_m.t[sel] / second, mod_sort(spks_m.i[sel]), ".")
+    # ax[1].plot(stim_m.t / second, mod_sort(stim_m.i), ".", color="orange")
+    ax[1].set_ylabel("Raster")
 
 
-# bursts = burst_times(spks_m)
-bursts, time_series, summed_series, window = burst_times(spks_m, debug=True)
-ax[0].scatter(bursts / second, np.ones(len(bursts)))
+    # bursts = burst_times(spks_m)
+    bursts, time_series, summed_series, window = burst_times(spks_m, debug=True)
+    ax[0].scatter(bursts / second, np.ones(len(bursts)))
 
-bin_size = 50 * ms
-ax[4].plot(np.arange(len(summed_series)) * bin_size / second, summed_series)
+    bin_size = 50 * ms
+    ax[4].plot(np.arange(len(summed_series)) * bin_size / second, summed_series)
 
-ibi = args.duration * second / len(bursts)
-print("ibi: ", ibi)
+    ibi = args.duration * second / len(bursts)
+    print("ibi: ", ibi)
 
-show()
+    show()

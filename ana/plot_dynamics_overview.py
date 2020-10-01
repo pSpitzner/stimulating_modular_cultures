@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-17 13:43:10
-# @Last Modified: 2020-09-29 21:44:46
+# @Last Modified: 2020-09-30 11:27:15
 # ------------------------------------------------------------------------------ #
 
 
@@ -121,11 +121,16 @@ ax[-1].set_xlim(0,sim_duration)
 #     if '2x2' in text:
 #         fig.suptitle(text)
 
-log.setLevel('DEBUG')
-s = spikes[1]
-s = s[np.isfinite(s)]
-bursts, isi_low, hist, edges = logisi.burst_detection_pasquale(s)
+# log.setLevel('DEBUG')
+# s = spikes[1]
+# s = s[np.isfinite(s)]
+# bursts, isi_low, hist, edges = logisi.burst_detection_pasquale(s)
 
-per_neuron_bursts, thr, hist, hist_smooth, edges = logisi.network_burst_detection(spikes)
+nb, per_neuron_bursts = logisi.network_burst_detection(spikes)
+
+ax[2].plot(nb["med"], .98*np.ones(len(nb["med"]) ), "|r", markersize=6)
+ax[2].plot(per_neuron_bursts, 1.02*np.ones(len(per_neuron_bursts) ), "|g", markersize=6)
+ax[2].set_ylim(.9, 1.1)
+
 
 

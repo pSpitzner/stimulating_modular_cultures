@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-09-28 10:36:48
-# @Last Modified: 2020-09-29 23:02:19
+# @Last Modified: 2020-10-01 11:05:39
 # ------------------------------------------------------------------------------ #
 # My implementation of the logISI historgram burst detection algorithm
 # by Pasuqale et al.
@@ -164,8 +164,8 @@ def find_thresh(h, h_edges, ISITh=100.0, void_th=0.7, peak_kwargs=None):
         ymins = np.vectorize(f)(x_2s)
 
         f = lambda x: np.argmin(h[x1:x])
-        log.debug(h[x1 : x_2s[0]])
-        log.debug(h[x1 : x_2s[-1]])
+        # log.debug(h[x1 : x_2s[0]])
+        # log.debug(h[x1 : x_2s[-1]])
         xmins = np.vectorize(f)(x_2s) + x1
 
         void_pars = 1 - (ymins / np.sqrt(y1 * y_2s))
@@ -212,7 +212,7 @@ def logisi_break_calc(st, cutoff, void_th=0.7, peak_kwargs=None):
     debug_s = hist_smooth
     debug_e = edges / 1000.0
 
-    log.debug(hist_smooth)
+    # log.debug(hist_smooth)
     thr = find_thresh(
         h=hist_smooth,
         h_edges=edges,
@@ -220,7 +220,7 @@ def logisi_break_calc(st, cutoff, void_th=0.7, peak_kwargs=None):
         void_th=void_th,
         peak_kwargs=peak_kwargs,
     )
-    log.debug(thr)
+    log.debug(f"thr: {thr}")
     if not thr is None:
         thr = thr / 1000.0
 
@@ -395,8 +395,9 @@ def logisi_find_burst(spikes, min_ibi, min_durn, min_spikes, isi_low):
         ## no bursts were found, so return an empty structure.
         return no_bursts
 
-    log.debug("End of phase1")
-    log.debug(bursts)
+    log.debug("End of phase 1")
+    log.debug(f"num bursts before rejections: {len(bursts['beg'])}")
+    # log.debug(bursts)
 
     ## Phase 2 -- merging of bursts.    Here we see if any pair of bursts
     ## have an IBI less than min_ibi; if so, we then merge the bursts.
@@ -413,15 +414,15 @@ def logisi_find_burst(spikes, min_ibi, min_durn, min_spikes, isi_low):
 
         # remove these later
         merge_bursts = np.where(ibis < min_ibi)[0]
+        log.debug(f"ibis < min_ibi: {len(merge_bursts)}")
         rejects = merge_bursts
 
         for burst in reversed(merge_bursts):
             bursts["end"][burst - 1] = bursts["end"][burst]
-            bursts["end"][burst] = np.nan  # not needed, but helpful.
+            # bursts["end"][burst] = np.nan  # not needed, but helpful.
 
     log.debug("End of phase 2\n")
-    log.debug(bursts)
-    log.debug(f"num bursts {len(bursts['beg'])}")
+    # log.debug(bursts)
 
     ## Phase 3 -- remove small bursts: less than min duration (MIN_DURN), or
     ## having too few spikes (less than MIN_SPIKES).
@@ -430,8 +431,8 @@ def logisi_find_burst(spikes, min_ibi, min_durn, min_spikes, isi_low):
     ## BLEN = number of spikes in a burst.
     ## DURN = duration of burst.
     bursts["blen"] = bursts["end"] - bursts["beg"] + 1
-    log.debug(bursts["beg"])
-    log.debug(bursts["end"])
+    # log.debug(bursts["beg"])
+    # log.debug(bursts["end"])
     bursts["durn"] = spikes[bursts["end"]] - spikes[bursts["beg"]]
     bursts["mean_isis"] = bursts["durn"] / (bursts["blen"] - 1)
 
@@ -441,7 +442,9 @@ def logisi_find_burst(spikes, min_ibi, min_durn, min_spikes, isi_low):
 
     if len(rejects) > 0:
         for key in bursts.keys():
-            np.delete(bursts[key], rejects)
+            bursts[key] = np.delete(bursts[key], rejects)
+
+    log.debug(f"num bursts after rejections: {len(bursts['beg'])}")
 
     if len(bursts["beg"]) == 0:
         ## All the bursts were removed during phase 3.
@@ -482,27 +485,30 @@ def network_burst_detection(spiketimes, network_fraction=0.8, key_to_use="med"):
         if bursts is not None:
             per_neuron_bursts.append(bursts[key_to_use])
 
-    per_neuron_bursts = np.sort(per_neuron_bursts, axis=None)
+    # log.debug(np.array(per_neuron_bursts).ravel())
+    per_neuron_bursts = np.sort(np.concatenate(per_neuron_bursts).ravel())
     global foo
     global bar
     global nb
     foo = per_neuron_bursts
     bar = np.diff(foo)
 
-    log.setLevel("DEBUG")
 
     thr, hist, hist_smooth, edges = logisi_break_calc(
         per_neuron_bursts, cutoff=0.2, void_th=0, peak_kwargs={}
     )
 
+    # log.setLevel("DEBUG")
     nb = logisi_find_burst(
         spikes=per_neuron_bursts,
-        min_ibi=0,
+        min_ibi=.25,
         min_durn=0,
         min_spikes=int(network_fraction * num_n),
         isi_low=thr,
     )
-    return per_neuron_bursts, thr, hist, hist_smooth, edges
+    return nb, per_neuron_bursts
+
+
 
 
 # threshold for ibi

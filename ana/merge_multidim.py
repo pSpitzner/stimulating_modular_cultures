@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2020-09-29 19:28:43
+# @Last Modified: 2020-10-01 11:14:01
 #
 # Scans the provided directory for .hdf5 files and checks if they have the right
 # data to plot a 2d ibi_mean_4d of ibi = f(gA, rate)
@@ -39,6 +39,7 @@ d_obs["tD"] = "/meta/dynamics_tD"
 # functions for analysis. candidate is the hdf5 file
 # need to return a dict where the key becomes the hdf5 data set name
 # and a scalar entry as the value
+# todo: add description
 def scalar_mean_ibi(candidate):
     # load spiketimes and calculate ibi
     spiketimes = ut.h5_load(candidate, "/data/spiketimes", silent=True)
@@ -48,6 +49,17 @@ def scalar_mean_ibi(candidate):
     res = dict()
     res["ibi_mean"] = np.mean(ibis) if len(ibis) > 0 else np.inf
     res["ibi_var"] = np.var(ibis) if len(ibis) > 0 else np.inf
+    return res
+
+def scalar_mean_ibi_pasquale(candidate):
+    # load spiketimes and calculate ibi
+    spiketimes = ut.h5_load(candidate, "/data/spiketimes", silent=True)
+    network_bursts, per_neuron_bursts = logisi.network_burst_detection(spiketimes)
+    ibis = network_bursts["IBI"]
+
+    res = dict()
+    res["ibi_pasuale_mean"] = np.nanmean(ibis) if len(ibis) > 0 else np.inf
+    res["ibi_pasuale_var"] = np.nanvar(ibis) if len(ibis) > 0 else np.inf
     return res
 
 
@@ -66,7 +78,7 @@ l_ana_functions.append(scalar_mean_ibi)
 l_ana_functions.append(scalar_asdr)
 
 # all the keys that will be returned from above
-l_ana_keys = ["ibi_mean", "ibi_var", "asdr_mean"]
+l_ana_keys = ["ibi_mean", "ibi_var", "asdr_mean", "ibi_pasuale_mean", "ibi_pasuale_var"]
 
 # ------------------------------------------------------------------------------ #
 # arguments
