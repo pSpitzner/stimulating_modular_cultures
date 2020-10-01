@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-17 13:43:10
-# @Last Modified: 2020-09-30 11:27:15
+# @Last Modified: 2020-10-01 11:56:14
 # ------------------------------------------------------------------------------ #
 
 
@@ -126,9 +126,17 @@ ax[-1].set_xlim(0,sim_duration)
 # s = s[np.isfinite(s)]
 # bursts, isi_low, hist, edges = logisi.burst_detection_pasquale(s)
 
-nb, per_neuron_bursts = logisi.network_burst_detection(spikes)
 
-ax[2].plot(nb["med"], .98*np.ones(len(nb["med"]) ), "|r", markersize=6)
+# load spiketimes and calculate ibi
+spiketimes = ut.h5_load(file, "/data/spiketimes", silent=True)
+network_bursts, per_neuron_bursts = logisi.network_burst_detection(spiketimes)
+ibis = network_bursts["IBI"]
+
+res = dict()
+print(f"mean ibi pasqu: {np.nanmean(ibis) if len(ibis) > 0 else np.inf}")
+print(f"var ibi pasqu: {np.nanvar(ibis) if len(ibis) > 0 else np.inf}")
+
+ax[2].plot(network_bursts["med"], .98*np.ones(len(network_bursts["med"]) ), "|r", markersize=6)
 ax[2].plot(per_neuron_bursts, 1.02*np.ones(len(per_neuron_bursts) ), "|g", markersize=6)
 ax[2].set_ylim(.9, 1.1)
 

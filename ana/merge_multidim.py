@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2020-10-01 11:14:01
+# @Last Modified: 2020-10-01 12:32:02
 #
 # Scans the provided directory for .hdf5 files and checks if they have the right
 # data to plot a 2d ibi_mean_4d of ibi = f(gA, rate)
@@ -14,6 +14,7 @@ import sys
 import glob
 import h5py
 import argparse
+import logging
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -22,6 +23,7 @@ import seaborn as sns
 import pandas as pd
 from tqdm import tqdm
 
+log = logging.getLogger(__name__)
 sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/../ana/"))
 import utility as ut
 import logisi as logisi
@@ -55,11 +57,15 @@ def scalar_mean_ibi_pasquale(candidate):
     # load spiketimes and calculate ibi
     spiketimes = ut.h5_load(candidate, "/data/spiketimes", silent=True)
     network_bursts, per_neuron_bursts = logisi.network_burst_detection(spiketimes)
-    ibis = network_bursts["IBI"]
+    if network_bursts is None:
+        ibis = []
+    else:
+        ibis = network_bursts["IBI"]
 
     res = dict()
-    res["ibi_pasuale_mean"] = np.nanmean(ibis) if len(ibis) > 0 else np.inf
-    res["ibi_pasuale_var"] = np.nanvar(ibis) if len(ibis) > 0 else np.inf
+    res["ibi_pasquale_mean"] = np.nanmean(ibis) if len(ibis) > 0 else np.inf
+    res["ibi_pasquale_var"] = np.nanvar(ibis) if len(ibis) > 0 else np.inf
+    # print(f"\n{res['ibi_pasquale_mean']}")
     return res
 
 
@@ -76,9 +82,10 @@ def scalar_asdr(candidate):
 l_ana_functions = list()
 l_ana_functions.append(scalar_mean_ibi)
 l_ana_functions.append(scalar_asdr)
+l_ana_functions.append(scalar_mean_ibi_pasquale)
 
 # all the keys that will be returned from above
-l_ana_keys = ["ibi_mean", "ibi_var", "asdr_mean", "ibi_pasuale_mean", "ibi_pasuale_var"]
+l_ana_keys = ["ibi_mean", "ibi_var", "asdr_mean", "ibi_pasquale_mean", "ibi_pasquale_var"]
 
 # ------------------------------------------------------------------------------ #
 # arguments
