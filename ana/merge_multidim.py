@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2020-10-01 12:32:02
+# @Last Modified: 2020-10-07 16:58:02
 #
 # Scans the provided directory for .hdf5 files and checks if they have the right
 # data to plot a 2d ibi_mean_4d of ibi = f(gA, rate)
@@ -15,6 +15,7 @@ import glob
 import h5py
 import argparse
 import logging
+import warnings
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -24,9 +25,11 @@ import pandas as pd
 from tqdm import tqdm
 
 log = logging.getLogger(__name__)
+warnings.filterwarnings("ignore") # suppress numpy warnings
 sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/../ana/"))
 import utility as ut
 import logisi as logisi
+
 
 # ------------------------------------------------------------------------------ #
 # settings
@@ -42,7 +45,9 @@ d_obs["tD"] = "/meta/dynamics_tD"
 # need to return a dict where the key becomes the hdf5 data set name
 # and a scalar entry as the value
 # todo: add description
-def scalar_mean_ibi(candidate):
+def scalar_mean_ibi(candidate=None):
+    if candidate is None:
+        return ["ibi_mean", "ibi_var"]
     # load spiketimes and calculate ibi
     spiketimes = ut.h5_load(candidate, "/data/spiketimes", silent=True)
     bursttimes = ut.burst_times(spiketimes, bin_size=0.5, threshold=0.75)
@@ -53,7 +58,10 @@ def scalar_mean_ibi(candidate):
     res["ibi_var"] = np.var(ibis) if len(ibis) > 0 else np.inf
     return res
 
-def scalar_mean_ibi_pasquale(candidate):
+def scalar_mean_ibi_pasquale(candidate=None):
+    if candidate is None:
+        return ["ibi_pasquale_mean", "ibi_pasquale_var"]
+
     # load spiketimes and calculate ibi
     spiketimes = ut.h5_load(candidate, "/data/spiketimes", silent=True)
     network_bursts, per_neuron_bursts = logisi.network_burst_detection(spiketimes)
@@ -69,7 +77,10 @@ def scalar_mean_ibi_pasquale(candidate):
     return res
 
 
-def scalar_asdr(candidate):
+def scalar_asdr(candidate=None):
+    if candidate is None:
+        return ["asdr_mean"]
+
     spiketimes = ut.h5_load(candidate, "/data/spiketimes", silent=True)
     asdr = ut.population_activity(spiketimes, bin_size=1.0)
 
@@ -85,7 +96,9 @@ l_ana_functions.append(scalar_asdr)
 l_ana_functions.append(scalar_mean_ibi_pasquale)
 
 # all the keys that will be returned from above
-l_ana_keys = ["ibi_mean", "ibi_var", "asdr_mean", "ibi_pasquale_mean", "ibi_pasquale_var"]
+l_ana_keys = []
+for f in l_ana_functions:
+    l_ana_keys += f(candidate=None)
 
 # ------------------------------------------------------------------------------ #
 # arguments

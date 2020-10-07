@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-09-28 10:36:48
-# @Last Modified: 2020-10-01 12:33:19
+# @Last Modified: 2020-10-07 15:31:12
 # ------------------------------------------------------------------------------ #
 # My implementation of the logISI historgram burst detection algorithm
 # by Pasuqale et al.
@@ -33,6 +33,10 @@ import utility as ut
 log = logging.getLogger(__name__)
 # log.setLevel("DEBUG")
 
+# value to return if no bursts found.
+no_bursts = dict()
+for key in ["beg", "end", "med", "IBI", "blen", "durn", "mean_isis"]:
+    no_bursts[key] = np.array([])
 
 def burst_detection_pasquale(spike_train, cutoff=0.1):
     """
@@ -85,7 +89,7 @@ def burst_detection_pasquale(spike_train, cutoff=0.1):
             )
 
         elif isi_low < 0:
-            result = None
+            result = no_bursts
 
         elif isi_low > cutoff and isi_low < 1:
             # If isi_low >cutoff, find bursts using threshold equal to cutoff (default 100ms)
@@ -108,7 +112,7 @@ def burst_detection_pasquale(spike_train, cutoff=0.1):
             )
 
     else:
-        result = None
+        return [no_bursts] + [None]*3
 
     return result, isi_low, hist, edges
 
@@ -317,8 +321,7 @@ def logisi_find_burst(spikes, min_ibi, min_durn, min_spikes, isi_low):
     ## init.
     ##
 
-    # value to return if no bursts found.
-    no_bursts = None
+
 
     nspikes = len(spikes)
 
@@ -493,15 +496,14 @@ def network_burst_detection(spiketimes, network_fraction=0.8, key_to_use="med"):
         train = spiketimes[n]
         train = train[np.isfinite(train)]
         bursts, _, _, _ = burst_detection_pasquale(train)
-        if bursts is not None:
-            per_neuron_bursts.append(bursts[key_to_use])
+        per_neuron_bursts.append(bursts[key_to_use])
 
-    # log.debug(np.array(per_neuron_bursts).ravel())
+    log.debug(np.array(per_neuron_bursts).shape)
     try:
         per_neuron_bursts = np.sort(np.concatenate(per_neuron_bursts).ravel())
     except ValueError:
         # need at least one array to concatenate
-        return None, None
+        return no_bursts, no_bursts
     global foo
     global bar
     global nb
@@ -512,17 +514,22 @@ def network_burst_detection(spiketimes, network_fraction=0.8, key_to_use="med"):
         thr, hist, hist_smooth, edges = logisi_break_calc(
             per_neuron_bursts, cutoff=0.2, void_th=0, peak_kwargs={}
         )
-    except:
-        return None, None
+    except Exception as e:
+        log.info(f"logisi_break_calc: {e}")
+        return no_bursts, no_bursts
 
     # log.setLevel("DEBUG")
-    nb = logisi_find_burst(
-        spikes=per_neuron_bursts,
-        min_ibi=0.25,
-        min_durn=0,
-        min_spikes=int(network_fraction * num_n),
-        isi_low=thr,
-    )
+    try:
+        nb = logisi_find_burst(
+            spikes=per_neuron_bursts,
+            min_ibi=0.25,
+            min_durn=0,
+            min_spikes=int(network_fraction * num_n),
+            isi_low=thr,
+        )
+    except Exception as e:
+        log.info(f"find_burst: {e}")
+
     return nb, per_neuron_bursts
 
 

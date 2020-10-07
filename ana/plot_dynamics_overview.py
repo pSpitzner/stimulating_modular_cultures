@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-17 13:43:10
-# @Last Modified: 2020-10-01 11:56:14
+# @Last Modified: 2020-10-01 13:31:18
 # ------------------------------------------------------------------------------ #
 
 
@@ -128,6 +128,13 @@ ax[-1].set_xlim(0,sim_duration)
 
 
 # load spiketimes and calculate ibi
+
+# spiketimes = ut.h5_load(file, "/data/spiketimes", silent=True)
+# s = spiketimes[20]
+# s = s[s != 0]
+# s = s[np.isfinite(s)]
+# foo = logisi.burst_detection_pasquale(s)
+
 spiketimes = ut.h5_load(file, "/data/spiketimes", silent=True)
 network_bursts, per_neuron_bursts = logisi.network_burst_detection(spiketimes)
 ibis = network_bursts["IBI"]
