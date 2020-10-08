@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-21 11:11:40
-# @Last Modified: 2020-10-01 11:05:06
+# @Last Modified: 2020-10-08 12:12:11
 # ------------------------------------------------------------------------------ #
 # Helper functions that are needed in various other scripts
 # ------------------------------------------------------------------------------ #
@@ -47,7 +47,8 @@ def h5_load(filenames, dsetname, raise_ex=False, silent=False):
     else:
         return res
 
-def h5_ls(filename, dsetname = '/'):
+
+def h5_ls(filename, dsetname="/"):
     """
         list the keys in a dsetname
 
@@ -237,6 +238,91 @@ def burst_times(
         return bursts, time_series, summed_series
 
 
+def mutual_information(spiketimes, bin_size=0.050, embedding=10):
+
+    log.debug("mututal_information()")
+    binary_spikes = spikes_as_binned_binary_array(spiketimes, bin_size)
+    pop_act = np.sum(binary_spikes, axis=0)
+    num_n = binary_spikes.shape[0]
+    num_t = binary_spikes.shape[1]
+
+    # binarize the population activity
+    pop_act = pop_act > np.median(pop_act)
+
+    # MI for ---- on x
+    # for every bin 0|1
+    # |-------------|x|
+    # |---- "y" ----|x|
+    # then slide window:
+    #   |-------------|x|
+
+    # pattern, binary array to int. use int as the label of the pattern
+    pattern_to_int = lambda b: b.dot(1 << np.arange(b.size)[::-1])
+
+    # apply this on a sliding window for the whole binarized pop act
+    f = lambda y: pattern_to_int(pop_act[y : y + embedding])
+    pop_act_ints = np.vectorize(f)(np.arange(0, len(pop_act) - embedding))
+
+    # indep. of neuron
+    p_y = np.histogram(pop_act_ints, bins=np.max(pop_act_ints), density=True)[0]
+
+    # dep. of neuron
+    p_x = np.empty(shape=(num_n, 2))
+    p_x[:, 1] = np.mean(binary_spikes, axis=1)
+    p_x[:, 0] = 1 - p_x[:, 1]
+
+    p_x_y = np.zeros(shape=(num_n, 2, 2**embedding))
+
+    for t in range(0, num_t - embedding):
+        patt
+        p_x_y[0] += pop_act_ints[t]
+
+    # H(Y), H(X)
+    h_y = -np.sum(p_y * np.log2(p_y)) # scalar
+    h_x = -np.sum(p_x * np.log2(p_x), axis=1) # size: num_n
+
+    # H(Y|X) = -\sum p(x) \sum p(y|x) log p(y|x)
+    # h_y_given_x -np.sum( )
+
+    # I(X;Y) = H(Y) - H(Y|X)
+
+
+def spikes_as_binned_binary_array(spiketimes, bin_size=0.050):
+    """
+        convert the nan-padded spikelist into a 2d array, binned with 0 or 1
+        if spikes occured
+
+        Parameters
+        ----------
+        spiketimes: 2d array
+            nan-padded array of spiketimes, first dim are neurons
+
+        bin_size: float
+            time bin size, in same units as spiketimes. assuming seconds, defualt 50ms
+
+        Returns
+        -------
+        binary_array: 2d np array with binned spikes
+    """
+    num_n = spiketimes.shape[0]
+
+    # target array
+    t_max = np.nanmax(spiketimes)
+    t_index_max = int(np.ceil(t_max / bin_size))
+
+    binned_ts = np.zeros(shape=(num_n, t_index_max), dtype=bool)
+
+    for n_id in range(0, num_n):
+        train = spiketimes[n_id]
+        for t in train:
+            if not np.isfinite(t):
+                break
+            t_idx = int(t / bin_size)
+            binned_ts[n_id][t_idx] = True
+
+    return binned_ts
+
+
 def population_activity(spiketimes, bin_size):
     """
         calculate the activity across the whole population. naive binning,
@@ -297,7 +383,7 @@ def inter_burst_intervals(spiketimes=None, bursttimes=None):
     if len(bursttimes) < 2:
         return np.array([])
 
-    return (bursttimes[1:] - bursttimes[:-1])
+    return bursttimes[1:] - bursttimes[:-1]
 
 
 def spikes_as_matrix_to_spikes_as_list(spikes_as_matrix):
@@ -330,8 +416,7 @@ def spikes_as_matrix_to_spikes_as_list(spikes_as_matrix):
         spikes_as_list += train
 
     result = np.zeros(shape=(2, len(spikes_as_list)))
-    result[0,:] = neurons_as_list
-    result[1,:] = spikes_as_list
+    result[0, :] = neurons_as_list
+    result[1, :] = spikes_as_list
 
     return result
-
