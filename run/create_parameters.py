@@ -9,7 +9,7 @@ os.chdir(os.path.dirname(__file__))
 seed = 15_000
 
 # parameters to scan, noise rate, ampa strength, and a few repetitons for statistics
-l_topo = ['2x2merged', '2x2_fixed']
+l_topo = ['2x2_fixed']
 l_rate = np.array([0.040])
 l_gampa = np.array([20, 25, 33, 34, 35, 36, 37, 45, 50])
 l_recovery = np.array([2.0])
