@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-01-24 14:13:56
-# @Last Modified: 2020-09-03 18:26:40
+# @Last Modified: 2020-10-15 17:26:13
 # ------------------------------------------------------------------ #
 # script that takes a hdf5 as produced by my cpp simulation
 # as first argument and visualizes the topological features
@@ -417,24 +417,27 @@ def plot_graph_edges(ax, tar=np.arange(len(n_x))):
 
 
 color = 0
-n = -1
+n_highlight_last = 0
 
 
-def highlight_single(ax=ax, stay=False):
+def highlight_single(ax=None, n = None, plot_connections=True):
     try:
+        if n is None:
+            global n_highlight_last
+            n = n_highlight_last
+            n_highlight_last += 1;
         global color
-        global n
-        if not stay:
-            color = (color + 1) % 10
-            n = n + 1
-        ax.plot(
+        color = (color + 1) % 10
+        if ax is None:
+            ax_ = axes[1,2]
+        ax_.plot(
             axon_segments_x[n], axon_segments_y[n], color=f"C{color}", lw=0.9, zorder=10
         )
         circles(
             n_x[n],
             n_y[n],
             n_R_s,
-            ax=ax,
+            ax=ax_,
             ls="-",
             lw=0.9,
             alpha=1.0,
@@ -446,7 +449,7 @@ def highlight_single(ax=ax, stay=False):
             n_x[n],
             n_y[n],
             n_R_d[n],
-            ax=ax,
+            ax=ax_,
             ls="--",
             lw=0.9,
             alpha=0.9,
@@ -458,7 +461,7 @@ def highlight_single(ax=ax, stay=False):
             n_x[n],
             n_y[n],
             n_R_d[n],
-            ax=ax,
+            ax=ax_,
             ls="--",
             lw=0.0,
             alpha=0.1,
@@ -469,6 +472,39 @@ def highlight_single(ax=ax, stay=False):
     except:
         print("failed to highlight single")
 
+    if not plot_connections:
+        return
+    # plot connections
+    if ax is None:
+        ax_ = axes[0,2]
+    try:
+        Gg=nx.DiGraph()
+        nodes = [n] + list(np.where(a_ij[n]==1)[0])
+        pos={}
+        Gg.add_nodes_from(nodes)
+        for i in nodes:
+            pos[i] = (n_x[i], n_y[i])
+            # print((n_x[i], n_y[i]))
+            Gg.nodes[i]['pos'] = (n_x[i], n_y[i])
+
+        for c in nodes[1:]:
+            Gg.add_edge(n, c, weight = 1)
+
+        nx.draw_networkx_edges(Gg, pos=pos, ax=ax_, edge_color=f'C{color}',
+        arrows=False, width=.4)
+    except Exception as e:
+        print("failed to highlight single connections:", e)
+
+
+def highlight_bridges(which = None, ax=None):
+    try:
+        ids = h5_load(file, '/data/neuron_bridge_ids')
+        if which is not None:
+            ids = ids[which]
+        for i in ids:
+            highlight_single(ax, i)
+    except Exception as e:
+        print(e)
 
 # ------------------------------------------------------------------ #
 # plotting
