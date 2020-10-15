@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2020-09-30 15:29:10
+# @Last Modified: 2020-10-12 11:05:59
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 or csv and runs the simulations in brian.
@@ -374,7 +374,7 @@ try:
         S.connect(i=i, j=j)
 except:
     print(f"Creating Synapses randomly.")
-    S.connect(condition="i != j", p=0.1)
+    S.connect(condition="i != j", p=0.01)
 
 # initalize to a somewhat sensible state. we could have different neuron types
 G.v = "vc + 5*mV*rand()"
@@ -393,7 +393,7 @@ spks_m = SpikeMonitor(G)
 # rate_m = PopulationRateMonitor(G)
 # mini_m = SpikeMonitor(mini_g)
 
-run(args.duration * second, report="stdout", report_period=20 * 60 * second)
+run(args.duration * second, report="stdout", report_period=1 * 60 * second)
 
 print(f'#{"":#^75}#\n#{"saving to disk":^75}#\n#{"":#^75}#')
 

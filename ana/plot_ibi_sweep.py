@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2020-09-29 19:13:56
+# @Last Modified: 2020-10-08 17:48:23
 #
 # Scans the provided directory for .hdf5 files and checks if they have the right
 # data to plot a 2d heatmap of ibi = f(gA, rate)
@@ -99,11 +99,14 @@ if len(l_axis_candidates) > 2:
 hidden_vals = dict()
 for obs in [i for i in l_axis_candidates if i not in l_axis_selected]:
     while True:
-        txt = input(f"{obs} from {d_axes[obs]}: ")
-        if len(txt) == 0:
+        if len(d_axes[obs]) == 1:
             val = d_axes[obs][0]
         else:
-            val = float(txt)
+            txt = input(f"{obs} from {d_axes[obs]}: ")
+            if len(txt) == 0:
+                val = d_axes[obs][0]
+            else:
+                val = float(txt)
 
         if val in d_axes[obs]:
             print(f"Using {val}")

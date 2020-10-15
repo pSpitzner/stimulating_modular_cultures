@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2020-10-08 17:28:28
+# @Last Modified: 2020-10-08 18:11:51
 #
 # Scans the provided directory for .hdf5 files and checks if they have the right
 # data to plot a 2d ibi_mean_4d of ibi = f(gA, rate)
@@ -94,7 +94,7 @@ def scalar_asdr(candidate=None):
 l_ana_functions = list()
 l_ana_functions.append(scalar_mean_ibi)
 l_ana_functions.append(scalar_asdr)
-l_ana_functions.append(scalar_mean_ibi_pasquale)
+# l_ana_functions.append(scalar_mean_ibi_pasquale)
 
 # all the keys that will be returned from above
 l_ana_keys = []
@@ -155,6 +155,12 @@ for candidate in tqdm(candidates):
     try:
         for obs in d_obs:
             temp = ut.h5_load(candidate, d_obs[obs], silent=True)
+            try:
+                # sometimes we find nested arrays
+                if len(temp == 1):
+                    temp = temp[0]
+            except:
+                pass
             if temp not in d_axes[obs]:
                 d_axes[obs].append(temp)
 
@@ -208,6 +214,7 @@ for candidate in tqdm(l_valid):
         temp = ut.h5_load(candidate, d_obs[obs], silent=True)
         # transform to index
         temp = np.where(d_axes[obs] == temp)[0][0]
+        # print(f"{obs} {temp}")
         index += (temp,)
 
     sim_duration = ut.h5_load(candidate, "/meta/dynamics_simulation_duration")
