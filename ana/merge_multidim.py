@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2020-10-08 18:11:51
+# @Last Modified: 2020-10-21 14:16:31
 #
 # Scans the provided directory for .hdf5 files and checks if they have the right
 # data to plot a 2d ibi_mean_4d of ibi = f(gA, rate)
@@ -89,11 +89,21 @@ def scalar_asdr(candidate=None):
     res["asdr_mean"] = np.mean(asdr)
     return res
 
+def scalar_k_out(candidate=None):
+    if candidate is None:
+        return ["k_out_median"]
+
+    kout = ut.h5_load(candidate, "/data/neuron_k_out", silent=True)
+
+    res = dict()
+    res["k_out_median"] = np.median(kout)
+    return res
 
 # a list of analysis functions to call on the candidate
 l_ana_functions = list()
 l_ana_functions.append(scalar_mean_ibi)
 l_ana_functions.append(scalar_asdr)
+l_ana_functions.append(scalar_k_out)
 # l_ana_functions.append(scalar_mean_ibi_pasquale)
 
 # all the keys that will be returned from above
