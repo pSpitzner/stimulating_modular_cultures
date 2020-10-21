@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-17 13:43:10
-# @Last Modified: 2020-10-01 13:31:18
+# @Last Modified: 2020-10-21 15:03:01
 # ------------------------------------------------------------------------------ #
 
 
@@ -97,7 +97,7 @@ for text in args.input_path.split('/'):
     if '2x2' in text:
         fig.suptitle(text)
 ga = ut.h5_load(args.input_path, '/meta/dynamics_gA')
-rate = ut.h5_load(args.input_path, '/meta/dynamics_rate') * 1000
+rate = ut.h5_load(args.input_path, '/meta/dynamics_rate')
 tD = ut.h5_load(args.input_path, '/meta/dynamics_tD')
 ax[0].set_title(f"Ampa: {ga:.1f} mV", loc='left')
 ax[0].set_title(f"Rate: {rate:.1f} Hz", loc='right')

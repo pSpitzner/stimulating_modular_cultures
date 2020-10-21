@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2020-10-12 11:05:59
+# @Last Modified: 2020-10-21 15:02:35
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 or csv and runs the simulations in brian.
@@ -75,7 +75,7 @@ gA =  50 * mV      # AMPA current strength, between 10 - 50 mV
 
 # noise
 beta = 0.8         # D = beta*D after spike, to reduce efficacy, beta < 1
-rate = 0.03 / ms   # rate for the poisson input (shot-noise), between 0.01 - 0.05 1/ms
+rate = 30 * Hz     # rate for the poisson input (shot-noise), between 10 - 50 Hz
 gm =  25 * mV      # shot noise (minis) strength, between 10 - 50 mV
                    # (sum of minis arriving at target neuron)
 gs = 300 * mV * mV * ms * ms  # white noise strength, via xi = dt**.5 * randn()
@@ -278,7 +278,7 @@ parser.add_argument(
 )
 parser.add_argument("-gA", dest="gA", default=gA / mV, help="in mV", type=float)
 parser.add_argument("-gm", dest="gm", default=gm / mV, help="in mV", type=float)
-parser.add_argument("-r", dest="r", default=rate * ms, help="in 1/ms", type=float)
+parser.add_argument("-r", dest="r", default=rate / Hz, help="in Hz", type=float)
 parser.add_argument("-tD", dest="tD", default=tD / second, help="in seconds", type=float)
 args = parser.parse_args()
 
@@ -286,7 +286,7 @@ numpy.random.seed(args.seed)
 gA = args.gA * mV
 gm = args.gm * mV
 tD = args.tD * second
-rate = args.r / ms
+rate = args.r * Hz
 
 print(f'#{"":#^75}#\n#{"running dynamics in brian":^75}#\n#{"":#^75}#')
 print(f"input topology: ", args.input_path)
@@ -464,10 +464,10 @@ try:
     dset = f.create_dataset("/meta/dynamics_tD", data=tD / second)
     dset.attrs["description"] = "characteristic decay time, in seconds"
 
-    dset = f.create_dataset("/meta/dynamics_rate", data=rate * ms)
+    dset = f.create_dataset("/meta/dynamics_rate", data=rate / Hz)
     dset.attrs[
         "description"
-    ] = "rate for the (global) poisson input (shot-noise), in 1/ms"
+    ] = "rate for the (global) poisson input (shot-noise), in Hz"
 
     dset = f.create_dataset("/meta/dynamics_simulation_duration", data=args.duration)
     dset.attrs["description"] = "in seconds"
