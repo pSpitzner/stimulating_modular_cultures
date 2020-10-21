@@ -6,17 +6,16 @@ from itertools import product
 os.chdir(os.path.dirname(__file__))
 
 # seed for rank 0, will increase per thread
-seed = 15_000
+seed = 25_000
 
 # parameters to scan, noise rate, ampa strength, and a few repetitons for statistics
-l_topo = ['2x2_fixed']
-l_rate = np.array([0.040])
-l_gampa = np.array([20, 25, 33, 34, 35, 36, 37, 45, 50])
+l_topo = ['2x2merged', '2x2_fixed']
+l_rate = np.array([20, 25, 30, 35, 37, 38, 39, 40])
+l_gampa = np.array([15, 40, 45, 50,
+    ] + list(np.arange(20, 37) ))
 l_recovery = np.array([2.0])
-l_alpha = np.array(
-    [0.005 , 0.0075, 0.01  , 0.0125, 0.015 , 0.0175,
-     0.02  , 0.0225, 0.025 , 0.0275, 0.03  , 0.0325])
-l_rep = range(0, 5)
+l_alpha = np.array([0.005 , 0.0075, 0.01  , 0.0125])
+l_rep = range(0, 3)
 
 arg_list = product(l_topo, l_rate, l_gampa, l_recovery, l_alpha, l_rep)
 
@@ -37,8 +36,8 @@ with open("./parameters_topo.tsv", "w") as f_topo:
             recovery = i[3]
             alpha  = i[4]
             rep  = i[5]
-            topo_path = f"./dat/topo/{topo}/gampa={gampa:04.2f}_rate={rate:.4f}_recovery={recovery:04.2f}_alpha={alpha:.04f}_rep={rep:02d}.hdf5"
-            dyn_path = f"./dat/dyn/{topo}/gampa={gampa:04.2f}_rate={rate:.4f}_recovery={recovery:04.2f}_alpha={alpha:.04f}_rep={rep:02d}.hdf5"
+            topo_path = f"./dat/topo/{topo}/gampa={gampa:04.2f}_rate={rate:04.2f}_recovery={recovery:04.2f}_alpha={alpha:.04f}_rep={rep:02d}.hdf5"
+            dyn_path = f"./dat/dyn/{topo}/gampa={gampa:04.2f}_rate={rate:04.2f}_recovery={recovery:04.2f}_alpha={alpha:.04f}_rep={rep:02d}.hdf5"
 
             f_topo.write(
                 # topology command
@@ -49,7 +48,7 @@ with open("./parameters_topo.tsv", "w") as f_topo:
                 f"python ./src/ibi.py -i {topo_path} " +
                 f"-o {dyn_path} " +
                 f"-d 3600 -equil 300 -s {seed:d} " +
-                f"-gA {gampa:04.2f} -tD {recovery:04.2f} -r {rate:.4f}\n"
+                f"-gA {gampa:04.2f} -tD {recovery:04.2f} -r {rate:04.2f}\n"
             )
 
             seed += 1
