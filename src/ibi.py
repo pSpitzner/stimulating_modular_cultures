@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2020-10-21 15:02:35
+# @Last Modified: 2020-10-26 11:59:40
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 or csv and runs the simulations in brian.
@@ -279,7 +279,9 @@ parser.add_argument(
 parser.add_argument("-gA", dest="gA", default=gA / mV, help="in mV", type=float)
 parser.add_argument("-gm", dest="gm", default=gm / mV, help="in mV", type=float)
 parser.add_argument("-r", dest="r", default=rate / Hz, help="in Hz", type=float)
-parser.add_argument("-tD", dest="tD", default=tD / second, help="in seconds", type=float)
+parser.add_argument(
+    "-tD", dest="tD", default=tD / second, help="in seconds", type=float
+)
 args = parser.parse_args()
 
 numpy.random.seed(args.seed)
@@ -298,7 +300,14 @@ print(f"rate: ", rate)
 
 try:
     # load from hdf5
-    a_ij = h5_load(args.input_path, "/data/connectivity_matrix")
+    print("Loading connectivity from hdf5 ... ")
+    try:
+        a_ij = None
+        a_ij_sparse = h5_load(args.input_path, "/data/connectivity_matrix_sparse")
+        a_ij_sparse = a_ij_sparse.astype(int, copy=False) # brian doesnt like uints
+    except:
+        a_ij_sparse = None
+        a_ij = h5_load(args.input_path, "/data/connectivity_matrix")
     num_n = int(h5_load(args.input_path, "/meta/topology_num_neur"))
     # get the neurons sorted according to their modules
     mod_ids = h5_load(args.input_path, "/data/neuron_module_id")
@@ -312,6 +321,7 @@ except:
     mod_sort = lambda x: x
     # or a csv
     try:
+        a_ij_sparse = None
         a_ij = loadtxt(args.input_path)
         num_n = a_ij.shape[0]
     except:
@@ -365,14 +375,20 @@ mini_g = PoissonInput(target=G, target_var="I", N=1, rate=rate, weight=gm)
 
 # connect synapses from loaded matrix or randomly
 try:
-    assert a_ij is not None
-    pre, post = np.where(a_ij == 1)
-    for idx, i in enumerate(pre):
-        j = post[idx]
-        # i = np.argwhere(mod_sorted == i)[0, 0]
-        # j = np.argwhere(mod_sorted == j)[0, 0]
-        S.connect(i=i, j=j)
-except:
+    assert a_ij is not None or a_ij_sparse is not None
+    if a_ij_sparse is None:
+        print("Applying connectivity (non-sparse) ... ")
+        pre, post = np.where(a_ij == 1)
+        for idx, i in enumerate(pre):
+            j = post[idx]
+            # i = np.argwhere(mod_sorted == i)[0, 0]
+            # j = np.argwhere(mod_sorted == j)[0, 0]
+            S.connect(i=i, j=j)
+    else:
+        print("Applying connectivity (sparse) ... ")
+        S.connect(i=a_ij_sparse[:, 0], j=a_ij_sparse[:, 1])
+except Exception as e:
+    print(e)
     print(f"Creating Synapses randomly.")
     S.connect(condition="i != j", p=0.01)
 
@@ -417,13 +433,15 @@ try:
         if len(trains[tdx]) > tmax:
             tmax = len(trains[tdx])
     spiketimes = np.zeros(shape=(num_n, tmax))
-    spiketimes_as_list = np.zeros(shape=(2,spks_m.num_spikes))
+    spiketimes_as_list = np.zeros(shape=(2, spks_m.num_spikes))
     last_idx = 0
     for n in range(0, num_n):
         t = trains[n]
         spiketimes[n, 0 : len(t)] = t / second - args.equil_duration
-        spiketimes_as_list[0, last_idx:last_idx+len(t)] = [n]*len(t)
-        spiketimes_as_list[1, last_idx:last_idx+len(t)] = t / second - args.equil_duration
+        spiketimes_as_list[0, last_idx : last_idx + len(t)] = [n] * len(t)
+        spiketimes_as_list[1, last_idx : last_idx + len(t)] = (
+            t / second - args.equil_duration
+        )
         last_idx += len(t)
 
     try:
@@ -432,27 +450,28 @@ try:
         bursts = np.array([])
         summed_series = np.array([])
 
-
     ibi = args.duration * second / len(bursts)
     print(f"{len(bursts)} bursts occured in {args.duration} seconds. ibi: {ibi}")
 
     dset = f.create_dataset("/data/spiketimes", data=spiketimes)
-    dset.attrs["description"] = "2d array of spiketimes, neuron x spiketime in seconds, zero-padded"
-
-    dset = f.create_dataset("/data/spiketimes_as_list", data=spiketimes_as_list)
-    dset.attrs["description"] = "two-column list of spiketimes. first col is neuron id, second col the spiketime. effectively same data as in '/data/spiketimes'. neuron id will need casting to int for indexing."
-
-
-
-    dset = f.create_dataset("/data/bursttimes", data=bursts / second)
-    dset.attrs["description"] = "time of detected busts in seconds"
-    dset = f.create_dataset("/data/summed_series", data=bursts / second)
     dset.attrs[
         "description"
-    ] = "timeseries of the number of neurons that spike in a time bin. based on 50 ms time bins. in each bin, a neuron spikes -possibly multiple times- (1) or not (0). In the summed series, in every bin we have an entry between 0 and number of neurons"
-    dset = f.create_dataset("/data/ibi", data=ibi / second)
-    dset.attrs["description"] = "inter burst interval in seconds"
+    ] = "2d array of spiketimes, neuron x spiketime in seconds, zero-padded"
 
+    dset = f.create_dataset("/data/spiketimes_as_list", data=spiketimes_as_list)
+    dset.attrs[
+        "description"
+    ] = "two-column list of spiketimes. first col is neuron id, second col the spiketime. effectively same data as in '/data/spiketimes'. neuron id will need casting to int for indexing."
+
+    # this is really not the right place to do burst-detection.
+    # dset = f.create_dataset("/data/bursttimes", data=bursts / second)
+    # dset.attrs["description"] = "time of detected busts in seconds"
+    # dset = f.create_dataset("/data/summed_series", data=bursts / second)
+    # dset.attrs[
+    #     "description"
+    # ] = "timeseries of the number of neurons that spike in a time bin. based on 50 ms time bins. in each bin, a neuron spikes -possibly multiple times- (1) or not (0). In the summed series, in every bin we have an entry between 0 and number of neurons"
+    # dset = f.create_dataset("/data/ibi", data=ibi / second)
+    # dset.attrs["description"] = "inter burst interval in seconds"
 
     # meta data of this simulation
     dset = f.create_dataset("/meta/dynamics_gA", data=gA / mV)
@@ -472,7 +491,9 @@ try:
     dset = f.create_dataset("/meta/dynamics_simulation_duration", data=args.duration)
     dset.attrs["description"] = "in seconds"
 
-    dset = f.create_dataset("/meta/dynamics_equilibration_duration", data=args.equil_duration)
+    dset = f.create_dataset(
+        "/meta/dynamics_equilibration_duration", data=args.equil_duration
+    )
     dset.attrs["description"] = "in seconds"
 
     f.close()
@@ -489,6 +510,7 @@ print(f'#{"":#^75}#\n#{"All done!":^75}#\n#{"":#^75}#')
 # Plotting
 # ------------------------------------------------------------------------------ #
 
+
 def plot_overview():
     ion()  # interactive plotting
     fig, ax = subplots(5, 1, sharex=True)
@@ -501,7 +523,6 @@ def plot_overview():
     ax[1].plot(spks_m.t[sel] / second, mod_sort(spks_m.i[sel]), ".")
     # ax[1].plot(stim_m.t / second, mod_sort(stim_m.i), ".", color="orange")
     ax[1].set_ylabel("Raster")
-
 
     # bursts = burst_times(spks_m)
     bursts, time_series, summed_series, window = burst_times(spks_m, debug=True)
