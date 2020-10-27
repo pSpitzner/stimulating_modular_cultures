@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2020-10-27 12:41:55
+# @Last Modified: 2020-10-27 17:29:25
 #
 # Scans the provided directory for .hdf5 files and checks if they have the right
 # data to plot a 2d ibi_mean_4d of ibi = f(gA, rate)
@@ -25,7 +25,7 @@ import pandas as pd
 from tqdm import tqdm
 
 log = logging.getLogger(__name__)
-warnings.filterwarnings("ignore") # suppress numpy warnings
+warnings.filterwarnings("ignore")  # suppress numpy warnings
 sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/../ana/"))
 import utility as ut
 import logisi as logisi
@@ -60,22 +60,45 @@ def scalar_mean_ibi(candidate=None):
     res["ibi_var"] = np.var(ibis) if len(ibis) > 0 else np.inf
     return res
 
+
 def scalar_mean_ibi_pasquale(candidate=None):
+    """
+        logisi methoed enables some cool properties, like sequences, burst duration
+        etc.
+    """
     if candidate is None:
-        return ["ibi_pasquale_mean", "ibi_pasquale_var"]
+        return [
+            "psq_ibi_mean",
+            "psq_ibi_var",
+            "psq_nb_duration_mean",
+            "psq_nb_duration_var",
+        ]
 
     # load spiketimes and calculate ibi
     spiketimes = ut.h5_load(candidate, "/data/spiketimes", silent=True)
-    network_bursts, per_neuron_bursts = logisi.network_burst_detection(spiketimes)
-    if network_bursts is None:
-        ibis = []
-    else:
-        ibis = network_bursts["IBI"]
+    network_bursts, details = logisi.network_burst_detection(spiketimes)
+    # if network_bursts is None:
+    # ibis = []
+    # burst_durations = []
+    # else:
+
+    ibis = network_bursts["IBI"]
+
+    # network_bursts ["durn"] does not give the right duration because i reused
+    # the burst detection function on the network level.
+    # patching this inplace, here
+    durn = (
+        details["end_times"][network_bursts["end"]]
+        - details["beg_times"][network_bursts["beg"]]
+    )
 
     res = dict()
-    res["ibi_pasquale_mean"] = np.nanmean(ibis) if len(ibis) > 0 else np.inf
-    res["ibi_pasquale_var"] = np.nanvar(ibis) if len(ibis) > 0 else np.inf
-    # print(f"\n{res['ibi_pasquale_mean']}")
+    res["psq_ibi_mean"] = np.nanmean(ibis) if len(ibis) > 0 else np.inf
+    res["psq_ibi_var"] = np.nanvar(ibis) if len(ibis) > 0 else np.inf
+    res["psq_nd_duration_mean"] = np.nanmean(durn) if len(durn) > 0 else np.inf
+    res["psq_nd_duration_var"] = np.nanvar(durn) if len(durn) > 0 else np.inf
+
+    # print(f"\n{res['psq_ibi_mean']}")
     return res
 
 
@@ -90,6 +113,7 @@ def scalar_asdr(candidate=None):
     res["asdr_mean"] = np.mean(asdr)
     return res
 
+
 def scalar_k_out(candidate=None):
     if candidate is None:
         return ["k_out_median"]
@@ -99,6 +123,7 @@ def scalar_k_out(candidate=None):
     res = dict()
     res["k_out_median"] = np.median(kout)
     return res
+
 
 # a list of analysis functions to call on the candidate
 l_ana_functions = list()

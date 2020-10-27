@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2020-10-26 11:59:40
+# @Last Modified: 2020-10-27 14:26:09
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 or csv and runs the simulations in brian.
@@ -82,6 +82,10 @@ gs = 300 * mV * mV * ms * ms  # white noise strength, via xi = dt**.5 * randn()
 # fmt:on
 
 # integration step size
+# this turns out to be quite crucial for synchonization:
+# when too large (brian defaul 0.1ms) this forces sth like an integer cast at
+# some point and may promote synchronized firing. (spike times are not precise enough)
+# heuristically: do not go below 0.05 ms, better 0.01ms
 defaultclock.dt = 0.05 * ms
 
 # ------------------------------------------------------------------------------ #
@@ -250,6 +254,79 @@ def burst_times(spks_m, debug=False):
 
 
 # ------------------------------------------------------------------------------ #
+# stimulation
+# recreate the stimulation used by hideaki.
+#     * 400ms time windows
+#     * 10 candidate neurons across two modules
+#     * per time window p=0.4 for every candidate
+# ------------------------------------------------------------------------------ #
+
+def stimulation_pattern_candidates(candidates, p_per_candidate=0.4):
+    """
+        create a random pattern from given candidates.
+        the stimulation_pattern_random() can be used once to get candidates.
+
+        Parameters
+        ----------
+        candidates: list of int
+            the ids of the candidates
+
+        Returns
+        -------
+        activate: list of int
+            the ids of the candidates to target
+    """
+
+    num_c = len(candidates)
+    idx = np.random.random_sample(size=num_c) # [0.0, 1.0)
+    return candidates[idx < p_per_candidate]
+
+
+def stimulation_pattern_random(n_per_mod=5, mod_targets=[0]):
+    """
+        produces a random pattern for one time window
+
+        Parameters
+        ----------
+        n_per_mod : int
+            number of candidates per module
+
+        mod_targets : list of int
+            which targets to pick candidates
+
+        Returns
+        -------
+        neuron_ids: list of int
+            the neuron ids to target
+    """
+    global mod_ids
+
+    num_in_mod = []
+    offset = [0]
+    arg_sorted = np.argsort(mod_ids)
+    for mdx in range(0, np.nanmax(mod_targets) + 1):
+        N = np.sum(mod_ids == mdx)
+        offset.append(offset[-1] + N)
+        num_in_mod.append(N)
+
+    # draw a random neuron in the target module
+    rand_in_mod = lambda m: arg_sorted[offset[m] + np.random.randint(0, num_in_mod[m])]
+
+    res = []
+    for mdx in mod_targets:
+        assert mdx in mod_ids
+        temp = []
+        for n in range(0, n_per_mod):
+            tar = rand_in_mod(mdx)
+            while tar in temp:
+                tar = rand_in_mod(mdx)
+            temp.append(tar)
+        res += temp
+
+    return res
+
+
+# ------------------------------------------------------------------------------ #
 # command line arguments
 # ------------------------------------------------------------------------------ #
 
@@ -304,7 +381,7 @@ try:
     try:
         a_ij = None
         a_ij_sparse = h5_load(args.input_path, "/data/connectivity_matrix_sparse")
-        a_ij_sparse = a_ij_sparse.astype(int, copy=False) # brian doesnt like uints
+        a_ij_sparse = a_ij_sparse.astype(int, copy=False)  # brian doesnt like uints
     except:
         a_ij_sparse = None
         a_ij = h5_load(args.input_path, "/data/connectivity_matrix")
