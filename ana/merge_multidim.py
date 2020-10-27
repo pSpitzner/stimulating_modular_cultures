@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2020-10-21 14:16:31
+# @Last Modified: 2020-10-27 12:41:55
 #
 # Scans the provided directory for .hdf5 files and checks if they have the right
 # data to plot a 2d ibi_mean_4d of ibi = f(gA, rate)
@@ -41,6 +41,7 @@ d_obs["ga"] = "/meta/dynamics_gA"
 d_obs["rate"] = "/meta/dynamics_rate"
 d_obs["tD"] = "/meta/dynamics_tD"
 d_obs["alpha"] = "/meta/topology_alpha"
+d_obs["k_inter"] = "/meta/topology_k_inter"
 
 # functions for analysis. candidate is the hdf5 file
 # need to return a dict where the key becomes the hdf5 data set name
