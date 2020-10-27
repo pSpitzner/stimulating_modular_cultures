@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-01-24 13:43:39
-# @Last Modified: 2020-02-27 12:20:34
+# @Last Modified: 2020-10-17 22:39:29
 # ------------------------------------------------------------------------------- #
 # Create a movie of the network for a given time range and visualize
 # firing neurons. Save to mp4.
@@ -23,6 +23,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from matplotlib.animation import FFMpegWriter
+
+sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/../ana/"))
+import utility as ut
 
 plt.ioff()
 
@@ -95,7 +98,7 @@ rescale = args.rescale  # factor by which to rescale the event list
 bpf = ((args.tmax - args.tmin) / num_frames)
 
 frame_offset = int(args.tmin / bpf)
-decay_s = 0.75  # decay of spike display in seconds
+decay_s = 0.5  # decay of spike display in seconds
 decay_b = bpf * fps * decay_s  # in time bins
 
 # ------------------------------------------------------------------ #
@@ -146,6 +149,14 @@ event_list = event_list * rescale
 # event_list = event_list.astype(int)
 event_list = np.where(event_list == 0, np.nan, event_list)
 
+# we want to scale brightness of spikes with population activity
+pop_act = ut.population_activity(event_list, bin_size=1)
+pop_act_max = np.nanmax(pop_act);
+pop_act_min = np.nanmin(pop_act);
+
+print(f"pop_act_max {pop_act_max}")
+print(f"pop_act_min {pop_act_min}")
+
 # ------------------------------------------------------------------------------ #
 # figure setup and color choices
 # ------------------------------------------------------------------------------ #
@@ -155,17 +166,19 @@ canvas_clr = "black"  # the overall background
 title_clr = "white"
 
 # needs to return a color that will be applied to the foreground of axons
-def render_spike_axon(time_ago, decay_time):
+def render_spike_axon(time_ago, decay_time, multiplier=1):
     alpha = 1.0 - (time_ago) / decay_time  # linear
     # alpha = 1.0 / (time_ago) # 1/x, pretty steep
     alpha = np.clip(alpha, 0.0, 1.0)
+    alpha = alpha*multiplier
     return (1.0, 1.0, 1.0, alpha * 0.6)
 
 
 # needs to return a two colors, for cell body and outline
-def render_spike_soma(time_ago, decay_time):
+def render_spike_soma(time_ago, decay_time, multiplier=1):
     alpha = 1.0 - (time_ago) / decay_time  # linear
     alpha = np.clip(alpha, 0.0, 1.0)
+    alpha = alpha*multiplier
     edge = (1.0, 1.0, 1.0, alpha * 0.8)
     face = (1.0, 1.0, 1.0, alpha)
     return edge, face
@@ -227,6 +240,13 @@ with writer.saving(fig=fig, outfile=args.output_path, dpi=100):
         time_stamp = f * bpf
         art_time.set_text(f"t = {time_stamp :.2f} {args.tunit}")
 
+        # this may cause bugs
+        tdx = int(time_stamp)
+
+        multiplier = pop_act[tdx]/pop_act_max
+        multiplier = np.clip(multiplier, 0.25, 0.5)
+        multiplier = multiplier*2
+
         for n in range(num_n):
             idx = prev_s_idx[n]
             while idx + 1 < last_s_idx and event_list[n, idx + 1] < time_stamp:
@@ -237,8 +257,8 @@ with writer.saving(fig=fig, outfile=args.output_path, dpi=100):
             time_ago = time_stamp - spike_time
 
             if time_ago >= 0 and time_ago < decay_b:  # paint something cool
-                ax_edge = render_spike_axon(time_ago, decay_b)
-                sm_edge, sm_face = render_spike_soma(time_ago, decay_b)
+                ax_edge = render_spike_axon(time_ago, decay_b, multiplier)
+                sm_edge, sm_face = render_spike_soma(time_ago, decay_b, multiplier)
                 art_axons[n].set_color(ax_edge)
                 art_soma[n].set_edgecolor(sm_edge)
                 art_soma[n].set_facecolor(sm_face)
