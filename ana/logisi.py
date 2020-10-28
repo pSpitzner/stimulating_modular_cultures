@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-09-28 10:36:48
-# @Last Modified: 2020-10-28 11:27:53
+# @Last Modified: 2020-10-28 12:06:06
 # ------------------------------------------------------------------------------ #
 # My implementation of the logISI historgram burst detection algorithm
 # by Pasuqale et al.
@@ -616,5 +616,6 @@ def network_burst_detection(spiketimes, network_fraction=0.8, sort_by="beg"):
         )
     except Exception as e:
         log.info(f"find_burst: {e}")
+        nb = no_bursts
 
     return nb, details

@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2020-10-27 18:43:46
+# @Last Modified: 2020-10-28 19:47:01
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 or csv and runs the simulations in brian.
@@ -396,8 +396,8 @@ try:
     mod_ids = h5_load(args.input_path, "/data/neuron_module_id")
     mod_sorted = np.zeros(num_n, dtype=int)
     temp = np.argsort(mod_ids)
-    for i in range(0, num_n):
-        mod_sorted[i] = np.argwhere(temp == i)
+    for idx in range(0, num_n):
+        mod_sorted[idx] = np.argwhere(temp == idx)
 
     mod_sort = lambda x: mod_sorted[x]
 except:
@@ -483,20 +483,27 @@ G.v = "vc + 5*mV*rand()"
 if args.enable_stimulation:
 
     candidates = stimulation_pattern_random(n_per_mod=5, mod_targets=[0])
+    candidates = np.array(candidates)
     stimulus_indices = []
     stimulus_times = []
-    for step in range(1, int(args.duration * second / stim_interval) - 1):
-        t = step * stim_interval + G.t
-        n = stimulation_pattern_candidates(candidates=candidates)
+    for step in range(
+        1, int((args.duration + args.equil_duration) * second / stim_interval) - 1
+    ):
+        t = step * stim_interval
+        n = stimulation_pattern_candidates(candidates=candidates).tolist()
         stimulus_indices += n
         stimulus_times += [t] * len(n)
 
     stim_g = SpikeGeneratorGroup(
-        N=num_n, indices=stimulus_indices, times=stimulus_times,
+        N=num_n,
+        indices=stimulus_indices,
+        times=stimulus_times,
+        name="create_stimulation",
     )
-    stim_s = Synapses(stim_g, G, on_pre="v_post = 2*vp", name="Stimulation")
+    # because we project via artificial synapses, we get a delay of
+    # approx (!) one timestep between the stimulation and the spike
+    stim_s = Synapses(stim_g, G, on_pre="v_post = 2*vp", name="apply_stimulation",)
     stim_s.connect(condition="i == j")
-    stim_m = SpikeMonitor(stim_g)
 
 # ------------------------------------------------------------------------------ #
 # Running
@@ -510,6 +517,9 @@ run(args.equil_duration * second, report="stdout", report_period=1 * 60 * second
 spks_m = SpikeMonitor(G)
 # rate_m = PopulationRateMonitor(G)
 # mini_m = SpikeMonitor(mini_g)
+
+if args.enable_stimulation:
+    stim_m = SpikeMonitor(stim_g)
 
 run(args.duration * second, report="stdout", report_period=1 * 60 * second)
 
@@ -533,7 +543,8 @@ try:
         raise ValueError
     f = h5py.File(args.output_path, "a")
 
-    def convert_brian_spikes_to_pauls(trains):
+    def convert_brian_spikes_to_pauls(spks_m):
+        trains = spks_m.spike_trains()
         tmax = 0
         for tdx in trains.keys():
             if len(trains[tdx]) > tmax:
@@ -549,12 +560,10 @@ try:
                 t / second - args.equil_duration
             )
             last_idx += len(t)
-        return spiketimes, spiketimes_as_list
+        return spiketimes, spiketimes_as_list.T
 
     # normal spikes, no stim in two different formats
-    spks, spks_as_list = convert_brian_spikes_to_pauls(
-        spks_m.spike_trains()
-    )
+    spks, spks_as_list = convert_brian_spikes_to_pauls(spks_m)
 
     dset = f.create_dataset("/data/spiketimes", data=spks)
     dset.attrs[
@@ -568,14 +577,12 @@ try:
 
     if args.enable_stimulation:
         # normal spikes, no stim in two different formats
-        stim, stim_as_list = convert_brian_spikes_to_pauls(
-            stim_m.spike_trains()
-        )
+        stim, stim_as_list = convert_brian_spikes_to_pauls(stim_m)
 
         dset = f.create_dataset("/data/stimulation_times_as_list", data=stim_as_list)
         dset.attrs[
             "description"
-        ] = "two-column list of spiketimes. first col is target-neuron id, second col the stim. time."
+        ] = "two-column list of stimulation times. first col is target-neuron id, second col the stimulation time. Beware: we have approximateley one timestep delay between stimulation and spike."
 
     # this is really not the right place to do burst-detection.
     # dset = f.create_dataset("/data/bursttimes", data=bursts / second)
