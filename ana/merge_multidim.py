@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2020-10-27 17:29:25
+# @Last Modified: 2020-10-28 11:03:04
 #
 # Scans the provided directory for .hdf5 files and checks if they have the right
 # data to plot a 2d ibi_mean_4d of ibi = f(gA, rate)
@@ -61,7 +61,7 @@ def scalar_mean_ibi(candidate=None):
     return res
 
 
-def scalar_mean_ibi_pasquale(candidate=None):
+def scalar_logisi_pasquale(candidate=None):
     """
         logisi methoed enables some cool properties, like sequences, burst duration
         etc.
@@ -130,7 +130,7 @@ l_ana_functions = list()
 l_ana_functions.append(scalar_mean_ibi)
 l_ana_functions.append(scalar_asdr)
 l_ana_functions.append(scalar_k_out)
-# l_ana_functions.append(scalar_mean_ibi_pasquale)
+l_ana_functions.append(scalar_logisi_pasquale)
 
 # all the keys that will be returned from above
 l_ana_keys = []
@@ -191,6 +191,11 @@ for candidate in tqdm(candidates):
     try:
         for obs in d_obs:
             temp = ut.h5_load(candidate, d_obs[obs], silent=True)
+
+            # dirty workaround for missing metadata
+            if obs == 'k_inter':
+                temp = int(candidate[candidate.find('k=')+2])
+
             try:
                 # sometimes we find nested arrays
                 if len(temp == 1):
@@ -221,6 +226,9 @@ for candidate in tqdm(candidates):
     for obs in d_axes.keys():
         # get value
         temp = ut.h5_load(candidate, d_obs[obs], silent=True)
+        # dirty workaround for missing metadata
+        if obs == 'k_inter':
+            temp = int(candidate[candidate.find('k=')+2])
         # transform to index
         temp = np.where(d_axes[obs] == temp)[0][0]
         index += (temp,)
@@ -248,6 +256,10 @@ for candidate in tqdm(l_valid):
     for obs in d_axes.keys():
         # get value
         temp = ut.h5_load(candidate, d_obs[obs], silent=True)
+        # dirty workaround for missing metadata
+        if obs == 'k_inter':
+            temp = int(candidate[candidate.find('k=')+2])
+
         # transform to index
         temp = np.where(d_axes[obs] == temp)[0][0]
         # print(f"{obs} {temp}")

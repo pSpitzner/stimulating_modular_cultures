@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-10-28 10:42:05
-# @Last Modified: 2020-10-28 10:55:35
+# @Last Modified: 2020-10-28 11:00:30
 # ------------------------------------------------------------------------------ #
 
 import os
@@ -81,7 +81,7 @@ for candidate in tqdm(candidates):
 
             # dirty workaround for missing metadata
             if obs == 'k_inter':
-                temp = int(candidate[candidate.find('k=')+2])
+                temp = np.array([int(candidate[candidate.find('k=')+2])])
 
                 # write back
                 f_tar = h5py.File(candidate, "r+")
