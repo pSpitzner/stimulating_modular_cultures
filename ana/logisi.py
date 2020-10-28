@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-09-28 10:36:48
-# @Last Modified: 2020-10-23 15:32:57
+# @Last Modified: 2020-10-28 11:27:53
 # ------------------------------------------------------------------------------ #
 # My implementation of the logISI historgram burst detection algorithm
 # by Pasuqale et al.
@@ -195,17 +195,23 @@ def find_thresh(h, h_edges, ISITh=100.0, void_th=0.7, peak_kwargs=None):
 debug_h = None
 debug_s = None
 debug_e = None
+debug_spikes = None
 
 # Calculates cutoff for burst detection
 def logisi_break_calc(st, cutoff, void_th=0.7, peak_kwargs=None):
-    isi = np.diff(st) * 1000.0
-    max_isi = np.ceil(np.log10(np.max(isi)))
-    isi = isi[isi >= 1]
-    br = np.logspace(0, max_isi, int(10 * max_isi))
-    hist, edges = np.histogram(isi, bins=br, density=True)
+
     global debug_h
     global debug_s
     global debug_e
+    global debug_isi
+    global debug_spikes
+
+    isi = np.diff(st) * 1000.0
+    debug_spikes = st
+    isi = isi[isi >= 1]
+    max_isi = np.ceil(np.log10(np.max(isi)))
+    br = np.logspace(0, max_isi, int(10 * max_isi))
+    hist, edges = np.histogram(isi, bins=br, density=True)
     hist_smooth = lowess(
         endog=hist,
         exog=np.arange(len(hist)),
@@ -553,6 +559,7 @@ def network_burst_detection(spiketimes, network_fraction=0.8, sort_by="beg"):
     for n in tqdm(range(num_n), leave=None):
         train = spiketimes[n]
         train = train[np.isfinite(train)]
+        train = train[np.nonzero(train)]
         bursts, _, _, _ = burst_detection_pasquale(train)
         neuron_ids += [n] * len(bursts["med"])
         med_times += bursts["med"].tolist()

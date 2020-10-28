@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2020-10-28 11:05:40
+# @Last Modified: 2020-10-28 11:15:40
 #
 # Scans the provided directory for .hdf5 files and checks if they have the right
 # data to plot a 2d ibi_mean_4d of ibi = f(gA, rate)
@@ -95,8 +95,8 @@ def scalar_logisi_pasquale(candidate=None):
     res = dict()
     res["psq_ibi_mean"] = np.nanmean(ibis) if len(ibis) > 0 else np.inf
     res["psq_ibi_var"] = np.nanvar(ibis) if len(ibis) > 0 else np.inf
-    res["psq_nd_duration_mean"] = np.nanmean(durn) if len(durn) > 0 else np.inf
-    res["psq_nd_duration_var"] = np.nanvar(durn) if len(durn) > 0 else np.inf
+    res["psq_nb_duration_mean"] = np.nanmean(durn) if len(durn) > 0 else np.inf
+    res["psq_nb_duration_mean"] = np.nanvar(durn) if len(durn) > 0 else np.inf
 
     # print(f"\n{res['psq_ibi_mean']}")
     return res
