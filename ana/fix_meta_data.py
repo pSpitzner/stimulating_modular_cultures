@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-10-28 10:42:05
-# @Last Modified: 2020-10-28 10:46:59
+# @Last Modified: 2020-10-28 10:55:35
 # ------------------------------------------------------------------------------ #
 
 import os
@@ -84,11 +84,15 @@ for candidate in tqdm(candidates):
                 temp = int(candidate[candidate.find('k=')+2])
 
                 # write back
-                f_tar = h5py.File(merge_path, "r+")
-                dset = f_tar.create_dataset("/meta/topology_k_inter", data=temp)
+                f_tar = h5py.File(candidate, "r+")
+                try:
+                    dset = f_tar.create_dataset("/meta/topology_k_inter", data=temp)
+                except RuntimeError:
+                    dset = f_tar["/meta/topology_k_inter"]
+                    dset[...] = temp
                 f_tar.close()
 
 
 
     except Exception as e:
-        print(f"incompatible file: {candidate}")
+        print(f"incompatible file: {candidate} {e}")
