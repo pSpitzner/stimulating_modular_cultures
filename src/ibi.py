@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2020-10-27 14:26:09
+# @Last Modified: 2020-10-27 18:43:46
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 or csv and runs the simulations in brian.
@@ -79,6 +79,11 @@ rate = 30 * Hz     # rate for the poisson input (shot-noise), between 10 - 50 Hz
 gm =  25 * mV      # shot noise (minis) strength, between 10 - 50 mV
                    # (sum of minis arriving at target neuron)
 gs = 300 * mV * mV * ms * ms  # white noise strength, via xi = dt**.5 * randn()
+
+
+# stimulation
+stim_interval = 400 * ms
+
 # fmt:on
 
 # integration step size
@@ -261,6 +266,7 @@ def burst_times(spks_m, debug=False):
 #     * per time window p=0.4 for every candidate
 # ------------------------------------------------------------------------------ #
 
+
 def stimulation_pattern_candidates(candidates, p_per_candidate=0.4):
     """
         create a random pattern from given candidates.
@@ -278,7 +284,7 @@ def stimulation_pattern_candidates(candidates, p_per_candidate=0.4):
     """
 
     num_c = len(candidates)
-    idx = np.random.random_sample(size=num_c) # [0.0, 1.0)
+    idx = np.random.random_sample(size=num_c)  # [0.0, 1.0)
     return candidates[idx < p_per_candidate]
 
 
@@ -458,8 +464,6 @@ try:
         pre, post = np.where(a_ij == 1)
         for idx, i in enumerate(pre):
             j = post[idx]
-            # i = np.argwhere(mod_sorted == i)[0, 0]
-            # j = np.argwhere(mod_sorted == j)[0, 0]
             S.connect(i=i, j=j)
     else:
         print("Applying connectivity (sparse) ... ")
@@ -473,10 +477,31 @@ except Exception as e:
 G.v = "vc + 5*mV*rand()"
 
 # ------------------------------------------------------------------------------ #
-# Running and Writing
+# Stimulation if requested
 # ------------------------------------------------------------------------------ #
 
-# assert False
+if args.enable_stimulation:
+
+    candidates = stimulation_pattern_random(n_per_mod=5, mod_targets=[0])
+    stimulus_indices = []
+    stimulus_times = []
+    for step in range(1, int(args.duration * second / stim_interval) - 1):
+        t = step * stim_interval + G.t
+        n = stimulation_pattern_candidates(candidates=candidates)
+        stimulus_indices += n
+        stimulus_times += [t] * len(n)
+
+    stim_g = SpikeGeneratorGroup(
+        N=num_n, indices=stimulus_indices, times=stimulus_times,
+    )
+    stim_s = Synapses(stim_g, G, on_pre="v_post = 2*vp", name="Stimulation")
+    stim_s.connect(condition="i == j")
+    stim_m = SpikeMonitor(stim_g)
+
+# ------------------------------------------------------------------------------ #
+# Running
+# ------------------------------------------------------------------------------ #
+
 # equilibrate
 run(args.equil_duration * second, report="stdout", report_period=1 * 60 * second)
 
@@ -487,6 +512,11 @@ spks_m = SpikeMonitor(G)
 # mini_m = SpikeMonitor(mini_g)
 
 run(args.duration * second, report="stdout", report_period=1 * 60 * second)
+
+
+# ------------------------------------------------------------------------------ #
+# Writing
+# ------------------------------------------------------------------------------ #
 
 print(f'#{"":#^75}#\n#{"saving to disk":^75}#\n#{"":#^75}#')
 
@@ -503,42 +533,49 @@ try:
         raise ValueError
     f = h5py.File(args.output_path, "a")
 
+    def convert_brian_spikes_to_pauls(trains):
+        tmax = 0
+        for tdx in trains.keys():
+            if len(trains[tdx]) > tmax:
+                tmax = len(trains[tdx])
+        spiketimes = np.zeros(shape=(num_n, tmax))
+        spiketimes_as_list = np.zeros(shape=(2, spks_m.num_spikes))
+        last_idx = 0
+        for n in range(0, num_n):
+            t = trains[n]
+            spiketimes[n, 0 : len(t)] = t / second - args.equil_duration
+            spiketimes_as_list[0, last_idx : last_idx + len(t)] = [n] * len(t)
+            spiketimes_as_list[1, last_idx : last_idx + len(t)] = (
+                t / second - args.equil_duration
+            )
+            last_idx += len(t)
+        return spiketimes, spiketimes_as_list
+
     # normal spikes, no stim in two different formats
-    trains = spks_m.spike_trains()
-    tmax = 0
-    for tdx in trains.keys():
-        if len(trains[tdx]) > tmax:
-            tmax = len(trains[tdx])
-    spiketimes = np.zeros(shape=(num_n, tmax))
-    spiketimes_as_list = np.zeros(shape=(2, spks_m.num_spikes))
-    last_idx = 0
-    for n in range(0, num_n):
-        t = trains[n]
-        spiketimes[n, 0 : len(t)] = t / second - args.equil_duration
-        spiketimes_as_list[0, last_idx : last_idx + len(t)] = [n] * len(t)
-        spiketimes_as_list[1, last_idx : last_idx + len(t)] = (
-            t / second - args.equil_duration
-        )
-        last_idx += len(t)
+    spks, spks_as_list = convert_brian_spikes_to_pauls(
+        spks_m.spike_trains()
+    )
 
-    try:
-        bursts, time_series, summed_series, window = burst_times(spks_m, debug=True)
-    except Exception as e:
-        bursts = np.array([])
-        summed_series = np.array([])
-
-    ibi = args.duration * second / len(bursts)
-    print(f"{len(bursts)} bursts occured in {args.duration} seconds. ibi: {ibi}")
-
-    dset = f.create_dataset("/data/spiketimes", data=spiketimes)
+    dset = f.create_dataset("/data/spiketimes", data=spks)
     dset.attrs[
         "description"
     ] = "2d array of spiketimes, neuron x spiketime in seconds, zero-padded"
 
-    dset = f.create_dataset("/data/spiketimes_as_list", data=spiketimes_as_list)
+    dset = f.create_dataset("/data/spiketimes_as_list", data=spks_as_list)
     dset.attrs[
         "description"
     ] = "two-column list of spiketimes. first col is neuron id, second col the spiketime. effectively same data as in '/data/spiketimes'. neuron id will need casting to int for indexing."
+
+    if args.enable_stimulation:
+        # normal spikes, no stim in two different formats
+        stim, stim_as_list = convert_brian_spikes_to_pauls(
+            stim_m.spike_trains()
+        )
+
+        dset = f.create_dataset("/data/stimulation_times_as_list", data=stim_as_list)
+        dset.attrs[
+            "description"
+        ] = "two-column list of spiketimes. first col is target-neuron id, second col the stim. time."
 
     # this is really not the right place to do burst-detection.
     # dset = f.create_dataset("/data/bursttimes", data=bursts / second)
@@ -575,40 +612,7 @@ try:
 
     f.close()
 
+    print(f'#{"":#^75}#\n#{"All done!":^75}#\n#{"":#^75}#')
 
 except Exception as e:
     print("Unable to save to disk\n", e)
-
-
-print(f'#{"":#^75}#\n#{"All done!":^75}#\n#{"":#^75}#')
-
-
-# ------------------------------------------------------------------------------ #
-# Plotting
-# ------------------------------------------------------------------------------ #
-
-
-def plot_overview():
-    ion()  # interactive plotting
-    fig, ax = subplots(5, 1, sharex=True)
-
-    n1 = randint(0, num_n)  # some neuron ton highlight
-    sel = where(spks_m.i == n1)[0]
-
-    # ax[1].plot(mini_m.t / second, mini_m.i, ".y")
-    ax[1].plot(spks_m.t / second, mod_sort(spks_m.i), ".k")
-    ax[1].plot(spks_m.t[sel] / second, mod_sort(spks_m.i[sel]), ".")
-    # ax[1].plot(stim_m.t / second, mod_sort(stim_m.i), ".", color="orange")
-    ax[1].set_ylabel("Raster")
-
-    # bursts = burst_times(spks_m)
-    bursts, time_series, summed_series, window = burst_times(spks_m, debug=True)
-    ax[0].scatter(bursts / second, np.ones(len(bursts)))
-
-    bin_size = 50 * ms
-    ax[4].plot(np.arange(len(summed_series)) * bin_size / second, summed_series)
-
-    ibi = args.duration * second / len(bursts)
-    print("ibi: ", ibi)
-
-    show()
