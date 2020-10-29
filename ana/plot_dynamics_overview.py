@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-17 13:43:10
-# @Last Modified: 2020-10-23 15:40:00
+# @Last Modified: 2020-10-29 18:17:43
 # ------------------------------------------------------------------------------ #
 
 
@@ -10,13 +10,14 @@ import os
 import sys
 import glob
 import h5py
-import matplotlib
 import argparse
 import logging
 
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
+import pandas as pd
 import networkx as nx
 from brian2.units import *
 
@@ -43,6 +44,7 @@ try:
     # get the neurons sorted according to their modules
     mod_ids = ut.h5_load(args.input_path, "/data/neuron_module_id")
     mod_sorted = np.zeros(num_n, dtype=int)
+    mods = np.sort(np.unique(mod_ids))
     temp = np.argsort(mod_ids)
     for i in range(0, num_n):
         mod_sorted[i] = np.argwhere(temp == i)
@@ -113,7 +115,9 @@ rate = ut.h5_load(args.input_path, "/meta/dynamics_rate")
 tD = ut.h5_load(args.input_path, "/meta/dynamics_tD")
 ax[0].set_title(f"Ampa: {ga:.1f} mV", loc="left")
 ax[0].set_title(f"Rate: {rate:.1f} Hz", loc="right")
-ax[0].set_title(f"tD: {tD:.1f} s", loc="center")
+if "2x2_fixed" in args.input_path:
+    k_inter = ut.h5_load(args.input_path, "/meta/topology_k_inter")[0]
+    ax[0].set_title(f"k: {k_inter:d}", loc="center")
 
 ax[-1].set_xlabel("Time [seconds]")
 ax[-1].set_xlim(0, sim_duration)
@@ -148,12 +152,12 @@ ax[-1].set_xlim(0, sim_duration)
 # foo = logisi.burst_detection_pasquale(s)
 
 # this is totally not the right place to do this, but here we are
-def burst_analysis(file):
+def burst_analysis(file, network_fraction):
 
     f_tar = h5py.File(file, "r+")
     spiketimes = ut.h5_load(file, "/data/spiketimes", silent=True)
     network_bursts, details = logisi.network_burst_detection(
-        spiketimes, network_fraction=0.2
+        spiketimes, network_fraction=network_fraction
     )
 
     description = """
@@ -169,27 +173,30 @@ def burst_analysis(file):
     num_bursts = len(network_bursts["beg"])
     dat = np.ones(shape=(num_bursts, 6)) * np.nan
 
-    dat[:,0] = details["beg_times"][network_bursts["beg"]]
-    dat[:,1] = network_bursts["med"] # urgh, this is so inconsistent.
-    dat[:,2] = details["end_times"][network_bursts["end"]]
-    dat[:,3] = details["neuron_ids"][network_bursts["beg"]]
-    dat[:,4] = details["neuron_ids"][network_bursts["end"]]
-    dat[:,5] = network_bursts["unique"]
+    dat[:, 0] = details["beg_times"][network_bursts["beg"]]
+    dat[:, 1] = network_bursts["med"]  # urgh, this is so inconsistent.
+    dat[:, 2] = details["end_times"][network_bursts["end"]]
+    dat[:, 3] = details["neuron_ids"][network_bursts["beg"]]
+    dat[:, 4] = details["neuron_ids"][network_bursts["end"]]
+    dat[:, 5] = network_bursts["unique"]
 
-    try:
-        dset = f_tar.create_dataset("/data/network_bursts_logisi", data=dat)
-    except RuntimeError:
-        dset = f_tar["/data/network_bursts_logisi"]
-        dset[...] = dat
-    dset.attrs["description"] = description
-    f_tar.close()
+    # try:
+    #     dset = f_tar.create_dataset("/data/network_bursts_logisi", data=dat)
+    # except RuntimeError:
+    #     dset = f_tar["/data/network_bursts_logisi"]
+    #     dset[...] = dat
+    # dset.attrs["description"] = description
+    # f_tar.close()
 
     return spiketimes, network_bursts, details
 
-spiketimes, network_bursts, details = burst_analysis(file)
+
+spiketimes, network_bursts, details = burst_analysis(file, network_fraction=0.5)
 ibis = network_bursts["IBI"]
 uniq = network_bursts["unique"]
 neuron_bursts = details["beg_times"]
+num_bursts = len(network_bursts["beg"])
+
 
 res = dict()
 print(f"mean ibi pasqu: {np.nanmean(ibis) if len(ibis) > 0 else np.inf}")
@@ -232,32 +239,102 @@ ax[2].plot(neuron_bursts, 1.02 * np.ones(len(neuron_bursts)), "|g", markersize=6
 
 ax[2].set_ylim(0.9, 1.1)
 
-
-# lets look at the neuron sequence
-fig2, ax2 = plt.subplots()
-
 starters = details["neuron_ids"][network_bursts["beg"]]
 
 # we could look at modules instead of individual neurons.
-try:
-    starters = mod_ids[starters]
-except:
-    pass
+# try:
+#     starters = mod_ids[starters]
+# except:
+#     pass
 
-hist, edges = np.histogram(starters, bins=np.arange(0, num_n+1), density=True)
-edges = edges[:-1]
-# sort by largest amount
-idx = np.flip(np.argsort(hist))
-hist = hist[idx]
-edges = edges[idx]
-lim = len(np.where(hist > 0)[0])
+
+per_mod_hists = np.zeros(num_n, dtype=np.int)
+per_mod_ranks = np.zeros(num_n, dtype=np.int)
+
+# get histogram counts per on a per-module level
+mod_rank = np.zeros(len(mods), dtype=np.int)
+for m in mods:
+    idx = np.where(mod_ids[starters] == m)[0]
+    hist, edges = np.histogram(
+        starters[idx], bins=np.arange(0, num_n + 1), density=False
+    )
+    edges = edges[:-1]
+    # remove zero entries
+    nzdx = np.where(hist > 0)[0]
+    hist = hist[nzdx]
+    edges = edges[nzdx]
+    per_mod_hists[edges] = hist
+    mod_rank[m] = np.sum(hist)
+
+    # sort by largest amount
+    jdx = np.flip(np.argsort(hist))
+    # hist = hist[jdx]
+    # edges = edges[jdx]
+    per_mod_ranks[edges[jdx]] = np.arange(len(jdx))
+
+get_mod_rank = lambda m: np.where(np.flip(np.argsort(mod_rank)) == m)[0][0]
+get_mod_sum = lambda m: mod_rank[m]
+
+# # order starters by id first
+starters = np.sort(np.unique(starters))
+# # then by histogram height
+# starters = starters[ np.flip(np.argsort(per_mod_hists[starters])) ]
+# # then by module id according to module dominance
+# for m in mods:
+#     idx = np.where(mod_ids[starters] == m)[0]
+#     jdx = np.argsort(np.vectorize(get_mod_))
+# starters = starters[ np.flip(np.argsort(mod_ids[starters])) ]
+
+
+df = pd.DataFrame(
+    data={
+        "n_id": starters,
+        "mod": mod_ids[starters],
+        "mod_rank": np.vectorize(get_mod_rank)(mod_ids[starters]),
+        "mod_sum": np.vectorize(get_mod_sum)(mod_ids[starters]),
+        "per_mod_hists": per_mod_hists[starters],
+        "per_mod_ranks": per_mod_ranks[starters],
+    }
+)
+
+df = df.sort_values(by=["per_mod_hists", "mod_rank"], ascending=[False, True])
+
+
+fig2, ax2 = plt.subplots(nrows=1, ncols=2, figsize=[12, 4])
 
 # plot histogram with seaborn
-sns.barplot(x=np.arange(0, lim), y=hist[:lim], palette="rocket", ax=ax2)
+# sns.catplot(data=df, col="mod", y="per_mod_hists", x="per_mod_ranks", palette="rocket", ax=ax2, kind="bar", aspect=.8)
+sns.barplot(
+    data=df,
+    x="n_id",
+    order=df["n_id"],
+    y="per_mod_hists",
+    hue="mod_sum",
+    dodge=False,
+    palette="coolwarm",
+    ax=ax2[0],
+)
+
+sns.barplot(
+    data=df,
+    x="mod_rank",
+    y="mod_sum",
+    hue="mod_sum",
+    dodge=False,
+    palette="coolwarm",
+    ax=ax2[1],
+)
+
 # ax2.axhline(0, color="k", clip_on=False)
-ax2.set_xticklabels(edges[:lim])
-ax2.set_ylabel("Probability")
-ax2.set_xlabel("Burst initiation at Neuron")
-
-
-
+# ax2.set_xticklabels(edges[:lim])
+# ax2.get_legend().set_visible(False)
+# ax2[0].legend
+# some more meta data
+for text in args.input_path.split("/"):
+    if "2x2" in text:
+        fig2.suptitle(text)
+ax2[0].set_title(f"Ampa: {ga:.1f} mV", loc="left")
+ax2[0].set_title(f"Rate: {rate:.1f} Hz", loc="right")
+if "2x2_fixed" in args.input_path:
+    k_inter = ut.h5_load(args.input_path, "/meta/topology_k_inter")[0]
+    ax2[0].set_title(f"k: {k_inter:d}", loc="center")
