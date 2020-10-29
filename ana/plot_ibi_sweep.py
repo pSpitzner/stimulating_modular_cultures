@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2020-10-08 17:48:23
+# @Last Modified: 2020-10-29 14:42:56
 #
 # Scans the provided directory for .hdf5 files and checks if they have the right
 # data to plot a 2d heatmap of ibi = f(gA, rate)
@@ -65,13 +65,18 @@ l_obs_candidates = ut.h5_ls(input_path, "/data/")
 l_obs_candidates = [obs for obs in l_obs_candidates if obs.find("axis_") != 0]
 assert len(l_obs_candidates) > 0
 
+options = f""
+for idx, opt in enumerate(l_obs_candidates):
+    options += f"{idx:d} {opt}\n"
+
 while True:
-    txt = input(f"Choose observable to plot {l_obs_candidates}: ")
+    txt = input(f"Choose observable to plot, e.g. '1'\n{options}> ")
     if len(txt) == 0:
         obs_to_plot = l_obs_candidates[0]
     else:
-        obs_to_plot = str(txt)
-    if obs_to_plot in l_obs_candidates:
+        if int(txt) >= len(l_obs_candidates):
+            continue
+        obs_to_plot = l_obs_candidates[int(txt)]
         print(f"Using {obs_to_plot}")
         break
 
@@ -83,12 +88,19 @@ for obs in l_axis_candidates:
     d_axes[obs] = ut.h5_load(input_path, "/data/axis_" + obs, silent=True)
 
 # select which two axis to show
+options = f""
+for idx, opt in enumerate(l_axis_candidates):
+    options += f"{idx:d} {opt}\n"
 while True:
-    txt = input(f"Choose 2 axis to plot {l_axis_candidates}: ")
+    txt = input(f"Choose 2 axis to plot, e.g. '1 3'\n{options}> ")
     if len(txt) == 0:
         l_axis_selected = list(l_axis_candidates[:2])
     else:
-        l_axis_selected = txt.split(' ')
+        txt = txt.split(' ')
+        if len(txt) < 2 or int(txt[0]) > len(l_axis_candidates) or int(txt[1]) > len(l_axis_candidates):
+            continue
+        l_axis_selected = l_axis_candidates[ [int(txt[0]), int(txt[1])] ].tolist()
+
     if len(l_axis_selected) == 2 and all(i in l_axis_candidates for i in l_axis_selected):
         print(f"Using {l_axis_selected}")
         break
