@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-09-28 10:36:48
-# @Last Modified: 2020-10-28 12:06:06
+# @Last Modified: 2020-10-29 11:04:04
 # ------------------------------------------------------------------------------ #
 # My implementation of the logISI historgram burst detection algorithm
 # by Pasuqale et al.
@@ -26,12 +26,38 @@ from statsmodels.nonparametric.smoothers_lowess import lowess
 from scipy.signal import find_peaks
 from tqdm import tqdm
 
-
 sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/../ana/"))
 import utility as ut
 
 log = logging.getLogger(__name__)
 # log.setLevel("DEBUG")
+
+try:
+    from numba import jit, prange
+
+    # raise ImportError
+    log.info("Using numba for parallelizable functions")
+except ImportError:
+    log.info("Numba not available, skipping parallelization")
+    # replace numba functions if numba not available:
+    # we only use jit and prange
+    # helper needed for decorators with kwargs
+    def parametrized(dec):
+        def layer(*args, **kwargs):
+            def repl(f):
+                return dec(f, *args, **kwargs)
+
+            return repl
+
+        return layer
+
+    @parametrized
+    def jit(func, **kwargs):
+        return func
+
+    def prange(*args):
+        return range(*args)
+
 
 # value to return if no bursts found.
 no_bursts = dict()
@@ -238,32 +264,49 @@ def logisi_break_calc(st, cutoff, void_th=0.7, peak_kwargs=None):
     return thr, hist, hist_smooth, edges / 1000.0
 
 
-###Function to add burst related spikes to edges of bursts
-def add_brs(bursts, brs, spikes):
+@jit(nopython=True, parallel=True, fastmath=True, cache=True)
+def _add_brs_inner(a_beg, a_end, b_beg, b_end):
     def is_between(x, a, b):
         return (x >= a) & (x <= b)
 
-    num_bursts = len(bursts["beg"])
-    num_brs = len(brs["beg"])
-    burst_adj = {
-        "beg": np.zeros(num_bursts).astype(int),
-        "end": np.zeros(num_bursts).astype(int),
-    }
+    num_a = len(a_beg)
+    num_b = len(b_beg)
 
-    for i in range(num_bursts):
-        for j in range(num_brs):
-            if is_between(bursts["beg"][i], brs["beg"][j], brs["end"][j]) or is_between(
-                bursts["end"][i], brs["beg"][j], brs["end"][j]
+    res_beg = np.zeros(num_a, dtype=np.int32)
+    res_end = np.zeros(num_a, dtype=np.int32)
+
+    for i in prange(num_a):
+        for j in range(num_b):
+            if is_between(a_beg[i], b_beg[j], b_end[j]) or is_between(
+                a_end[i], b_beg[j], b_end[j]
             ):
-                burst_adj["beg"][i] = np.fmin(bursts["beg"][i], brs["beg"][j])
-                burst_adj["end"][i] = np.fmax(bursts["end"][i], brs["end"][j])
+                res_beg[i] = np.fmin(a_beg[i], b_beg[j])
+                res_end[i] = np.fmax(a_end[i], b_end[j])
                 break
             else:
-                burst_adj["beg"][i] = bursts["beg"][i]
-                burst_adj["end"][i] = bursts["end"][i]
+                res_beg[i] = a_beg[i]
+                res_end[i] = a_end[i]
 
-            if brs["end"][j] > bursts["end"][i]:
+            if b_end[j] > a_end[i]:
                 break
+
+    return res_beg, res_end
+
+
+###Function to add burst related spikes to edges of bursts
+def add_brs(bursts, brs, spikes):
+
+    num_bursts = len(bursts["beg"])
+    num_brs = len(brs["beg"])
+
+    res_beg, res_end = _add_brs_inner(
+        bursts["beg"], bursts["end"], brs["beg"], brs["end"]
+    )
+
+    burst_adj = {
+        "beg": res_beg,
+        "end": res_end,
+    }
 
     diff_begs = np.diff(burst_adj["beg"])
     diff_ends = np.diff(burst_adj["end"])
@@ -554,7 +597,6 @@ def network_burst_detection(spiketimes, network_fraction=0.8, sort_by="beg"):
     end_times = []
     # which neuron did burst
     neuron_ids = []
-
 
     for n in tqdm(range(num_n), leave=None):
         train = spiketimes[n]
