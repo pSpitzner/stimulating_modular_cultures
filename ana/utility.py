@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-21 11:11:40
-# @Last Modified: 2020-10-08 18:06:46
+# @Last Modified: 2020-10-29 14:09:23
 # ------------------------------------------------------------------------------ #
 # Helper functions that are needed in various other scripts
 # ------------------------------------------------------------------------------ #
@@ -47,7 +47,8 @@ def h5_load(filenames, dsetname, raise_ex=False, silent=False):
     else:
         return res
 
-def h5_ls(filename, dsetname = '/'):
+
+def h5_ls(filename, dsetname="/"):
     """
         list the keys in a dsetname
 
@@ -253,7 +254,7 @@ def population_activity(spiketimes, bin_size):
 
     # target array
     t_max = np.nanmax(spiketimes)
-    t_index_max = int(np.ceil(t_max / bin_size))
+    t_index_max = int(np.ceil(t_max / bin_size) + 1)
 
     population_activity = np.zeros(t_index_max)
 
@@ -297,7 +298,7 @@ def inter_burst_intervals(spiketimes=None, bursttimes=None):
     if len(bursttimes) < 2:
         return np.array([])
 
-    return (bursttimes[1:] - bursttimes[:-1])
+    return bursttimes[1:] - bursttimes[:-1]
 
 
 def spikes_as_matrix_to_spikes_as_list(spikes_as_matrix):
@@ -330,8 +331,7 @@ def spikes_as_matrix_to_spikes_as_list(spikes_as_matrix):
         spikes_as_list += train
 
     result = np.zeros(shape=(2, len(spikes_as_list)))
-    result[0,:] = neurons_as_list
-    result[1,:] = spikes_as_list
+    result[0, :] = neurons_as_list
+    result[1, :] = spikes_as_list
 
     return result
-
