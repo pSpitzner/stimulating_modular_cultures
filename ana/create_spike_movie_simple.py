@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-01-24 13:43:39
-# @Last Modified: 2020-10-17 22:39:29
+# @Last Modified: 2020-10-29 20:26:28
 # ------------------------------------------------------------------------------- #
 # Create a movie of the network for a given time range and visualize
 # firing neurons. Save to mp4.
@@ -54,7 +54,7 @@ parser.add_argument(
     dest="tunit",
     help="time unit of the ('--rescale'd) bins in the eventlist. only used for displaying the time index in the movie. default: 'sec'",
     type=str,
-    default='sec',
+    default="sec",
 )
 parser.add_argument(
     "-r",
@@ -95,7 +95,7 @@ num_frames = int(np.floor(args.length * fps))
 rescale = args.rescale  # factor by which to rescale the event list
 
 # how many time bins of the eventlist to include in each rendered frame
-bpf = ((args.tmax - args.tmin) / num_frames)
+bpf = (args.tmax - args.tmin) / num_frames
 
 frame_offset = int(args.tmin / bpf)
 decay_s = 0.5  # decay of spike display in seconds
@@ -151,11 +151,28 @@ event_list = np.where(event_list == 0, np.nan, event_list)
 
 # we want to scale brightness of spikes with population activity
 pop_act = ut.population_activity(event_list, bin_size=1)
-pop_act_max = np.nanmax(pop_act);
-pop_act_min = np.nanmin(pop_act);
+pop_act_max = np.nanmax(pop_act)
+pop_act_min = np.nanmin(pop_act)
 
 print(f"pop_act_max {pop_act_max}")
 print(f"pop_act_min {pop_act_min}")
+
+
+# for the raster_plots, we need modules
+# we want to plot spikes sorted by module, if they exists
+try:
+    num_n = int(ut.h5_load(args.input_path, "/meta/topology_num_neur"))
+    # get the neurons sorted according to their modules
+    mod_ids = ut.h5_load(args.input_path, "/data/neuron_module_id")
+    mod_sorted = np.zeros(num_n, dtype=int)
+    mods = np.sort(np.unique(mod_ids))
+    temp = np.argsort(mod_ids)
+    for i in range(0, num_n):
+        mod_sorted[i] = np.argwhere(temp == i)
+
+    mod_sort = lambda x: mod_sorted[x]
+except:
+    mod_sort = lambda x: x
 
 # ------------------------------------------------------------------------------ #
 # figure setup and color choices
@@ -170,7 +187,7 @@ def render_spike_axon(time_ago, decay_time, multiplier=1):
     alpha = 1.0 - (time_ago) / decay_time  # linear
     # alpha = 1.0 / (time_ago) # 1/x, pretty steep
     alpha = np.clip(alpha, 0.0, 1.0)
-    alpha = alpha*multiplier
+    alpha = alpha * multiplier
     return (1.0, 1.0, 1.0, alpha * 0.6)
 
 
@@ -178,7 +195,7 @@ def render_spike_axon(time_ago, decay_time, multiplier=1):
 def render_spike_soma(time_ago, decay_time, multiplier=1):
     alpha = 1.0 - (time_ago) / decay_time  # linear
     alpha = np.clip(alpha, 0.0, 1.0)
-    alpha = alpha*multiplier
+    alpha = alpha * multiplier
     edge = (1.0, 1.0, 1.0, alpha * 0.8)
     face = (1.0, 1.0, 1.0, alpha)
     return edge, face
@@ -189,20 +206,101 @@ axon_edge = rgba_to_rgb((1.0, 1.0, 1.0, 0.1), canvas_clr)
 soma_edge = rgba_to_rgb((1.0, 1.0, 1.0, 0.1), canvas_clr)
 soma_face = rgba_to_rgb((1.0, 1.0, 1.0, 0.1), canvas_clr)
 
-fig, ax = plt.subplots(figsize=[6.4, 6.4])
-ax.set_title(f"{args.title}", fontsize=16, color=title_clr)
+fig = plt.figure(constrained_layout=False, figsize=[6.4, 12])
+gs = fig.add_gridspec(4, 1)
+ax_net = fig.add_subplot(gs[0:2, 0])  # network
+ax_act = fig.add_subplot(gs[3, 0])  # population activity
+ax_rst = fig.add_subplot(gs[2, 0], sharex=ax_act)  # raster plot
+
+for ax in fig.axes:
+    ax.spines["bottom"].set_color("gray")
+    ax.spines["top"].set_color("gray")
+    ax.spines["right"].set_color("gray")
+    ax.spines["left"].set_color("gray")
+    ax.xaxis.label.set_color("gray")
+    ax.yaxis.label.set_color("gray")
+    ax.tick_params(colors="gray")
+
+ax_net.set_facecolor(canvas_clr)
+ax_rst.set_facecolor(canvas_clr)
+ax_act.set_facecolor(canvas_clr)
+
+ax_net.set_title(f"{args.title}", fontsize=16, color=title_clr)
 fig.patch.set_facecolor(canvas_clr)
-ax.set_facecolor(canvas_clr)
-plt.axis("off")
-ax.set_aspect(1)
+ax_net.axis("off")
+ax_net.set_aspect(1)
 art_time = fig.text(0.02, 0.95, "current time", fontsize=14, color=title_clr)
+
+
+# ------------------------------------------------------------------------------ #
+# graph plotting
+# ------------------------------------------------------------------------------ #
+
+ax_act.spines["top"].set_visible(False)
+ax_act.spines["right"].set_visible(False)
+ax_act.spines["bottom"].set_visible(False)
+
+ax_rst.spines["top"].set_visible(False)
+ax_rst.spines["right"].set_visible(False)
+ax_rst.spines["bottom"].set_visible(False)
+ax_rst.spines["left"].set_visible(False)
+ax_rst.xaxis.set_ticks_position("none")
+ax_rst.yaxis.set_ticks_position("none")
+ax_rst.tick_params(labelbottom=False, labelleft=False)
+
+graph_duration = 60.0  # seconds
+
+# init activity plot
+# assuming pop_act in seconds
+ax_act.plot(np.arange(0, len(pop_act)), pop_act, color="white")
+ax_act.set_xticks([0, 0, 0])
+ax_act.set_xticklabels(
+    [f"Now", f"+{+ graph_duration * 1/4 :.1f}", f"+{+ graph_duration * 2/4 :.1f}",]
+)
+act_vline = ax_act.axvline(x=0, ymin=-0.1, ymax=1, color="gray")
+ax_act.set_ylabel("Population Activity")
+
+# init raster plot
+ax_rst.set_ylabel("Raster Plot")
+for n in range(0, event_list.shape[0]):
+    idx = np.where(
+        np.logical_and(
+            np.isfinite(event_list[n]),
+            np.logical_and(
+                event_list[n] >= args.tmin - graph_duration,
+                event_list[n] <= args.tmax + graph_duration,
+            ),
+        )
+    )
+    ax_rst.plot(
+        event_list[n][idx],
+        mod_sort(n) * np.ones(len(event_list[n][idx])),
+        "|w",
+        alpha=0.3,
+    )
+
+
+def replot(time_in_seconds):
+    ax_act.set_xlim(
+        time_in_seconds - graph_duration * 1 / 4,
+        time_in_seconds + graph_duration * 3 / 4,
+    )
+    act_vline.set_xdata(time_in_seconds)
+    ax_act.set_xticks(
+        [
+            time_in_seconds,
+            time_in_seconds + graph_duration * 1 / 4,
+            time_in_seconds + graph_duration * 2 / 4,
+        ]
+    )
+
 
 art_axons = []
 for i in range(len(seg_x)):
     # background
-    tmp = ax.plot(seg_x[i], seg_y[i], color=axon_edge, lw=0.5, zorder=0,)
+    tmp = ax_net.plot(seg_x[i], seg_y[i], color=axon_edge, lw=0.5, zorder=0,)
     # foreground overlay, when spiking
-    tmp = ax.plot(seg_x[i], seg_y[i], color=(0, 0, 0, 0), lw=0.7, zorder=3,)
+    tmp = ax_net.plot(seg_x[i], seg_y[i], color=(0, 0, 0, 0), lw=0.7, zorder=3,)
     art_axons.append(tmp[0])
 
 art_soma = []
@@ -212,13 +310,13 @@ for i in range(len(pos_x)):
     circle.set_facecolor(soma_face)
     circle.set_edgecolor(soma_edge)
     circle.set_linewidth(0.25)
-    ax.add_artist(circle)
+    ax_net.add_artist(circle)
     # foreground overlay, when spiking
     circle = plt.Circle((pos_x[i], pos_y[i]), radius=rad_n, lw=0.7, zorder=4)
     circle.set_facecolor((0, 0, 0, 0))
     circle.set_edgecolor((0, 0, 0, 0))
     circle.set_linewidth(0.25)
-    ax.add_artist(circle)
+    ax_net.add_artist(circle)
     art_soma.append(circle)
 
 
@@ -239,13 +337,14 @@ with writer.saving(fig=fig, outfile=args.output_path, dpi=100):
     for f in tqdm(range(frame_offset, num_frames + frame_offset)):
         time_stamp = f * bpf
         art_time.set_text(f"t = {time_stamp :.2f} {args.tunit}")
+        replot(time_stamp)
 
         # this may cause bugs
         tdx = int(time_stamp)
 
-        multiplier = pop_act[tdx]/pop_act_max
-        multiplier = np.clip(multiplier, 0.25, 0.5)
-        multiplier = multiplier*2
+        multiplier = pop_act[tdx] / pop_act_max
+        multiplier = np.clip(multiplier, 0.5, 0.8)
+        multiplier = multiplier * 1.25
 
         for n in range(num_n):
             idx = prev_s_idx[n]
