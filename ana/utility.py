@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-21 11:11:40
-# @Last Modified: 2020-10-29 14:09:23
+# @Last Modified: 2020-10-29 19:07:15
 # ------------------------------------------------------------------------------ #
 # Helper functions that are needed in various other scripts
 # ------------------------------------------------------------------------------ #
@@ -266,6 +266,7 @@ def population_activity(spiketimes, bin_size):
             t_idx = int(t / bin_size)
             population_activity[t_idx] += 1
 
+    # print(f"bs: {bin_size:g} min: {np.nanmin(population_activity):g} max: {np.nanmax(population_activity):g} mean: {np.nanmean(population_activity):g} sum: {np.sum(population_activity):g}")
     return population_activity
 
 

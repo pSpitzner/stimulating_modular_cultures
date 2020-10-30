@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-09-28 10:36:48
-# @Last Modified: 2020-10-29 11:04:04
+# @Last Modified: 2020-10-30 12:01:19
 # ------------------------------------------------------------------------------ #
 # My implementation of the logISI historgram burst detection algorithm
 # by Pasuqale et al.
@@ -556,7 +556,7 @@ def logisi_find_burst(spikes, min_ibi, min_durn, min_spikes, isi_low, neuron_ids
 # ------------------------------------------------------------------------------ #
 
 
-def network_burst_detection(spiketimes, network_fraction=0.8, sort_by="beg"):
+def network_burst_detection(spiketimes, network_fraction=0.75, sort_by="beg"):
     """
         Detection of network bursts using the logisi method by pasquale et al.
         The log-histogram trick is applied two times, once on the per-neuron-

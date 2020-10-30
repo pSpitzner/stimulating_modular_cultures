@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-17 13:43:10
-# @Last Modified: 2020-10-29 18:17:43
+# @Last Modified: 2020-10-30 11:12:11
 # ------------------------------------------------------------------------------ #
 
 
@@ -73,8 +73,10 @@ for n in range(0, spikes.shape[0]):
 
 log.info("Calculating Population Activity")
 ax[1].set_ylabel("ASDR")
-pop_act = ut.population_activity(spikes, bin_size=1.0)
-ax[1].plot(np.arange(0, len(pop_act)) * 1.0, pop_act)
+bs = 1.0
+pop_act = ut.population_activity(spikes, bin_size=bs)
+ax[1].plot(np.arange(0, len(pop_act)) * bs, pop_act)
+
 log.info(f"ASDR (mean): {np.mean(pop_act):g}")
 ax[1].text(
     0.95,
@@ -191,7 +193,7 @@ def burst_analysis(file, network_fraction):
     return spiketimes, network_bursts, details
 
 
-spiketimes, network_bursts, details = burst_analysis(file, network_fraction=0.5)
+spiketimes, network_bursts, details = burst_analysis(file, network_fraction=0.75)
 ibis = network_bursts["IBI"]
 uniq = network_bursts["unique"]
 neuron_bursts = details["beg_times"]

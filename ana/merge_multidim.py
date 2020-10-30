@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2020-10-28 11:15:40
+# @Last Modified: 2020-10-30 12:01:49
 #
 # Scans the provided directory for .hdf5 files and checks if they have the right
 # data to plot a 2d ibi_mean_4d of ibi = f(gA, rate)
@@ -76,7 +76,9 @@ def scalar_logisi_pasquale(candidate=None):
 
     # load spiketimes and calculate ibi
     spiketimes = ut.h5_load(candidate, "/data/spiketimes", silent=True)
-    network_bursts, details = logisi.network_burst_detection(spiketimes)
+    network_bursts, details = logisi.network_burst_detection(
+        spiketimes, network_fraction=0.75, sort_by="beg"
+    )
     # if network_bursts is None:
     # ibis = []
     # burst_durations = []
