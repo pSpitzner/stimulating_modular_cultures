@@ -10,13 +10,12 @@ seed = 35_000
 
 # parameters to scan, noise rate, ampa strength, and a few repetitons for statistics
 l_topo = ['2x2merged', '2x2_fixed']
-l_rate = np.array([20, 25, 30, 35, 37, 38, 39, 40])
-l_gampa = np.array([15, 40, 45, 50,
-    ] + list(np.arange(20, 37) ))
+l_rate = np.arange(25,41)
+l_gampa = np.arange(20,51)
 l_recovery = np.array([2.0])
 l_alpha = np.array([0.0125])
-l_k_inter = np.array([1,3,5])
-l_rep = range(0, 3)
+l_k_inter = np.array([3])
+l_rep = range(0, 15)
 
 arg_list = product(l_topo, l_rate, l_gampa, l_recovery, l_alpha, l_k_inter, l_rep)
 
@@ -40,8 +39,8 @@ with open("./parameters_topo.tsv", "w") as f_topo:
             rep  = i[6]
 
             # inter-module connections do not make sense for merged cultures
-            if topo == "2x2merged" and k_inter != 1:
-                continue
+            # if topo == "2x2merged" and k_inter != 1:
+                # continue
 
             topo_path = f"./dat/topo/{topo}/gampa={gampa:04.2f}_rate={rate:04.2f}_recovery={recovery:04.2f}_alpha={alpha:.04f}_k={k_inter:d}_rep={rep:02d}.hdf5"
             dyn_path = f"./dat/dyn/{topo}/gampa={gampa:04.2f}_rate={rate:04.2f}_recovery={recovery:04.2f}_alpha={alpha:.04f}_k={k_inter:d}_rep={rep:02d}.hdf5"
