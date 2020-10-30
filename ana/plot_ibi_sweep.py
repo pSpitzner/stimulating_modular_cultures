@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2020-10-29 14:44:49
+# @Last Modified: 2020-10-30 15:48:43
 #
 # Scans the provided directory for .hdf5 files and checks if they have the right
 # data to plot a 2d heatmap of ibi = f(gA, rate)
@@ -29,8 +29,10 @@ from mpl_toolkits.mplot3d import Axes3D
 # helper
 # ------------------------------------------------------------------ #
 
+
 def full_path(path):
     return os.path.abspath(os.path.expanduser(path))
+
 
 # ------------------------------------------------------------------------------ #
 # load and merge, if needed
@@ -45,6 +47,9 @@ parser.add_argument(
     metavar="FILE",
 )
 parser.add_argument("-o", dest="output_path", help="output path", metavar="FILE")
+parser.add_argument(
+    "-c", "--center", dest="center_cmap_around", default=None, type=float,
+)
 args = parser.parse_args()
 
 # if a directory is provided as input, merge individual hdf5 files down, first
@@ -96,12 +101,18 @@ while True:
     if len(txt) == 0:
         l_axis_selected = list(l_axis_candidates[:2])
     else:
-        txt = txt.split(' ')
-        if len(txt) < 2 or int(txt[0]) > len(l_axis_candidates) or int(txt[1]) > len(l_axis_candidates):
+        txt = txt.split(" ")
+        if (
+            len(txt) < 2
+            or int(txt[0]) > len(l_axis_candidates)
+            or int(txt[1]) > len(l_axis_candidates)
+        ):
             continue
-        l_axis_selected = l_axis_candidates[ [int(txt[0]), int(txt[1])] ].tolist()
+        l_axis_selected = l_axis_candidates[[int(txt[0]), int(txt[1])]].tolist()
 
-    if len(l_axis_selected) == 2 and all(i in l_axis_candidates for i in l_axis_selected):
+    if len(l_axis_selected) == 2 and all(
+        i in l_axis_candidates for i in l_axis_selected
+    ):
         print(f"Using {l_axis_selected}")
         break
 
@@ -149,31 +160,45 @@ x_obs = l_axis_selected[1]
 data_mean = pd.DataFrame(
     # average across repetitions, which are last axis
     np.nanmean(data_3d, axis=2),
-    index=d_axes[y_obs], columns=d_axes[x_obs])
+    index=d_axes[y_obs],
+    columns=d_axes[x_obs],
+)
 
 plt.ion()
-fig, ax = plt.subplots(figsize=(10,4))
+fig, ax = plt.subplots(figsize=(10, 4))
+
+if args.center_cmap_around is None:
+    kwargs = {
+        # vmin=np.nanmin(data_mean[np.isfinite(data_mean)]),
+        # vmax=np.nanmax(data_mean[np.isfinite(data_mean)]),
+        'vmin': 0,
+        'vmax': 150,
+        'cmap': "Blues",
+    }
+else:
+    kwargs = {
+        'vmin': 0,
+        'vmax': args.center_cmap_around * 2,
+        'center': args.center_cmap_around,
+        'cmap': "twilight",
+    }
 
 sns.heatmap(
     data_mean,
     ax=ax,
-    # vmin=np.nanmin(data_mean[np.isfinite(data_mean)]),
-    # vmax=np.nanmax(data_mean[np.isfinite(data_mean)]),
-    vmin=0,
-    vmax=150,
     annot=True,
     fmt=".2g",
     linewidth=2.5,
-    cmap="Blues",
     square=False,
     cbar_kws={"label": obs_to_plot},
+    **kwargs,
 )
 ax.set_xlabel(x_obs)
 ax.set_ylabel(y_obs)
 ax.invert_yaxis()
 
-for text in args.input_path.split('/'):
-    if '2x2' in text:
+for text in args.input_path.split("/"):
+    if "2x2" in text:
         fig.suptitle(text)
 
 try:
