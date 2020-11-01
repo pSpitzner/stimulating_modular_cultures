@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2020-10-28 19:47:01
+# @Last Modified: 2020-11-01 13:20:19
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 or csv and runs the simulations in brian.
@@ -27,7 +27,9 @@
 import h5py
 import argparse
 import os
+import tempfile
 import sys
+import shutil
 import numpy as np
 from brian2 import *
 
@@ -35,7 +37,10 @@ sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/../ana/"))
 import utility as ut
 
 # we want to run this on a cluster, assign a custom cache directory to each thread
-cache_dir = os.path.expanduser(f"~/.cython/brian-pid-{os.getpid()}")
+# putting this into a user-directory that gets backed-up turns out to be a bad idea.
+# but shared dirs across users may cause trouble due to access-rights, defaults: 755
+# cache_dir = os.path.expanduser(f"~/.cython/brian-pid-{os.getpid()}")
+cache_dir = f"{tempfile.gettempdir()}/cython/brian-pid-{os.getpid()}"
 prefs.codegen.runtime.cython.cache_dir = cache_dir
 prefs.codegen.runtime.cython.multiprocess_safe = False
 
@@ -623,3 +628,9 @@ try:
 
 except Exception as e:
     print("Unable to save to disk\n", e)
+
+# remove cython caches
+try:
+    shutil.rmtree(cache_dir, ignore_errors=True)
+except Exception as e:
+    print("Unable to remove cached files: {e}")
