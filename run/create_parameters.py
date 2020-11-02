@@ -6,12 +6,15 @@ from itertools import product
 os.chdir(os.path.dirname(__file__))
 
 # seed for rank 0, will increase per thread
-seed = 35_000
+seed = 55_000
 
 # parameters to scan, noise rate, ampa strength, and a few repetitons for statistics
 l_topo = ['2x2merged', '2x2_fixed']
-l_rate = np.arange(25,41)
-l_gampa = np.arange(20,51)
+# l_rate = np.arange(25,41)
+# l_gampa = np.arange(20,51)
+# extend region
+l_rate = np.arange(20,31)
+l_gampa = np.arange(51,61)
 l_recovery = np.array([2.0])
 l_alpha = np.array([0.0125])
 l_k_inter = np.array([3])

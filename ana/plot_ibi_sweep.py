@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2020-10-30 15:48:43
+# @Last Modified: 2020-11-02 10:35:14
 #
 # Scans the provided directory for .hdf5 files and checks if they have the right
 # data to plot a 2d heatmap of ibi = f(gA, rate)
@@ -186,7 +186,7 @@ else:
 sns.heatmap(
     data_mean,
     ax=ax,
-    annot=True,
+    # annot=True,
     fmt=".2g",
     linewidth=2.5,
     square=False,
