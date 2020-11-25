@@ -6,7 +6,7 @@ from itertools import product
 os.chdir(os.path.dirname(__file__))
 
 # seed for rank 0, will increase per thread
-seed = 55_000
+seed = 1_000
 
 # parameters to scan, noise rate, ampa strength, and a few repetitons for statistics
 l_topo = ['2x2merged', '2x2_fixed']
@@ -27,41 +27,44 @@ arg_list = product(l_topo, l_rate, l_gampa, l_recovery, l_alpha, l_k_inter, l_re
 count = 0
 with open("./parameters_topo.tsv", "w") as f_topo:
     with open("./parameters_dyn.tsv", "w") as f_dyn:
+        with open("./parameters_stim.tsv", "w") as f_stim:
 
-        # set the cli arguments
-        f_topo.write("# commands to create topology\n")
-        f_dyn.write("# commands to run dynamics on existing topology\n")
+            # set the cli arguments
+            f_topo.write("# commands to create topology\n")
+            f_dyn.write("# commands to run dynamics on existing topology\n")
+            f_stim.write("# commands with stimulation enabled\n")
 
-        for i in arg_list:
-            topo = i[0]
-            rate = i[1]
-            gampa = i[2]
-            recovery = i[3]
-            alpha  = i[4]
-            k_inter  = i[5]
-            rep  = i[6]
+            for i in arg_list:
+                topo = i[0]
+                rate = i[1]
+                gampa = i[2]
+                recovery = i[3]
+                alpha  = i[4]
+                k_inter  = i[5]
+                rep  = i[6]
 
-            # inter-module connections do not make sense for merged cultures
-            # if topo == "2x2merged" and k_inter != 1:
-                # continue
+                # inter-module connections do not make sense for merged cultures
+                # if topo == "2x2merged" and k_inter != 1:
+                    # continue
 
-            topo_path = f"./dat/topo/{topo}/gampa={gampa:04.2f}_rate={rate:04.2f}_recovery={recovery:04.2f}_alpha={alpha:.04f}_k={k_inter:d}_rep={rep:02d}.hdf5"
-            dyn_path = f"./dat/dyn/{topo}/gampa={gampa:04.2f}_rate={rate:04.2f}_recovery={recovery:04.2f}_alpha={alpha:.04f}_k={k_inter:d}_rep={rep:02d}.hdf5"
+                topo_path = f"./dat/topo/{topo}/gampa={gampa:04.2f}_rate={rate:04.2f}_recovery={recovery:04.2f}_alpha={alpha:.04f}_k={k_inter:d}_rep={rep:02d}.hdf5"
+                dyn_path = f"./dat/dyn/{topo}/gampa={gampa:04.2f}_rate={rate:04.2f}_recovery={recovery:04.2f}_alpha={alpha:.04f}_k={k_inter:d}_rep={rep:02d}.hdf5"
+                stim_path = f"./dat/stim/{topo}/gampa={gampa:04.2f}_rate={rate:04.2f}_recovery={recovery:04.2f}_alpha={alpha:.04f}_k={k_inter:d}_rep={rep:02d}.hdf5"
 
-            f_topo.write(
-                # topology command
-                f"/data.nst/share/projects/paul_brian_modular_cultures/topology_orlandi_standalone/exe/orlandi_standalone -N 100 -s {seed:d} -o {topo_path} -f {topo} -a {alpha} -a_weighted 1 -k {k_inter}\n"
-            )
-            f_dyn.write(
-                # dynamic command
-                f"python ./src/ibi.py -i {topo_path} " +
-                f"-o {dyn_path} " +
-                f"-d 3600 -equil 300 -s {seed:d} " +
-                f"-gA {gampa:04.2f} -tD {recovery:04.2f} -r {rate:04.2f}\n"
-            )
+                f_topo.write(
+                    # topology command
+                    f"/data.nst/share/projects/paul_brian_modular_cultures/topology_orlandi_standalone/exe/orlandi_standalone -N 100 -s {seed:d} -o {topo_path} -f {topo} -a {alpha} -a_weighted 1 -k {k_inter}\n"
+                )
+                f_dyn.write(
+                    # dynamic command
+                    f"python ./src/ibi.py -i {topo_path} " +
+                    f"-o {dyn_path} " +
+                    f"-d 3600 -equil 300 -s {seed:d} " +
+                    f"-gA {gampa:04.2f} -tD {recovery:04.2f} -r {rate:04.2f}\n"
+                )
 
-            seed += 1
-            count += 1
+                seed += 1
+                count += 1
 
 
 print(f"number of argument combinations: {count}")

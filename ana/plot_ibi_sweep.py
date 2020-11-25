@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2020-11-02 10:35:14
+# @Last Modified: 2020-11-02 20:52:32
 #
 # Scans the provided directory for .hdf5 files and checks if they have the right
 # data to plot a 2d heatmap of ibi = f(gA, rate)
@@ -50,6 +50,14 @@ parser.add_argument("-o", dest="output_path", help="output path", metavar="FILE"
 parser.add_argument(
     "-c", "--center", dest="center_cmap_around", default=None, type=float,
 )
+parser.add_argument(
+    "-a",
+    "--annot",
+    dest="enable_annotation",
+    default=False,
+    action="store_true",
+)
+
 args = parser.parse_args()
 
 # if a directory is provided as input, merge individual hdf5 files down, first
@@ -186,7 +194,7 @@ else:
 sns.heatmap(
     data_mean,
     ax=ax,
-    # annot=True,
+    annot=args.enable_annotation,
     fmt=".2g",
     linewidth=2.5,
     square=False,

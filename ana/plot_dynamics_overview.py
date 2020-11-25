@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-17 13:43:10
-# @Last Modified: 2020-10-30 11:12:11
+# @Last Modified: 2020-11-25 10:16:08
 # ------------------------------------------------------------------------------ #
 
 
@@ -45,6 +45,8 @@ try:
     mod_ids = ut.h5_load(args.input_path, "/data/neuron_module_id")
     mod_sorted = np.zeros(num_n, dtype=int)
     mods = np.sort(np.unique(mod_ids))
+    if len(mods) == 1:
+        raise NotImplementedError # avoid resorting.
     temp = np.argsort(mod_ids)
     for i in range(0, num_n):
         mod_sorted[i] = np.argwhere(temp == i)
@@ -59,6 +61,11 @@ spikes = ut.h5_load(args.input_path, "/data/spiketimes")
 spikes = np.where(spikes == 0, np.nan, spikes)
 sim_duration = ut.h5_load(args.input_path, "/meta/dynamics_simulation_duration")
 
+try:
+    stim_times = ut.h5_load(args.input_path, "/data/stimulation_times_as_list", raise_ex=True)
+except:
+    stim_times = None
+
 plt.ion()
 fig, ax = plt.subplots(3, 1, sharex=True)
 
@@ -66,6 +73,10 @@ log.info("Plotting raster")
 ax[0].set_ylabel("Raster")
 for n in range(0, spikes.shape[0]):
     ax[0].plot(spikes[n], mod_sort(n) * np.ones(len(spikes[n])), "|k", alpha=0.1)
+
+# if stim_times is not None:
+    # ax[0].plot(stim_times[n], mod_sort(n), "|k", alpha=0.1)
+
 
 # highlight one neuron in particular:
 # sel = np.random.randint(0, num_n)
@@ -110,7 +121,7 @@ ax[2].text(
 
 # some more meta data
 for text in args.input_path.split("/"):
-    if "2x2" in text:
+    # if "2x2" in text:
         fig.suptitle(text)
 ga = ut.h5_load(args.input_path, "/meta/dynamics_gA")
 rate = ut.h5_load(args.input_path, "/meta/dynamics_rate")
@@ -193,7 +204,7 @@ def burst_analysis(file, network_fraction):
     return spiketimes, network_bursts, details
 
 
-spiketimes, network_bursts, details = burst_analysis(file, network_fraction=0.75)
+spiketimes, network_bursts, details = burst_analysis(file, network_fraction=0.2)
 ibis = network_bursts["IBI"]
 uniq = network_bursts["unique"]
 neuron_bursts = details["beg_times"]
@@ -311,9 +322,10 @@ sns.barplot(
     x="n_id",
     order=df["n_id"],
     y="per_mod_hists",
-    hue="mod_sum",
+    hue="mod",
+    hue_order=mods,
     dodge=False,
-    palette="coolwarm",
+    palette="tab10",
     ax=ax2[0],
 )
 
@@ -321,9 +333,10 @@ sns.barplot(
     data=df,
     x="mod_rank",
     y="mod_sum",
-    hue="mod_sum",
+    hue="mod",
+    hue_order=mods,
     dodge=False,
-    palette="coolwarm",
+    palette="tab10",
     ax=ax2[1],
 )
 
@@ -333,7 +346,7 @@ sns.barplot(
 # ax2[0].legend
 # some more meta data
 for text in args.input_path.split("/"):
-    if "2x2" in text:
+    # if "2x2" in text:
         fig2.suptitle(text)
 ax2[0].set_title(f"Ampa: {ga:.1f} mV", loc="left")
 ax2[0].set_title(f"Rate: {rate:.1f} Hz", loc="right")

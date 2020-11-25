@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2020-11-01 13:20:19
+# @Last Modified: 2020-11-25 17:14:27
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 or csv and runs the simulations in brian.
@@ -385,6 +385,7 @@ print(f"gA: ", gA)
 print(f"gm: ", gm)
 print(f"tD: ", tD)
 print(f"rate: ", rate)
+print(f"stimulation: ", args.enable_stimulation)
 
 try:
     # load from hdf5
@@ -520,7 +521,7 @@ run(args.equil_duration * second, report="stdout", report_period=1 * 60 * second
 # disable state monitors that are not needed for production
 # stat_m = StateMonitor(G, ["v", "I", "u", "D"], record=True)
 spks_m = SpikeMonitor(G)
-# rate_m = PopulationRateMonitor(G)
+rate_m = PopulationRateMonitor(G)
 # mini_m = SpikeMonitor(mini_g)
 
 if args.enable_stimulation:
@@ -589,15 +590,29 @@ try:
             "description"
         ] = "two-column list of stimulation times. first col is target-neuron id, second col the stimulation time. Beware: we have approximateley one timestep delay between stimulation and spike."
 
-    # this is really not the right place to do burst-detection.
-    # dset = f.create_dataset("/data/bursttimes", data=bursts / second)
-    # dset.attrs["description"] = "time of detected busts in seconds"
-    # dset = f.create_dataset("/data/summed_series", data=bursts / second)
-    # dset.attrs[
-    #     "description"
-    # ] = "timeseries of the number of neurons that spike in a time bin. based on 50 ms time bins. in each bin, a neuron spikes -possibly multiple times- (1) or not (0). In the summed series, in every bin we have an entry between 0 and number of neurons"
-    # dset = f.create_dataset("/data/ibi", data=ibi / second)
-    # dset.attrs["description"] = "inter burst interval in seconds"
+    # rates
+    dset = f.create_dataset(
+        "/data/population_rate",
+        data=np.array(
+            [rate_m.t / second - args.equil_duration , rate_m.rate / Hz]
+        ).T,
+    )
+    dset.attrs[
+        "description"
+    ] = "2d array of the population rate in Hz, first dim is time in seconds"
+
+    dset = f.create_dataset(
+        "/data/population_rate_smoothed",
+        data=np.array(
+            [
+                rate_m.t / second - args.equil_duration,
+                rate_m.smooth_rate(window="gaussian", width=50 * ms) / Hz,
+            ]
+        ).T,
+    )
+    dset.attrs[
+        "description"
+    ] = "population rate in Hz, smoothed with gaussian kernel of 50ms width, first dim is time in seconds"
 
     # meta data of this simulation
     dset = f.create_dataset("/meta/dynamics_gA", data=gA / mV)
