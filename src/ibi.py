@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2020-11-25 17:14:27
+# @Last Modified: 2020-11-26 15:31:51
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 or csv and runs the simulations in brian.
@@ -591,28 +591,31 @@ try:
         ] = "two-column list of stimulation times. first col is target-neuron id, second col the stimulation time. Beware: we have approximateley one timestep delay between stimulation and spike."
 
     # rates
-    dset = f.create_dataset(
-        "/data/population_rate",
-        data=np.array(
-            [rate_m.t / second - args.equil_duration , rate_m.rate / Hz]
-        ).T,
-    )
-    dset.attrs[
-        "description"
-    ] = "2d array of the population rate in Hz, first dim is time in seconds"
+    # at the default timestep, the data files get huge.
+    freq = int(50 * ms / defaultclock.dt)
+    # dset = f.create_dataset(
+    #     "/data/population_rate",
+    #     data=np.array(
+    #         [rate_m.t / second - args.equil_duration , rate_m.rate / Hz]
+    #     ).T,
+    # )
+    # dset.attrs[
+    #     "description"
+    # ] = "2d array of the population rate in Hz, first dim is time in seconds"
 
     dset = f.create_dataset(
         "/data/population_rate_smoothed",
         data=np.array(
             [
-                rate_m.t / second - args.equil_duration,
-                rate_m.smooth_rate(window="gaussian", width=50 * ms) / Hz,
+                (rate_m.t / second - args.equil_duration)[::freq],
+                (rate_m.smooth_rate(window="gaussian", width=50 * ms) / Hz)[::freq],
             ]
         ).T,
     )
     dset.attrs[
         "description"
     ] = "population rate in Hz, smoothed with gaussian kernel of 50ms width, first dim is time in seconds"
+
 
     # meta data of this simulation
     dset = f.create_dataset("/meta/dynamics_gA", data=gA / mV)
