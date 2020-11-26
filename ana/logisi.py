@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-09-28 10:36:48
-# @Last Modified: 2020-10-30 12:01:19
+# @Last Modified: 2020-11-26 17:56:50
 # ------------------------------------------------------------------------------ #
 # My implementation of the logISI historgram burst detection algorithm
 # by Pasuqale et al.
@@ -61,7 +61,17 @@ except ImportError:
 
 # value to return if no bursts found.
 no_bursts = dict()
-for key in ["beg", "end", "med", "IBI", "blen", "durn", "mean_isis"]:
+for key in [
+    "i_beg",
+    "i_end",
+    "t_beg",
+    "t_end",
+    "t_med",
+    "IBI",
+    "blen",
+    "durn",
+    "mean_isis",
+]:
     no_bursts[key] = np.array([]).astype(int)
 
 
@@ -85,8 +95,8 @@ def burst_detection_pasquale(spike_train, cutoff=0.1):
         -------
         bursts: dict
             with the following keys, each with a 1d array of len = number bursts:
-            * beg: the index in the train of the first spike in the burst
-            * end: the index of the last spike of the burst
+            * i_beg: the index in the train of the first spike in the burst
+            * i_end: the index of the last spike of the burst
             * med: the time of the median spike within the burst
             * IBI: time from last spike of the prev. burst to first spike of this burst
             * blen: number of spikes counting into the burst
@@ -296,20 +306,20 @@ def _add_brs_inner(a_beg, a_end, b_beg, b_end):
 ###Function to add burst related spikes to edges of bursts
 def add_brs(bursts, brs, spikes):
 
-    num_bursts = len(bursts["beg"])
-    num_brs = len(brs["beg"])
+    num_bursts = len(bursts["i_beg"])
+    num_brs = len(brs["i_beg"])
 
     res_beg, res_end = _add_brs_inner(
-        bursts["beg"], bursts["end"], brs["beg"], brs["end"]
+        bursts["i_beg"], bursts["i_end"], brs["i_beg"], brs["i_end"]
     )
 
     burst_adj = {
-        "beg": res_beg,
-        "end": res_end,
+        "i_beg": res_beg,
+        "i_end": res_end,
     }
 
-    diff_begs = np.diff(burst_adj["beg"])
-    diff_ends = np.diff(burst_adj["end"])
+    diff_begs = np.diff(burst_adj["i_beg"])
+    diff_ends = np.diff(burst_adj["i_end"])
 
     rejects = np.array([])
     rejects = np.concatenate((rejects, np.where(diff_begs == 0)[0]))
@@ -320,21 +330,25 @@ def add_brs(bursts, brs, spikes):
         for key in burst_adj.keys():
             np.delete(burst_adj[key], rejects)
 
-    burst_adj["blen"] = burst_adj["end"] - burst_adj["beg"] + 1
-    burst_adj["durn"] = spikes[burst_adj["end"]] - spikes[burst_adj["beg"]]
+    burst_adj["blen"] = burst_adj["i_end"] - burst_adj["i_beg"] + 1
+    burst_adj["durn"] = spikes[burst_adj["i_end"]] - spikes[burst_adj["i_beg"]]
     burst_adj["mean_isis"] = burst_adj["durn"] / (burst_adj["blen"] - 1)
 
-    ibis = spikes[burst_adj["beg"][1:]] - spikes[burst_adj["end"][:-1]]
+    ibis = spikes[burst_adj["i_beg"][1:]] - spikes[burst_adj["i_end"][:-1]]
     ibis = np.insert(ibis, 0, np.nan)
     burst_adj["IBI"] = ibis
 
     # get the median time of the burst
-    f = lambda b: np.median(spikes[burst_adj["beg"][b] : burst_adj["end"][b]])
-    burst_adj["med"] = (
-        np.vectorize(f)(np.arange(len(burst_adj["beg"])))
-        if len(burst_adj["beg"]) > 0
+    f = lambda b: np.median(spikes[burst_adj["i_beg"][b] : burst_adj["i_end"][b]])
+    burst_adj["t_med"] = (
+        np.vectorize(f)(np.arange(len(burst_adj["i_beg"])))
+        if len(burst_adj["i_beg"]) > 0
         else np.array([])
     )
+
+    # get the time stamps of i_beg and i_end
+    burst_adj["t_beg"] = spikes[burst_adj["i_beg"]]
+    burst_adj["t_end"] = spikes[burst_adj["i_end"]]
 
     return burst_adj
 
@@ -451,8 +465,8 @@ def logisi_find_burst(spikes, min_ibi, min_durn, min_spikes, isi_low, neuron_ids
         # convert bursts into a dictionary of 1d arrays
         bursts = np.array(bursts)
         bursts = {
-            "beg": bursts[:, 0].astype(int),
-            "end": bursts[:, 1].astype(int),
+            "i_beg": bursts[:, 0].astype(int),
+            "i_end": bursts[:, 1].astype(int),
             "IBI": bursts[:, 2],
         }
 
@@ -461,7 +475,7 @@ def logisi_find_burst(spikes, min_ibi, min_durn, min_spikes, isi_low, neuron_ids
         return no_bursts
 
     log.debug("End of phase 1")
-    log.debug(f"num bursts before rejections: {len(bursts['beg'])}")
+    log.debug(f"num bursts before rejections: {len(bursts['i_beg'])}")
     # log.debug(bursts)
 
     ## Phase 2 -- merging of bursts.    Here we see if any pair of bursts
@@ -483,8 +497,8 @@ def logisi_find_burst(spikes, min_ibi, min_durn, min_spikes, isi_low, neuron_ids
         rejects = merge_bursts
 
         for burst in reversed(merge_bursts):
-            bursts["end"][burst - 1] = bursts["end"][burst]
-            # bursts["end"][burst] = np.nan  # not needed, but helpful.
+            bursts["i_end"][burst - 1] = bursts["i_end"][burst]
+            # bursts["i_end"][burst] = np.nan  # not needed, but helpful.
 
     log.debug("End of phase 2\n")
     # log.debug(bursts)
@@ -495,10 +509,10 @@ def logisi_find_burst(spikes, min_ibi, min_durn, min_spikes, isi_low, neuron_ids
 
     ## BLEN = number of spikes in a burst.
     ## DURN = duration of burst.
-    bursts["blen"] = bursts["end"] - bursts["beg"] + 1
-    # log.debug(bursts["beg"])
-    # log.debug(bursts["end"])
-    bursts["durn"] = spikes[bursts["end"]] - spikes[bursts["beg"]]
+    bursts["blen"] = bursts["i_end"] - bursts["i_beg"] + 1
+    # log.debug(bursts["i_beg"])
+    # log.debug(bursts["i_end"])
+    bursts["durn"] = spikes[bursts["i_end"]] - spikes[bursts["i_beg"]]
     bursts["mean_isis"] = bursts["durn"] / (bursts["blen"] - 1)
 
     rejects = np.concatenate((rejects, np.where(bursts["durn"] < min_durn)[0]))
@@ -506,11 +520,11 @@ def logisi_find_burst(spikes, min_ibi, min_durn, min_spikes, isi_low, neuron_ids
         rejects = np.concatenate((rejects, np.where(bursts["blen"] < min_spikes)[0]))
     else:
         unique = lambda b: len(
-            np.unique(neuron_ids[bursts["beg"][b] : bursts["end"][b]])
+            np.unique(neuron_ids[bursts["i_beg"][b] : bursts["i_end"][b]])
         )
         bursts["unique"] = (
-            np.vectorize(unique)(np.arange(len(bursts["beg"])))
-            if len(bursts["beg"]) > 0
+            np.vectorize(unique)(np.arange(len(bursts["i_beg"])))
+            if len(bursts["i_beg"]) > 0
             else np.array([])
         )
         rejects = np.concatenate((rejects, np.where(bursts["unique"] < min_spikes)[0]))
@@ -521,30 +535,34 @@ def logisi_find_burst(spikes, min_ibi, min_durn, min_spikes, isi_low, neuron_ids
         for key in bursts.keys():
             bursts[key] = np.delete(bursts[key], rejects)
 
-    log.debug(f"num bursts after rejections: {len(bursts['beg'])}")
+    log.debug(f"num bursts after rejections: {len(bursts['i_beg'])}")
 
-    if len(bursts["beg"]) == 0:
+    if len(bursts["i_beg"]) == 0:
         pass
         ## All the bursts were removed during phase 3.
         # bursts = no_bursts
     else:
         ## Recompute IBI (only needed if phase 3 deleted some cells).
-        if len(bursts["beg"]) > 1:
-            ibis = spikes[bursts["beg"][1:]] - spikes[bursts["end"][:-1]]
+        if len(bursts["i_beg"]) > 1:
+            ibis = spikes[bursts["i_beg"][1:]] - spikes[bursts["i_end"][:-1]]
             ibis = np.insert(ibis, 0, np.nan)
         else:
             ibis = np.array([np.nan])
 
         bursts["IBI"] = ibis
-        assert len(bursts["IBI"]) == len(bursts["beg"])
+        assert len(bursts["IBI"]) == len(bursts["i_beg"])
 
     # get the median time of the burst
-    f = lambda b: np.median(spikes[bursts["beg"][b] : bursts["end"][b]])
-    bursts["med"] = (
-        np.vectorize(f)(np.arange(len(bursts["beg"])))
-        if len(bursts["beg"]) > 0
+    f = lambda b: np.median(spikes[bursts["i_beg"][b] : bursts["i_end"][b]])
+    bursts["t_med"] = (
+        np.vectorize(f)(np.arange(len(bursts["i_beg"])))
+        if len(bursts["i_beg"]) > 0
         else np.array([])
     )
+
+    # get the time stamps of i_beg and i_end
+    bursts["t_beg"] = spikes[bursts["i_beg"]]
+    bursts["t_end"] = spikes[bursts["i_end"]]
 
     ## End -- return burst structure.
     log.debug("logisi_find_burst done")
@@ -556,7 +574,7 @@ def logisi_find_burst(spikes, min_ibi, min_durn, min_spikes, isi_low, neuron_ids
 # ------------------------------------------------------------------------------ #
 
 
-def network_burst_detection(spiketimes, network_fraction=0.75, sort_by="beg"):
+def network_burst_detection(spiketimes, network_fraction=0.75, sort_by="i_beg"):
     """
         Detection of network bursts using the logisi method by pasquale et al.
         The log-histogram trick is applied two times, once on the per-neuron-
@@ -572,7 +590,7 @@ def network_burst_detection(spiketimes, network_fraction=0.75, sort_by="beg"):
             single-neuron level) in order to detect a network burst
 
         sort_by : str
-            "beg", "med", or "end"; default is "beg"
+            "i_beg", "t_med", or "i_end"; default is "i_beg"
             what criterion to sort neuron-level bursts by for the network
             burst detection. only impacts the sequence of contributing
             neurons in bursts, not the bursts themselves.
@@ -587,7 +605,7 @@ def network_burst_detection(spiketimes, network_fraction=0.75, sort_by="beg"):
             containing details such as the neuron-level bursts, neuron id
             corresponding to a burst etc.
     """
-    assert sort_by in ["beg", "med", "end"]
+    assert sort_by in ["i_beg", "t_med", "i_end"]
     num_n = spiketimes.shape[0]
 
     # flat list of all bursts that occured on the single-neuron level
@@ -603,11 +621,11 @@ def network_burst_detection(spiketimes, network_fraction=0.75, sort_by="beg"):
         train = train[np.isfinite(train)]
         train = train[np.nonzero(train)]
         bursts, _, _, _ = burst_detection_pasquale(train)
-        neuron_ids += [n] * len(bursts["med"])
-        med_times += bursts["med"].tolist()
+        neuron_ids += [n] * len(bursts["t_med"])
+        med_times += bursts["t_med"].tolist()
         # in the burst strucutre, beg and end are indices, convert to times.
-        beg_times += train[bursts["beg"]].tolist()
-        end_times += train[bursts["end"]].tolist()
+        beg_times += train[bursts["i_beg"]].tolist()
+        end_times += train[bursts["i_end"]].tolist()
 
     neuron_ids = np.array(neuron_ids)
     med_times = np.array(med_times)
@@ -624,21 +642,22 @@ def network_burst_detection(spiketimes, network_fraction=0.75, sort_by="beg"):
         return no_bursts, details
 
     # sort neuron-level bursts according to burst time, depending on user choice
-    if sort_by == "beg":
+    if sort_by == "i_beg":
         burst_times = beg_times
-    elif sort_by == "end":
+    elif sort_by == "i_end":
         burst_times = end_times
-    elif sort_by == "med":
+    elif sort_by == "t_med":
         burst_times = med_times
 
     idx = np.argsort(burst_times)
     burst_times = burst_times[idx]
     details["neuron_ids"] = neuron_ids[idx]
-    details["med_times"] = med_times[idx]
-    details["beg_times"] = beg_times[idx]
-    details["end_times"] = end_times[idx]
+    details["t_med"] = med_times[idx]
+    details["t_beg"] = beg_times[idx]
+    details["t_end"] = end_times[idx]
 
     try:
+        # we need slightly different parameters on the network level.
         thr, hist, hist_smooth, edges = logisi_break_calc(
             burst_times, cutoff=0.2, void_th=0, peak_kwargs={}
         )
@@ -661,3 +680,100 @@ def network_burst_detection(spiketimes, network_fraction=0.75, sort_by="beg"):
         nb = no_bursts
 
     return nb, details
+
+
+def sequence_detection(network_bursts, details, mod_ids):
+    """
+        Find in which sequence modules were activated during each network burst.
+
+        Parameters
+        ----------
+        network_bursts, details : dict
+            pass as obtained from network_burst_detection()
+
+        mod_ids : array like
+            which module every neuron is in. mod_ids[neuron_id] should give the mod id.
+            no boundary check is done, neuron_ids need to be below len(mod_ids)
+
+        Returns
+        -------
+        sequences : dict
+            * 'neuron_seq', the full sequence of neurons of the network burst
+            * 'module_seq', sequence of module activation. (shorter if not all activated)
+            * 'first_n_from_m', which neuron was first in each module from 'module_seq'
+    """
+
+    # get a sequence for every network burst
+    m_seqs = []
+    n_seqs = []
+    i_seqs = []
+
+    # go through all network bursts
+    for b in range(0, len(network_bursts["i_beg"])):
+        # get indices of bounds of network bursts
+        beg = network_bursts["i_beg"][b]
+        end = network_bursts["i_end"][b]
+
+        # sequence of neurons
+        n_seq = details["neuron_ids"][beg:end]
+        n_seqs.append(n_seq)
+
+        # sequence of modules, use np.unique and preserve order
+        m_seq = mod_ids[n_seq]
+        _, idx = np.unique(m_seq, return_index=True)
+        m_seqs.append(m_seq[np.sort(idx)])
+        i_seqs.append(n_seq[np.sort(idx)]) # which neuron was first, per-module
+
+    res = dict()
+    res['neuron_seq'] = n_seqs
+    res['module_seq'] = m_seqs
+    res['first_n_from_m'] = i_seqs
+
+    return res
+
+
+
+
+
+def reformat_network_burst(network_bursts, details, write_to_file=None):
+    """
+        Format network bursts as one np array. optionally, write to hdf5 file.
+
+        Pass network_bursts and details from network_burst_detection()!
+    """
+
+    description = """
+        network bursts, based on the logisi method by pasuqale DOI 10.1007/s10827-009-0175-1
+        2d array, each row is a network burst, 6 columns (col 3-6 will need integer casting):
+        0 - network-burst time: begin
+        1 - network-burst time: median
+        2 - network-burst time: end
+        3 - id of first neuron to spike
+        4 - id of last neuron to spike
+        5 - numer unique neurons involved in the burst
+    """
+    num_bursts = len(network_bursts["i_beg"])
+    dat = np.ones(shape=(num_bursts, 6)) * np.nan
+
+    dat[:, 0] = network_bursts["t_beg"] # details["beg_times"][network_bursts["i_beg"]]
+    dat[:, 1] = network_bursts["t_med"]  # urgh, this is so inconsistent.
+    dat[:, 2] = network_bursts["t_end"] # details["end_times"][network_bursts["i_end"]]
+    dat[:, 3] = details["neuron_ids"][network_bursts["i_beg"]]
+    dat[:, 4] = details["neuron_ids"][network_bursts["i_end"]]
+    dat[:, 5] = network_bursts["unique"]
+
+    if write_to_file is not None:
+        log.info("writing network bursts to {write_to_file}")
+        try:
+            f_tar = h5py.File(write_to_file, "r+")
+            try:
+                dset = f_tar.create_dataset("/data/network_bursts_logisi", data=dat)
+            except RuntimeError:
+                dset = f_tar["/data/network_bursts_logisi"]
+                dset[...] = dat
+            dset.attrs["description"] = description
+            f_tar.close()
+        except Exception as e:
+            log.info(e)
+
+    return dat
