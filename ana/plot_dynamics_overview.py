@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-17 13:43:10
-# @Last Modified: 2020-11-26 18:22:55
+# @Last Modified: 2020-11-27 13:34:32
 # ------------------------------------------------------------------------------ #
 
 
@@ -156,15 +156,13 @@ ax[-1].set_xlim(0, sim_duration)
 
 spiketimes = ut.h5_load(file, "/data/spiketimes", silent=True)
 network_bursts, details = logisi.network_burst_detection(
-    spiketimes, network_fraction=0.25
+    spiketimes, network_fraction=0.1
 )
 # logisi.reformat_network_burst(network_bursts, details, file)
 ibis = network_bursts["IBI"]
 uniq = network_bursts["unique"]
 neuron_bursts = details["t_beg"]
 num_bursts = len(network_bursts["i_beg"])
-
-seqs = logisi.sequence_detection(network_bursts, details, mod_ids)
 
 
 res = dict()
@@ -336,3 +334,39 @@ ax2[0].set_title(f"Rate: {rate:.1f} Hz", loc="right")
 if "2x2_fixed" in args.input_path:
     k_inter = ut.h5_load(args.input_path, "/meta/topology_k_inter")[0]
     ax2[0].set_title(f"k: {k_inter:d}", loc="center")
+
+
+# ------------------------------------------------------------------------------ #
+# new, full sequence analysis
+# ------------------------------------------------------------------------------ #
+
+seqs = logisi.sequence_detection(network_bursts, details, mod_ids)
+seq_labs, seq_hist = logisi.sequence_entropy(seqs['module_seq'], mods)
+seq_str_labs = np.array(logisi.sequence_labels_to_strings(seq_labs))
+seq_lens = np.zeros(len(seq_str_labs), dtype=np.int)
+seq_begs = np.zeros(len(seq_str_labs), dtype=np.int)
+for idx, s in enumerate(seq_str_labs):
+    seq_lens[idx] = len(s)
+    seq_begs[idx] = int(s[0])
+
+fig3, ax3 = plt.subplots(nrows=2, ncols=1, figsize=[12, 6])
+
+skip_empty = True
+if skip_empty:
+    nz_idx = np.where(seq_hist != 0)[0]
+else:
+    nz_idx = slice(None)
+
+clrs = 4*seq_lens[nz_idx] + seq_begs[nz_idx]
+clrs = mpl.cm.get_cmap("Spectral")(clrs/(5*len(mods)) )
+
+sns.barplot(
+    x = seq_str_labs[nz_idx],
+    y = seq_hist[nz_idx],
+    dodge=False,
+    palette=clrs,
+    ax=ax3[0],
+)
+
+
+

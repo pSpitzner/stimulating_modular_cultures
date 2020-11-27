@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-09-28 10:36:48
-# @Last Modified: 2020-11-26 17:56:50
+# @Last Modified: 2020-11-27 13:03:16
 # ------------------------------------------------------------------------------ #
 # My implementation of the logISI historgram burst detection algorithm
 # by Pasuqale et al.
@@ -25,6 +25,7 @@ import numpy as np
 from statsmodels.nonparametric.smoothers_lowess import lowess
 from scipy.signal import find_peaks
 from tqdm import tqdm
+from itertools import permutations
 
 sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/../ana/"))
 import utility as ut
@@ -732,6 +733,36 @@ def sequence_detection(network_bursts, details, mod_ids):
     return res
 
 
+def sequence_entropy(sequences, ids):
+
+    # create a list of all possible sequences.
+    # each sequence is a tuple
+    labels = []
+    for r in range(0, len(ids)):
+        labels += list(permutations(ids, r+1))
+
+    histogram = np.zeros(len(labels), dtype=np.int64 )
+
+    for s in sequences:
+        # get the right label, cast arrays to tuples for comparison
+        idx = labels.index(tuple(s))
+        histogram[idx] += 1
+
+    return labels, histogram
+
+def sequence_labels_to_strings(labels):
+    # helper to convert the labels from list of tuples to list of strings
+
+    res = []
+    for l in labels:
+        s = str(l)
+        s = s.replace("(", "")
+        s = s.replace(")", "")
+        s = s.replace(",", "")
+        s = s.replace(" ", "")
+        res.append(s)
+
+    return res
 
 
 
