@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2020-11-26 15:31:51
+# @Last Modified: 2020-11-27 18:25:04
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 or csv and runs the simulations in brian.
@@ -72,15 +72,15 @@ b = 0.5       # sensitivity to sub-threshold fluctuations
 d =  50 * mV  # after-spike reset of inhibitory current u
 
 # synapse
-tD =   1 * second  # characteristic recovery time, between 0.5 and 20 seconds
+tD =   2 * second  # characteristic recovery time, between 0.5 and 20 seconds
 tA =  10 * ms      # decay time of post-synaptic current (AMPA current decay time)
-gA =  50 * mV      # AMPA current strength, between 10 - 50 mV
+gA =  35 * mV      # AMPA current strength, between 10 - 50 mV
                    # 170.612 value in javiers neurondyn
                    # this needs to scale with tc/tA
 
 # noise
 beta = 0.8         # D = beta*D after spike, to reduce efficacy, beta < 1
-rate = 30 * Hz     # rate for the poisson input (shot-noise), between 10 - 50 Hz
+rate = 37 * Hz     # rate for the poisson input (shot-noise), between 10 - 50 Hz
 gm =  25 * mV      # shot noise (minis) strength, between 10 - 50 mV
                    # (sum of minis arriving at target neuron)
 gs = 300 * mV * mV * ms * ms  # white noise strength, via xi = dt**.5 * randn()
@@ -400,6 +400,7 @@ try:
     num_n = int(h5_load(args.input_path, "/meta/topology_num_neur"))
     # get the neurons sorted according to their modules
     mod_ids = h5_load(args.input_path, "/data/neuron_module_id")
+    mods = np.unique(mod_ids)
     mod_sorted = np.zeros(num_n, dtype=int)
     temp = np.argsort(mod_ids)
     for idx in range(0, num_n):
@@ -524,6 +525,24 @@ spks_m = SpikeMonitor(G)
 rate_m = PopulationRateMonitor(G)
 # mini_m = SpikeMonitor(mini_g)
 
+# if we have modules, try to get a rate monitor per module
+subgroups = []
+mod_rate_m = []
+for m in mods:
+    idx = np.where(mod_ids == m)[0]
+    # this should fail if neurons are not aligned consecutively, by their module id.
+    subgr = G[idx]
+    subgroups.append(subgr)
+    # mod_monitor = PopulationRateMonitor(subgr)
+    # mod_rate_m.append(mod_monitor)
+
+foo0 = PopulationRateMonitor(subgroups[0])
+foo1 = PopulationRateMonitor(subgroups[1])
+foo2 = PopulationRateMonitor(subgroups[2])
+foo3 = PopulationRateMonitor(subgroups[3])
+
+mod_rate_m = [foo0, foo1, foo2, foo3]
+
 if args.enable_stimulation:
     stim_m = SpikeMonitor(stim_g)
 
@@ -593,29 +612,33 @@ try:
     # rates
     # at the default timestep, the data files get huge.
     freq = int(50 * ms / defaultclock.dt)
-    # dset = f.create_dataset(
-    #     "/data/population_rate",
-    #     data=np.array(
-    #         [rate_m.t / second - args.equil_duration , rate_m.rate / Hz]
-    #     ).T,
-    # )
-    # dset.attrs[
-    #     "description"
-    # ] = "2d array of the population rate in Hz, first dim is time in seconds"
 
-    dset = f.create_dataset(
+    def write_rate(mon, dsetname, description):
+        dset = f.create_dataset(
+            dsetname,
+            data=np.array(
+                [
+                    (mon.t / second - args.equil_duration)[::freq],
+                    (mon.smooth_rate(window="gaussian", width=50 * ms) / Hz)[::freq],
+                ]
+            ).T,
+        )
+        dset.attrs["description"] = description
+
+    # main rate monitor
+    write_rate(
+        rate_m,
         "/data/population_rate_smoothed",
-        data=np.array(
-            [
-                (rate_m.t / second - args.equil_duration)[::freq],
-                (rate_m.smooth_rate(window="gaussian", width=50 * ms) / Hz)[::freq],
-            ]
-        ).T,
+        "population rate in Hz, smoothed with gaussian kernel of 50ms width, first dim is time in seconds",
     )
-    dset.attrs[
-        "description"
-    ] = "population rate in Hz, smoothed with gaussian kernel of 50ms width, first dim is time in seconds"
 
+    # and one for every module
+    for mdx, mon in enumerate(mod_rate_m):
+        write_rate(
+            mon,
+            "/data/module_rate_smoothed_modid={mods[mdx]:d}",
+            "same as population rate, just on a per module level",
+        )
 
     # meta data of this simulation
     dset = f.create_dataset("/meta/dynamics_gA", data=gA / mV)
@@ -645,7 +668,8 @@ try:
     print(f'#{"":#^75}#\n#{"All done!":^75}#\n#{"":#^75}#')
 
 except Exception as e:
-    print("Unable to save to disk\n", e)
+    print("Unable to save to disk\n")
+    print(e)
 
 # remove cython caches
 try:
