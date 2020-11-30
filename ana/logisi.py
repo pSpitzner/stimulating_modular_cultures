@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-09-28 10:36:48
-# @Last Modified: 2020-11-27 13:03:16
+# @Last Modified: 2020-11-30 20:12:41
 # ------------------------------------------------------------------------------ #
 # My implementation of the logISI historgram burst detection algorithm
 # by Pasuqale et al.
@@ -59,6 +59,263 @@ except ImportError:
     def prange(*args):
         return range(*args)
 
+
+# ------------------------------------------------------------------------------ #
+# population rate based burst detection
+# ------------------------------------------------------------------------------ #
+
+
+@jit(nopython=True, parallel=True, fastmath=True, cache=True)
+def population_rate(spiketimes, bin_size):
+    """
+        Calculate the activity across the whole population. naive binning,
+        no sliding window.
+        normalization by bin_size is still required.
+
+        Parameters
+        ----------
+        spiketimes :
+            np array with first dim neurons, second dim spiketimes. nan-padded
+        bin_size :
+            float, in units of spiketimes
+
+        Returns
+        -------
+        rate : 1d array
+            time series of the rate in number of spikes per bin,
+            normalized per-neuron, in steps of bin_size
+    """
+
+    num_n = spiketimes.shape[0]
+
+    # target array
+    t_max = np.nanmax(spiketimes)
+    t_index_max = int(np.ceil(t_max / bin_size) + 1)
+
+    rate = np.zeros(t_index_max)
+
+    for n_id in range(0, num_n):
+        train = spiketimes[n_id]
+        for t in train:
+            if not np.isfinite(t):
+                break
+            t_idx = int(t / bin_size)
+            rate[t_idx] += 1
+
+    rate = rate / num_n
+
+    return rate
+
+
+# @jit(nopython=True, parallel=True, fastmath=True, cache=True)
+def burst_detection_pop_rate(
+    spiketimes, bin_size=0.02, rate_threshold=15, extend=False
+):
+    """
+        find the population rate and define a burst for exceeding a threshold
+
+        Parameters
+        ----------
+        par: type
+            parameter description
+
+        Returns
+        -------
+        something: of_type
+    """
+
+    num_n = spiketimes.shape[0]
+
+    rate = population_rate(spiketimes, bin_size=bin_size) / bin_size
+
+    # work on index level of the `above` array. equivalent to time in steps of bin_size
+    above = np.where(rate >= rate_threshold)[0]
+    sep = np.where(np.diff(above) > 1)[0]
+
+    if len(above > 0):
+        sep = np.insert(sep, 0, -1)  # add the very left edge, will become 0
+        sep = np.insert(sep, len(sep), len(above) - 1)  # add the very right edge
+
+    # sep+1 gives begin index
+    beg = sep[:-1] + 1
+    end = sep[1:]
+
+    # back to time level
+    beg_time = above[beg] * bin_size
+    end_time = above[end] * bin_size
+
+    if extend:
+        beg_time -= bin_size / 2
+        end_time += bin_size / 2
+
+    return beg_time, end_time
+
+
+@jit(nopython=True, parallel=False, fastmath=True, cache=True)
+def merge_if_below_separation_threshold(beg_time, end_time, threshold):
+
+    """
+        If the `beg_time` of a new burst is closer than `threshold`
+        to the `end_time` of a previous burst, merge them.
+
+        Parameters
+        ----------
+        beg_time, end_time : 1d np array
+            sorted, same length!
+
+        threshold : float
+            in units used in beg_time and end_time
+
+        Returns
+        -------
+        beg_time, end_time
+    """
+    beg_res = []
+    end_res = []
+
+    # skip a new burst beginning if within threshold of the previous ending
+    skip = False
+
+    for idx in range(0, len(beg_time) - 1):
+
+        end = end_time[idx]
+        if not skip:
+            beg = beg_time[idx]
+
+        if beg_time[idx + 1] - threshold <= end:
+            skip = True
+            continue
+        else:
+            skip = False
+            beg_res.append(beg)
+            end_res.append(end)
+
+    # last burst is either okay (skip=False) or we use the currently open one (skip=True)
+    if skip:
+        beg_res.append(beg)
+    else:
+        beg_res.append(beg_time[-1])
+    end_res.append(end_time[-1])
+
+    return np.array(beg_res), np.array(end_res)
+
+
+@jit(nopython=True, parallel=False, fastmath=True, cache=True)
+def arg_merge_if_below_separation_threshold(beg_time, end_time, threshold):
+    # same as above just that here we return the indices that would provide
+    # the merged arrays. (like e.g. np.argsort)
+
+    beg_res = []
+    end_res = []
+
+    # skip a new burst beginning if within threshold of the previous ending
+    skip = False
+
+    for idx in range(0, len(beg_time) - 1):
+
+        end = idx
+        if not skip:
+            beg = idx
+
+        if beg_time[idx + 1] - threshold <= end_time[end]:
+            skip = True
+            continue
+        else:
+            skip = False
+            beg_res.append(beg)
+            end_res.append(end)
+
+    # last burst is either okay (skip=False) or we use the currently open one (skip=True)
+    if skip:
+        beg_res.append(beg)
+    else:
+        beg_res.append(len(beg_time) - 1)
+    end_res.append(len(end_time) - 1)
+
+    return np.array(beg_res, dtype=np.int32), np.array(end_res, dtype=np.int32)
+
+
+def system_burst_from_module_burst_broken(beg_times, end_times, threshold):
+
+    # number modules
+    num_m = len(beg_times)
+
+    # system_wide burst begin and end times
+    beg_sys = []
+    end_sys = []
+
+    # keep track which is the latest considered burst in each module
+    b_ids = np.zeros(num_m, dtype=np.int)
+
+    done = False
+    while not done:
+        first_id = np.argmin(beg_times[:, b_ids])
+        # end = -np.inf
+
+        # find the first module burst
+        for m in range(0, num_m):
+            b = beg_times[m, b_ids[m]]
+            if b <= beg:
+                beg = b
+
+            if e > end:
+                end = e
+
+
+def system_burst_from_module_burst(beg_times, end_times, threshold, modules=None):
+    """
+        Description
+
+        Parameters
+        ----------
+        beg_times, end_times: list of 1d np array
+            for every module, the lists should have one 1d np array
+
+        threshold : float
+            bursts that are less apart than this will be merged (across modules)
+
+        modules : list
+            the module label that corresponds to the first dim of beg_times
+
+        Returns
+        -------
+        something: of_type
+    """
+
+    if modules is None:
+        modules = np.arange(len(beg_times))
+
+    # construct a list of module ids to match beg_times
+    mods = []
+    for mdx, _ in enumerate(beg_times):
+        m = modules[mdx]
+        mods.append(np.array([m] * len(beg_times[mdx])))
+
+    # stack everything together in one lone flat list
+    all_begs = np.hstack(beg_times)
+    all_ends = np.hstack(end_times)
+    all_mods = np.hstack(mods)
+
+    # sort consistently by begin time
+    idx = np.argsort(all_begs)
+    all_begs = all_begs[idx]
+    all_ends = all_ends[idx]
+    all_mods = all_mods[idx]
+
+    # get indices that will yield merged system wide bursts
+    idx_begs, idx_ends = arg_merge_if_below_separation_threshold(
+        all_begs, all_ends, threshold
+    )
+
+    # do sequence sorting next
+    # ...
+
+    return all_begs[idx_begs], all_ends[idx_ends]
+
+
+# ------------------------------------------------------------------------------ #
+# Logisi method
+# ------------------------------------------------------------------------------ #
 
 # value to return if no bursts found.
 no_bursts = dict()
@@ -530,7 +787,7 @@ def logisi_find_burst(spikes, min_ibi, min_durn, min_spikes, isi_low, neuron_ids
         )
         rejects = np.concatenate((rejects, np.where(bursts["unique"] < min_spikes)[0]))
 
-    rejects = np.sort(np.unique(rejects))
+    rejects = np.sort(np.unique(rejects)).astype(int)
 
     if len(rejects) > 0:
         for key in bursts.keys():
@@ -723,12 +980,12 @@ def sequence_detection(network_bursts, details, mod_ids):
         m_seq = mod_ids[n_seq]
         _, idx = np.unique(m_seq, return_index=True)
         m_seqs.append(m_seq[np.sort(idx)])
-        i_seqs.append(n_seq[np.sort(idx)]) # which neuron was first, per-module
+        i_seqs.append(n_seq[np.sort(idx)])  # which neuron was first, per-module
 
     res = dict()
-    res['neuron_seq'] = n_seqs
-    res['module_seq'] = m_seqs
-    res['first_n_from_m'] = i_seqs
+    res["neuron_seq"] = n_seqs
+    res["module_seq"] = m_seqs
+    res["first_n_from_m"] = i_seqs
 
     return res
 
@@ -739,9 +996,9 @@ def sequence_entropy(sequences, ids):
     # each sequence is a tuple
     labels = []
     for r in range(0, len(ids)):
-        labels += list(permutations(ids, r+1))
+        labels += list(permutations(ids, r + 1))
 
-    histogram = np.zeros(len(labels), dtype=np.int64 )
+    histogram = np.zeros(len(labels), dtype=np.int64)
 
     for s in sequences:
         # get the right label, cast arrays to tuples for comparison
@@ -749,6 +1006,7 @@ def sequence_entropy(sequences, ids):
         histogram[idx] += 1
 
     return labels, histogram
+
 
 def sequence_labels_to_strings(labels):
     # helper to convert the labels from list of tuples to list of strings
@@ -763,7 +1021,6 @@ def sequence_labels_to_strings(labels):
         res.append(s)
 
     return res
-
 
 
 def reformat_network_burst(network_bursts, details, write_to_file=None):
@@ -786,9 +1043,9 @@ def reformat_network_burst(network_bursts, details, write_to_file=None):
     num_bursts = len(network_bursts["i_beg"])
     dat = np.ones(shape=(num_bursts, 6)) * np.nan
 
-    dat[:, 0] = network_bursts["t_beg"] # details["beg_times"][network_bursts["i_beg"]]
+    dat[:, 0] = network_bursts["t_beg"]  # details["beg_times"][network_bursts["i_beg"]]
     dat[:, 1] = network_bursts["t_med"]  # urgh, this is so inconsistent.
-    dat[:, 2] = network_bursts["t_end"] # details["end_times"][network_bursts["i_end"]]
+    dat[:, 2] = network_bursts["t_end"]  # details["end_times"][network_bursts["i_end"]]
     dat[:, 3] = details["neuron_ids"][network_bursts["i_beg"]]
     dat[:, 4] = details["neuron_ids"][network_bursts["i_end"]]
     dat[:, 5] = network_bursts["unique"]

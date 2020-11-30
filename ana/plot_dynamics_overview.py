@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-17 13:43:10
-# @Last Modified: 2020-11-27 13:34:32
+# @Last Modified: 2020-11-30 19:58:29
 # ------------------------------------------------------------------------------ #
 
 
@@ -69,12 +69,25 @@ except:
     stim_times = None
 
 plt.ion()
-fig, ax = plt.subplots(3, 1, sharex=True)
+fig, ax = plt.subplots(4, 1, sharex=True, figsize=(8, 8))
+
+mod_clrs = []
+for m in mods:
+    mod_clrs.append(f"C{m:d}")
+if len(mod_clrs) == 1:
+    mod_clrs[0] = "black"
+
 
 log.info("Plotting raster")
 ax[0].set_ylabel("Raster")
 for n in range(0, spikes.shape[0]):
-    ax[0].plot(spikes[n], mod_sort(n) * np.ones(len(spikes[n])), "|k", alpha=0.1)
+    ax[0].plot(
+        spikes[n],
+        mod_sort(n) * np.ones(len(spikes[n])),
+        "|",
+        alpha=0.1,
+        color=mod_clrs[mod_ids[n]],
+    )
 
 # if stim_times is not None:
 # ax[0].plot(stim_times[n], mod_sort(n), "|k", alpha=0.1)
@@ -88,7 +101,7 @@ log.info("Calculating Population Activity")
 ax[1].set_ylabel("ASDR")
 bs = 1.0
 pop_act = ut.population_activity(spikes, bin_size=bs)
-ax[1].plot(np.arange(0, len(pop_act)) * bs, pop_act)
+ax[1].plot(np.arange(0, len(pop_act)) * bs, pop_act, color="gray")
 
 log.info(f"ASDR (mean): {np.mean(pop_act):g}")
 ax[1].text(
@@ -100,35 +113,85 @@ ax[1].text(
     va="top",
 )
 
+
+ax[2].set_ylabel("Rates")
 # population rate from brian
-try:
-    pop_rate = ut.h5_load(file, "/data/population_rate_smoothed")
-    y = pop_rate[:,1] / np.nanmax(pop_rate[:,1]) * np.nanmax(pop_act)
-    x = pop_rate[:,0] # in seconds, beware bs
-    ax[1].plot(x,y)
-except Exception as e:
-    log.info(e)
+# try:
+#     pop_rate_brian = ut.h5_load(file, "/data/population_rate_smoothed")
+#     y = pop_rate_brian[:,1]
+#     x = pop_rate_brian[:,0] # in seconds, beware bs
+#     ax[2].plot(x,y, color="gray", label='brian')
+# except Exception as e:
+#     log.info(e)
 
+bs = 0.02
+pop_rate = logisi.population_rate(spikes, bin_size=bs)
+ax[2].plot(
+    np.arange(0, len(pop_rate)) * bs, pop_rate / bs, color="darkgray", label=None
+)
 
+beg_times = []
+end_times = []
+
+for m in mods:
+    selects = np.where(mod_ids == m)[0]
+    pop_rate = logisi.population_rate(spikes[selects], bin_size=bs)
+    mn = np.nanmean(pop_rate / bs)
+    ax[2].plot(
+        np.arange(0, len(pop_rate)) * bs,
+        pop_rate / bs,
+        label=f"{m:d}: ({mn:.2f} Hz)",
+        color=mod_clrs[m],
+    )
+    beg_time, end_time = logisi.burst_detection_pop_rate(
+        spikes[selects], bin_size=0.02, rate_threshold=15 # Hz
+    )
+
+    beg_time, end_time = logisi.merge_if_below_separation_threshold(
+        beg_time, end_time, threshold=0.1 # seconds
+    )
+
+    beg_times.append(beg_time)
+    end_times.append(end_time)
+
+    # ax[2].axhline(y=100*np.nanmean(pop_rate / bs), alpha=.5, color=mod_clrs[m])
+    ax[2].plot(
+        beg_time, np.ones(len(beg_time)) * (20 + m), marker="4", color=mod_clrs[m], lw=0
+    )
+    ax[2].plot(
+        end_time, np.ones(len(end_time)) * (20 + m), marker="3", color=mod_clrs[m], lw=0
+    )
+
+all_begs, all_ends = logisi.system_burst_from_module_burst(beg_times, end_times, threshold=0.1)
+
+ax[2].plot(
+    all_begs, np.ones(len(all_begs)) * (25), marker="4", color='black', lw=0
+)
+ax[2].plot(
+    all_ends, np.ones(len(all_ends)) * (25), marker="3", color='black', lw=0
+)
+
+ax[2].legend(loc=1)
+ax[2].axhline(y=15, ls=":", color="black")
 
 
 log.info("Detecting Bursts")
-ax[2].set_ylabel("Bursts")
-ax[2].set_yticks([])
+ax[3].set_ylabel("Bursts")
+ax[3].set_yticks([])
 bursts, time_series, summed_series = ut.burst_times(
     spikes, bin_size=0.5, threshold=0.75, mark_only_onset=False, debug=True
 )
-ax[2].plot(bursts, np.ones(len(bursts)), "|", markersize=12)
+ax[3].plot(bursts, np.ones(len(bursts)), "|", markersize=12)
 ibis = ut.inter_burst_intervals(bursttimes=bursts)
 log.info(f"sim duration: {sim_duration} [seconds]")
 log.info(f"Num bursts: {len(bursts):g}")
 log.info(f"IBI (mean): {np.mean(ibis):g} [seconds]")
 log.info(f"IBI (median): {np.median(ibis):g} [seconds]")
-ax[2].text(
+ax[3].text(
     0.95,
     0.95,
     f"IBI simple mean: {np.mean(ibis):g}\nvar: {np.var(ibis):g}",
-    transform=ax[2].transAxes,
+    transform=ax[3].transAxes,
     ha="right",
     va="top",
 )
@@ -170,41 +233,41 @@ print(f"mean ibi pasqu: {np.nanmean(ibis) if len(ibis) > 0 else np.inf}")
 print(f"var ibi pasqu: {np.nanvar(ibis) if len(ibis) > 0 else np.inf}")
 print(f"mean fraction: {np.nanmean(uniq) if len(uniq) > 0 else 0}")
 
-ax[2].text(
+ax[3].text(
     0.95,
     0.05,
     f"IBI logisi mean: {np.nanmean(ibis):g}\nvar: {np.nanvar(ibis):g}",
-    transform=ax[2].transAxes,
+    transform=ax[3].transAxes,
     ha="right",
     va="bottom",
 )
-ax[2].text(
+ax[3].text(
     0.05,
     0.05,
     f"unique neurons: {np.nanmean(uniq):.1f} / {num_n}",
-    transform=ax[2].transAxes,
+    transform=ax[3].transAxes,
     ha="left",
     va="bottom",
 )
 
 # network burst begin
-ax[2].plot(
+ax[3].plot(
     neuron_bursts[network_bursts["i_beg"]],
     0.98 * np.ones(len(network_bursts["i_beg"])),
     "|y",
     markersize=6,
 )
 # network burst median
-ax[2].plot(
+ax[3].plot(
     network_bursts["t_med"],
     0.98 * np.ones(len(network_bursts["t_med"])),
     "|r",
     markersize=6,
 )
 # neuron bursts
-ax[2].plot(neuron_bursts, 1.02 * np.ones(len(neuron_bursts)), "|g", markersize=6)
+ax[3].plot(neuron_bursts, 1.02 * np.ones(len(neuron_bursts)), "|g", markersize=6)
 
-ax[2].set_ylim(0.9, 1.1)
+ax[3].set_ylim(0.9, 1.1)
 
 
 # ------------------------------------------------------------------------------ #
@@ -226,7 +289,6 @@ ax[2].set_ylim(0.9, 1.1)
 #     ax[0].plot(mod_bursts, 12 + m * 25 * np.ones(len(mod_bursts)), "|r", alpha=0.8, markersize=12, zorder=1)
 
 # modtimes = np.vstack(modtimes)
-
 
 
 # ------------------------------------------------------------------------------ #
@@ -341,7 +403,7 @@ if "2x2_fixed" in args.input_path:
 # ------------------------------------------------------------------------------ #
 
 seqs = logisi.sequence_detection(network_bursts, details, mod_ids)
-seq_labs, seq_hist = logisi.sequence_entropy(seqs['module_seq'], mods)
+seq_labs, seq_hist = logisi.sequence_entropy(seqs["module_seq"], mods)
 seq_str_labs = np.array(logisi.sequence_labels_to_strings(seq_labs))
 seq_lens = np.zeros(len(seq_str_labs), dtype=np.int)
 seq_begs = np.zeros(len(seq_str_labs), dtype=np.int)
@@ -357,16 +419,9 @@ if skip_empty:
 else:
     nz_idx = slice(None)
 
-clrs = 4*seq_lens[nz_idx] + seq_begs[nz_idx]
-clrs = mpl.cm.get_cmap("Spectral")(clrs/(5*len(mods)) )
+clrs = 4 * seq_lens[nz_idx] + seq_begs[nz_idx]
+clrs = mpl.cm.get_cmap("Spectral")(clrs / (5 * len(mods)))
 
 sns.barplot(
-    x = seq_str_labs[nz_idx],
-    y = seq_hist[nz_idx],
-    dodge=False,
-    palette=clrs,
-    ax=ax3[0],
+    x=seq_str_labs[nz_idx], y=seq_hist[nz_idx], dodge=False, palette=clrs, ax=ax3[0],
 )
-
-
-
