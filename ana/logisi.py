@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-09-28 10:36:48
-# @Last Modified: 2020-12-03 09:58:27
+# @Last Modified: 2020-12-03 23:01:03
 # ------------------------------------------------------------------------------ #
 # My implementation of the logISI historgram burst detection algorithm
 # by Pasuqale et al.
@@ -580,7 +580,7 @@ def add_brs(bursts, brs, spikes):
     rejects = np.array([])
     rejects = np.concatenate((rejects, np.where(diff_begs == 0)[0]))
     rejects = np.concatenate((rejects, np.where(diff_ends == 0)[0] + 1))
-    rejects = np.sort(np.unique(rejects))
+    rejects = np.sort(np.unique(rejects)).astype(int)
 
     if len(rejects) > 0:
         for key in burst_adj.keys():
@@ -872,7 +872,7 @@ def network_burst_detection(spiketimes, network_fraction=0.75, sort_by="i_beg"):
     # which neuron did burst
     neuron_ids = []
 
-    for n in tqdm(range(num_n), leave=None):
+    for n in tqdm(range(num_n), leave=None, desc="Neurons"):
         train = spiketimes[n]
         train = train[np.isfinite(train)]
         train = train[np.nonzero(train)]
