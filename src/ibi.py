@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2020-11-27 18:25:04
+# @Last Modified: 2020-12-03 11:53:39
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 or csv and runs the simulations in brian.
@@ -526,22 +526,22 @@ rate_m = PopulationRateMonitor(G)
 # mini_m = SpikeMonitor(mini_g)
 
 # if we have modules, try to get a rate monitor per module
-subgroups = []
+# subgroups = []
 mod_rate_m = []
-for m in mods:
-    idx = np.where(mod_ids == m)[0]
-    # this should fail if neurons are not aligned consecutively, by their module id.
-    subgr = G[idx]
-    subgroups.append(subgr)
-    # mod_monitor = PopulationRateMonitor(subgr)
-    # mod_rate_m.append(mod_monitor)
+# for m in mods:
+#     idx = np.where(mod_ids == m)[0]
+#     # this should fail if neurons are not aligned consecutively, by their module id.
+#     subgr = G[idx]
+#     subgroups.append(subgr)
+#     # mod_monitor = PopulationRateMonitor(subgr)
+#     # mod_rate_m.append(mod_monitor)
 
-foo0 = PopulationRateMonitor(subgroups[0])
-foo1 = PopulationRateMonitor(subgroups[1])
-foo2 = PopulationRateMonitor(subgroups[2])
-foo3 = PopulationRateMonitor(subgroups[3])
+# foo0 = PopulationRateMonitor(subgroups[0])
+# foo1 = PopulationRateMonitor(subgroups[1])
+# foo2 = PopulationRateMonitor(subgroups[2])
+# foo3 = PopulationRateMonitor(subgroups[3])
 
-mod_rate_m = [foo0, foo1, foo2, foo3]
+# mod_rate_m = [foo0, foo1, foo2, foo3]
 
 if args.enable_stimulation:
     stim_m = SpikeMonitor(stim_g)

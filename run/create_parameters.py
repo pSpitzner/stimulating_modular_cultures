@@ -6,19 +6,19 @@ from itertools import product
 os.chdir(os.path.dirname(__file__))
 
 # seed for rank 0, will increase per thread
-seed = 1_000
+seed = 2_000
 
 # parameters to scan, noise rate, ampa strength, and a few repetitons for statistics
-l_topo = ['2x2merged', '2x2_fixed']
+l_topo = ['2x2_fixed']
 # l_rate = np.arange(25,41)
 # l_gampa = np.arange(20,51)
 # extend region
-l_rate = np.arange(20,31)
-l_gampa = np.arange(51,61)
+l_rate = np.array([37])
+l_gampa = np.array([35])
 l_recovery = np.array([2.0])
 l_alpha = np.array([0.0125])
 l_k_inter = np.array([3])
-l_rep = range(0, 15)
+l_rep = range(0, 50)
 
 arg_list = product(l_topo, l_rate, l_gampa, l_recovery, l_alpha, l_k_inter, l_rep)
 
@@ -59,7 +59,15 @@ with open("./parameters_topo.tsv", "w") as f_topo:
                     # dynamic command
                     f"python ./src/ibi.py -i {topo_path} " +
                     f"-o {dyn_path} " +
-                    f"-d 3600 -equil 300 -s {seed:d} " +
+                    f"-d 10800 -equil 300 -s {seed:d} " +
+                    f"-gA {gampa:04.2f} -tD {recovery:04.2f} -r {rate:04.2f}\n"
+                )
+
+                f_stim.write(
+                    # dynamic command
+                    f"python ./src/ibi.py -i {topo_path} " +
+                    f"-o {stim_path} " +
+                    f"-d 10800 -equil 300 -s {seed:d} --stim " +
                     f"-gA {gampa:04.2f} -tD {recovery:04.2f} -r {rate:04.2f}\n"
                 )
 
