@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-17 13:43:10
-# @Last Modified: 2020-11-30 19:58:29
+# @Last Modified: 2020-12-03 09:51:15
 # ------------------------------------------------------------------------------ #
 
 
@@ -162,7 +162,7 @@ for m in mods:
         end_time, np.ones(len(end_time)) * (20 + m), marker="3", color=mod_clrs[m], lw=0
     )
 
-all_begs, all_ends = logisi.system_burst_from_module_burst(beg_times, end_times, threshold=0.1)
+all_begs, all_ends, all_seqs = logisi.system_burst_from_module_burst(beg_times, end_times, threshold=0.1)
 
 ax[2].plot(
     all_begs, np.ones(len(all_begs)) * (25), marker="4", color='black', lw=0
@@ -403,25 +403,74 @@ if "2x2_fixed" in args.input_path:
 # ------------------------------------------------------------------------------ #
 
 seqs = logisi.sequence_detection(network_bursts, details, mod_ids)
-seq_labs, seq_hist = logisi.sequence_entropy(seqs["module_seq"], mods)
-seq_str_labs = np.array(logisi.sequence_labels_to_strings(seq_labs))
-seq_lens = np.zeros(len(seq_str_labs), dtype=np.int)
-seq_begs = np.zeros(len(seq_str_labs), dtype=np.int)
-for idx, s in enumerate(seq_str_labs):
-    seq_lens[idx] = len(s)
-    seq_begs[idx] = int(s[0])
+
+def plot_seqs_as_bars(list_of_sequences, ax, ax_merged):
+    seq_labs, seq_hist = logisi.sequence_entropy(list_of_sequences, mods)
+    seq_str_labs = np.array(logisi.sequence_labels_to_strings(seq_labs))
+    seq_lens = np.zeros(len(seq_str_labs), dtype=np.int)
+    seq_begs = np.zeros(len(seq_str_labs), dtype=np.int)
+    for idx, s in enumerate(seq_str_labs):
+        seq_lens[idx] = len(s)
+        seq_begs[idx] = int(s[0])
+
+    skip_empty = True
+    if skip_empty:
+        nz_idx = np.where(seq_hist != 0)[0]
+    else:
+        nz_idx = slice(None)
+
+    clrs = 4 * seq_lens[nz_idx] + seq_begs[nz_idx]
+    clrs = mpl.cm.get_cmap("Spectral")(clrs / (5 * len(mods)))
+
+    sns.barplot(
+        x=seq_str_labs[nz_idx], y=seq_hist[nz_idx], dodge=False, palette=clrs, ax=ax,
+    )
+    ax.text(
+        0.95,
+        0.95,
+        f"Num bursts: {np.sum(seq_hist[nz_idx]):d}",
+        transform=ax.transAxes,
+        ha="right",
+        va="top",
+    )
+
+    # plot by seq length
+    # dont use seq_lens as is, this will just get the permutaitons of labels
+    unique, counts = np.unique(seq_lens[nz_idx], return_counts=True)
+    clrs = 4 * unique + 1
+    clrs = mpl.cm.get_cmap("Spectral")(clrs / (5 * len(mods)))
+
+    sns.barplot(
+        x=unique, y=counts, dodge=False, palette=clrs, ax=ax_merged,
+    )
+    ax_merged.text(
+        0.95,
+        0.95,
+        f"Num bursts: {np.sum(seq_hist[nz_idx]):d}",
+        transform=ax.transAxes,
+        ha="right",
+        va="top",
+    )
+
+
+
+
 
 fig3, ax3 = plt.subplots(nrows=2, ncols=1, figsize=[12, 6])
+fig3b, ax3b = plt.subplots(nrows=2, ncols=1, figsize=[6, 6])
+plot_seqs_as_bars(seqs["module_seq"], ax3[0], ax3b[0])
+plot_seqs_as_bars(all_seqs, ax3[1], ax3b[1])
 
-skip_empty = True
-if skip_empty:
-    nz_idx = np.where(seq_hist != 0)[0]
-else:
-    nz_idx = slice(None)
+ax3[0].set_ylabel("From Logisi")
+ax3[1].set_ylabel("From Rates")
+ax3[0].set_title("Sequences")
+ax3b[0].set_ylabel("From Logisi")
+ax3b[1].set_ylabel("From Rates")
+ax3b[0].set_title("Sequence Length")
 
-clrs = 4 * seq_lens[nz_idx] + seq_begs[nz_idx]
-clrs = mpl.cm.get_cmap("Spectral")(clrs / (5 * len(mods)))
+for text in args.input_path.split("/"):
+    # if "2x2" in text:
+    fig3.suptitle(f"{text}")
+    fig3b.suptitle(f"{text}")
 
-sns.barplot(
-    x=seq_str_labs[nz_idx], y=seq_hist[nz_idx], dodge=False, palette=clrs, ax=ax3[0],
-)
+

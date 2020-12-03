@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-09-28 10:36:48
-# @Last Modified: 2020-11-30 20:12:41
+# @Last Modified: 2020-12-03 09:58:27
 # ------------------------------------------------------------------------------ #
 # My implementation of the logISI historgram burst detection algorithm
 # by Pasuqale et al.
@@ -235,33 +235,6 @@ def arg_merge_if_below_separation_threshold(beg_time, end_time, threshold):
     return np.array(beg_res, dtype=np.int32), np.array(end_res, dtype=np.int32)
 
 
-def system_burst_from_module_burst_broken(beg_times, end_times, threshold):
-
-    # number modules
-    num_m = len(beg_times)
-
-    # system_wide burst begin and end times
-    beg_sys = []
-    end_sys = []
-
-    # keep track which is the latest considered burst in each module
-    b_ids = np.zeros(num_m, dtype=np.int)
-
-    done = False
-    while not done:
-        first_id = np.argmin(beg_times[:, b_ids])
-        # end = -np.inf
-
-        # find the first module burst
-        for m in range(0, num_m):
-            b = beg_times[m, b_ids[m]]
-            if b <= beg:
-                beg = b
-
-            if e > end:
-                end = e
-
-
 def system_burst_from_module_burst(beg_times, end_times, threshold, modules=None):
     """
         Description
@@ -279,7 +252,12 @@ def system_burst_from_module_burst(beg_times, end_times, threshold, modules=None
 
         Returns
         -------
-        something: of_type
+        all_begs, all_ends :  1d np arrays
+            containing the start and end times of system-wide bursts.
+
+        sequences : list of tuples
+            that correspond to the sequence of module activation for a
+            particular burst
     """
 
     if modules is None:
@@ -307,10 +285,30 @@ def system_burst_from_module_burst(beg_times, end_times, threshold, modules=None
         all_begs, all_ends, threshold
     )
 
-    # do sequence sorting next
-    # ...
+    sequences = []
 
-    return all_begs[idx_begs], all_ends[idx_ends]
+    # do sequence sorting next
+    for pos, idx in enumerate(idx_begs):
+        # first module, save sequence as tuple
+        seq = (all_mods[idx], )
+
+        # first time occurences of follower
+        jdx = idx+1
+        while jdx <= idx_ends[pos]:
+            # get module id of bursts that were in the system burst, add to sequence
+            m = all_mods[jdx]
+            if m not in seq:
+                seq += (m,)
+            if len(seq) == len(modules):
+                break
+            jdx += 1
+
+        # add this particular sequence
+        sequences.append(seq)
+
+
+
+    return all_begs[idx_begs], all_ends[idx_ends], sequences
 
 
 # ------------------------------------------------------------------------------ #
