@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2020-12-11 11:11:03
+# @Last Modified: 2020-12-11 14:47:10
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 or csv and runs the simulations in brian.
@@ -117,13 +117,13 @@ def h5_load(filename, dsetname, raise_ex=True):
             return np.nan
 
 
-
 # ------------------------------------------------------------------------------ #
 # stimulation
 # recreate the stimulation used by hideaki.
 #     * 400ms time windows
 #     * 10 candidate neurons across two modules
 #     * per time window p=0.4 for every candidate
+#     * instead of spiking at window onset, draw a random time within the window
 # ------------------------------------------------------------------------------ #
 
 
@@ -150,7 +150,7 @@ def stimulation_pattern_candidates(candidates, p_per_candidate=0.4):
 
 def stimulation_pattern_random(n_per_mod=5, mod_targets=[0]):
     """
-        produces a random pattern for one time window
+        produces a random pattern of neurons for one time window
 
         Parameters
         ----------
@@ -192,6 +192,19 @@ def stimulation_pattern_random(n_per_mod=5, mod_targets=[0]):
     return res
 
 
+def stimulation_time_random(t_start, t_end, num_n):
+    """
+        create `num_n` random times that lie within a time window
+        from `t_start` to `t_end`
+
+        Returns
+        -------
+        times: 1d np array of size `num_n`
+    """
+
+    return np.random.uniform(low=t_start, high=t_end, size=num_n)  # [low, high)
+
+
 # ------------------------------------------------------------------------------ #
 # command line arguments
 # ------------------------------------------------------------------------------ #
@@ -219,6 +232,10 @@ parser.add_argument(
     default=False,
     action="store_true",
 )
+parser.add_argument(
+    "-jitter", dest="enable_stimulation_jitter", default=False, action="store_true",
+)
+parser.add_argument("-mod", dest="stimulation_module", default=0, type=int)
 parser.add_argument("-gA", dest="gA", default=gA / mV, help="in mV", type=float)
 parser.add_argument("-gm", dest="gm", default=gm / mV, help="in mV", type=float)
 parser.add_argument("-r", dest="r", default=rate / Hz, help="in Hz", type=float)
@@ -241,6 +258,9 @@ print(f"gm: ", gm)
 print(f"tD: ", tD)
 print(f"rate: ", rate)
 print(f"stimulation: ", args.enable_stimulation)
+if args.enable_stimulation:
+    print(f"stimulation jitter: ", args.enable_stimulation_jitter)
+    print(f"stimulation module: ", args.stimulation_module)
 
 try:
     # load from hdf5
@@ -344,17 +364,42 @@ G.v = "vc + 5*mV*rand()"
 
 if args.enable_stimulation:
 
-    candidates = stimulation_pattern_random(n_per_mod=5, mod_targets=[0])
+    candidates = stimulation_pattern_random(
+        n_per_mod=5, mod_targets=[args.stimulation_module]
+    )
     candidates = np.array(candidates)
     stimulus_indices = []
     stimulus_times = []
     for step in range(
         1, int((args.duration + args.equil_duration) * second / stim_interval) - 1
     ):
-        t = step * stim_interval
-        n = stimulation_pattern_candidates(candidates=candidates).tolist()
-        stimulus_indices += n
-        stimulus_times += [t] * len(n)
+        t = step * stim_interval / second
+        n_targets = stimulation_pattern_candidates(candidates=candidates).tolist()
+        if args.enable_stimulation_jitter:
+            # we want to model an additional poisson drive that get turned on
+            # when stimulationg
+            for n in n_targets:
+                dt = stim_interval / 100 / second
+                p = 1 / 100.0
+                for t_segment in np.arange(t, t+stim_interval/second, dt):
+                    if np.random.uniform(0, 1) < p:
+                        stimulus_indices += [n]
+                        stimulus_times += [
+                            np.random.uniform(
+                                low=t_segment, high=t_segment + dt
+                            )
+                        ]
+        else:
+            stimulus_indices += n_targets
+            stimulus_times += [t] * len(n_targets)
+
+    # sort and cast to array
+    idx = np.argsort(stimulus_times)
+    stimulus_times = np.array(stimulus_times)[idx] * second
+    stimulus_indices = np.array(stimulus_indices)[idx]
+
+
+    print(len(stimulus_times))
 
     stim_g = SpikeGeneratorGroup(
         N=num_n,
