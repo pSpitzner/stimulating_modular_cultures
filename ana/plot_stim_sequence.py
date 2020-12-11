@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-12-03 17:56:15
-# @Last Modified: 2020-12-03 22:45:49
+# @Last Modified: 2020-12-04 13:06:47
 # ------------------------------------------------------------------------------ #
 
 import os
@@ -90,6 +90,11 @@ def sequences_from_logisi(spikes, mod_ids):
 
 def histogram_from_sequences(list_of_sequences, mods=[0, 1, 2, 3]):
     seq_labs, seq_hist = logisi.sequence_entropy(list_of_sequences, mods)
+    seq_hist[0] = 0
+    for sdx, s in enumerate(seq_labs):
+        if s[0] == 0:
+            seq_hist[sdx] = 0
+
     seq_str_labs = np.array(logisi.sequence_labels_to_strings(seq_labs))
     seq_lens = np.zeros(len(seq_str_labs), dtype=np.int)
     seq_begs = np.zeros(len(seq_str_labs), dtype=np.int)
@@ -104,58 +109,99 @@ def histogram_from_sequences(list_of_sequences, mods=[0, 1, 2, 3]):
         nz_idx = slice(None)
 
     # plot by seq length
-    # dont use seq_lens as is, this will just get the permutaitons of labels
-    labels, counts = np.unique(seq_lens[nz_idx], return_counts=True)
+    # get possible
+    catalog = np.unique(seq_lens)
+    len_hist = np.zeros(len(catalog))
+    lookup = dict()
+    for c in catalog:
+        lookup[c] = np.where(catalog == c)[0][0]
 
-    # make sure every histogram has the same labels
-    fixed_labels = np.arange(1, len(mods)+1).astype(int)
-    fixed_counts = np.zeros(len(fixed_labels)).astype(int)
+    for sdx, s in enumerate(seq_hist):
+        c = seq_lens[sdx]
+        len_hist[lookup[c]] += s
 
-    for ldx, val in enumerate(counts):
-        fixed_counts[int(labels[ldx]-1)] = val
+    # assert np.sum(len_hist) == len(list_of_sequences), "sanity check"
+    # total = len(list_of_sequences)
+    total = np.sum(len_hist)
 
-    return fixed_labels, fixed_counts
+    return catalog, len_hist / total, total
 
 
 # collect histograms
-rate_collection = dict()
-rate_collection["counts"] = [None] * len(candidates)
-rate_collection["labels"] = [None] * len(candidates)
+# from rate based burst detection
+r_collection = dict()
+r_collection["probs"] = [None] * len(candidates)
+r_collection["labels"] = [None] * len(candidates)
+r_collection["totals"] = [None] * len(candidates)
 
-logisi_collection = dict()
-logisi_collection["counts"] = [None] * len(candidates)
-logisi_collection["labels"] = [None] * len(candidates)
+# from logisi burst detection
+l_collection = dict()
+l_collection["probs"] = [None] * len(candidates)
+l_collection["labels"] = [None] * len(candidates)
+l_collection["totals"] = [None] * len(candidates)
 
 for cdx, candidate in enumerate(tqdm(candidates, desc="Candidate files")):
     spikes = ut.h5_load(candidate, "/data/spiketimes", silent=True)
     mod_ids = ut.h5_load(candidate, "/data/neuron_module_id")
 
     r_seqs = sequences_from_rates(spikes, mod_ids)
-    r_labels, r_counts = histogram_from_sequences(r_seqs)
-    rate_collection["counts"][cdx] = r_counts
-    rate_collection["labels"][cdx] = r_labels
+    r_labels, r_probs, r_totals = histogram_from_sequences(r_seqs)
+    r_collection["probs"][cdx] = r_probs
+    r_collection["labels"][cdx] = r_labels
+    r_collection["totals"][cdx] = r_totals
 
-    l_seqs = sequences_from_logisi(spikes, mod_ids)
-    l_labels, l_counts = histogram_from_sequences(l_seqs)
-    logisi_collection["counts"][cdx] = l_counts
-    logisi_collection["labels"][cdx] = l_labels
+    # l_seqs = sequences_from_logisi(spikes, mod_ids)
+    # l_labels, l_probs, l_totals = histogram_from_sequences(l_seqs)
+    # l_collection["probs"][cdx] = l_probs
+    # l_collection["labels"][cdx] = l_labels
+    # l_collection["totals"][cdx] = l_totals
 
 
 # reshape to get full length sequences
-rate_counts = np.vstack(rate_collection["counts"])
-rate_labels = rate_collection["labels"][0]
+r_probs = np.vstack(r_collection["probs"])
+r_labels = r_collection["labels"][0]
 
-logisi_counts = np.vstack(logisi_collection["counts"])
-logisi_labels = logisi_collection["labels"][0]
+l_probs = np.vstack(l_collection["probs"])
+l_labels = l_collection["labels"][0]
 
-fig, axes = plt.subplots(nrows=1, ncols=2, figsize=[12, 4])
-sns.barplot(data=pd.DataFrame(data=rate_counts, columns=rate_labels), ax=axes[0])
+fig, axes = plt.subplots(nrows=2, ncols=1, figsize=[6, 8])
+sns.violinplot(
+    data=pd.DataFrame(data=r_probs, columns=r_labels),
+    ax=axes[0],
+    palette="Spectral",
+)
 axes[0].set_xlabel("Sequence length")
-axes[0].set_ylabel("Occurrences")
-axes[0].set_title("Rates")
+axes[0].set_ylabel("Probability\n(from Rates algorithm)")
+axes[0].set_ylim(1e-3, 1)
+axes[0].set_title(" ")
+axes[0].text(
+    0.05,
+    0.95,
+    f"Num bursts: {np.nanmean(r_collection['totals']):.1f}",
+    transform=axes[0].transAxes,
+    ha="left",
+    va="top",
+)
 
-sns.barplot(data=pd.DataFrame(data=logisi_counts, columns=logisi_labels), ax=axes[1])
+sns.violinplot(data=pd.DataFrame(data=l_probs, columns=l_labels), ax=axes[1],
+    palette='Spectral')
 axes[1].set_xlabel("Sequence length")
-axes[1].set_ylabel("Occurrences")
-axes[1].set_title("Logisi")
-fig.suptitle(args.input_path)
+axes[1].set_ylabel("Probability\n(from Logisi)")
+# axes[1].set_title("Logisi", loc='left')
+axes[1].set_ylim(1e-3, 1)
+axes[1].text(
+    0.05,
+    0.95,
+    f"Num bursts: {np.nanmean(l_collection['totals']):.1f}",
+    transform=axes[1].transAxes,
+    ha="left",
+    va="top",
+)
+
+
+for text in args.input_path.split("/"):
+    if "stim" in text:
+        fig.suptitle("stimulation ON")
+    if "dyn" in text:
+        fig.suptitle("stimulation OFF")
+fig.tight_layout()
