@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-17 13:43:10
-# @Last Modified: 2020-12-03 09:51:15
+# @Last Modified: 2020-12-10 11:53:10
 # ------------------------------------------------------------------------------ #
 
 
@@ -69,7 +69,8 @@ except:
     stim_times = None
 
 plt.ion()
-fig, ax = plt.subplots(4, 1, sharex=True, figsize=(8, 8))
+# fig, ax = plt.subplots(4, 1, sharex=True, figsize=(8, 8))
+fig, ax = plt.subplots(4, 1, sharex=True, figsize=(4, 7))
 
 mod_clrs = []
 for m in mods:
@@ -98,35 +99,35 @@ for n in range(0, spikes.shape[0]):
 # ax[0].plot(spikes[sel], mod_sort(sel) ** np.ones(len(spikes[sel])), "|")
 
 log.info("Calculating Population Activity")
-ax[1].set_ylabel("ASDR")
+ax[2].set_ylabel("ASDR")
 bs = 1.0
 pop_act = ut.population_activity(spikes, bin_size=bs)
-ax[1].plot(np.arange(0, len(pop_act)) * bs, pop_act, color="gray")
+ax[2].plot(np.arange(0, len(pop_act)) * bs, pop_act, color="gray")
 
 log.info(f"ASDR (mean): {np.mean(pop_act):g}")
-ax[1].text(
+ax[2].text(
     0.95,
     0.95,
     f"ASDR (mean): {np.mean(pop_act):g}",
-    transform=ax[1].transAxes,
+    transform=ax[2].transAxes,
     ha="right",
     va="top",
 )
 
 
-ax[2].set_ylabel("Rates")
+ax[1].set_ylabel("Rates")
 # population rate from brian
 # try:
 #     pop_rate_brian = ut.h5_load(file, "/data/population_rate_smoothed")
 #     y = pop_rate_brian[:,1]
 #     x = pop_rate_brian[:,0] # in seconds, beware bs
-#     ax[2].plot(x,y, color="gray", label='brian')
+#     ax[1].plot(x,y, color="gray", label='brian')
 # except Exception as e:
 #     log.info(e)
 
 bs = 0.02
 pop_rate = logisi.population_rate(spikes, bin_size=bs)
-ax[2].plot(
+ax[1].plot(
     np.arange(0, len(pop_rate)) * bs, pop_rate / bs, color="darkgray", label=None
 )
 
@@ -137,7 +138,7 @@ for m in mods:
     selects = np.where(mod_ids == m)[0]
     pop_rate = logisi.population_rate(spikes[selects], bin_size=bs)
     mn = np.nanmean(pop_rate / bs)
-    ax[2].plot(
+    ax[1].plot(
         np.arange(0, len(pop_rate)) * bs,
         pop_rate / bs,
         label=f"{m:d}: ({mn:.2f} Hz)",
@@ -154,25 +155,29 @@ for m in mods:
     beg_times.append(beg_time)
     end_times.append(end_time)
 
-    # ax[2].axhline(y=100*np.nanmean(pop_rate / bs), alpha=.5, color=mod_clrs[m])
-    ax[2].plot(
+    # ax[1].axhline(y=100*np.nanmean(pop_rate / bs), alpha=.5, color=mod_clrs[m])
+    ax[1].plot(
         beg_time, np.ones(len(beg_time)) * (20 + m), marker="4", color=mod_clrs[m], lw=0
     )
-    ax[2].plot(
+    ax[1].plot(
         end_time, np.ones(len(end_time)) * (20 + m), marker="3", color=mod_clrs[m], lw=0
     )
 
 all_begs, all_ends, all_seqs = logisi.system_burst_from_module_burst(beg_times, end_times, threshold=0.1)
 
-ax[2].plot(
+ax[1].plot(
     all_begs, np.ones(len(all_begs)) * (25), marker="4", color='black', lw=0
 )
-ax[2].plot(
+ax[1].plot(
     all_ends, np.ones(len(all_ends)) * (25), marker="3", color='black', lw=0
 )
 
-ax[2].legend(loc=1)
-ax[2].axhline(y=15, ls=":", color="black")
+leg = ax[1].legend(loc=1)
+leg.get_frame().set_linewidth(0.0)
+leg.get_frame().set_facecolor("#F0F0F0")
+leg.get_frame().set_alpha(0.95)
+leg.set_title("Module Rates")
+ax[1].axhline(y=15, ls=":", color="black")
 
 
 log.info("Detecting Bursts")
@@ -198,8 +203,11 @@ ax[3].text(
 
 # some more meta data
 for text in args.input_path.split("/"):
-    # if "2x2" in text:
-    fig.suptitle(text)
+    if "stim" in text:
+        fig.suptitle("stimulation ON")
+    if "dyn" in text:
+        fig.suptitle("stimulation OFF")
+
 ga = ut.h5_load(args.input_path, "/meta/dynamics_gA")
 rate = ut.h5_load(args.input_path, "/meta/dynamics_rate")
 tD = ut.h5_load(args.input_path, "/meta/dynamics_tD")
@@ -389,8 +397,11 @@ sns.barplot(
 # ax2[0].legend
 # some more meta data
 for text in args.input_path.split("/"):
-    # if "2x2" in text:
-    fig2.suptitle(text)
+    if "stim" in text:
+        fig2.suptitle("stimulation ON")
+    if "dyn" in text:
+        fig2.suptitle("stimulation OFF")
+
 ax2[0].set_title(f"Ampa: {ga:.1f} mV", loc="left")
 ax2[0].set_title(f"Rate: {rate:.1f} Hz", loc="right")
 if "2x2_fixed" in args.input_path:
@@ -403,8 +414,11 @@ if "2x2_fixed" in args.input_path:
 # ------------------------------------------------------------------------------ #
 
 seqs = logisi.sequence_detection(network_bursts, details, mod_ids)
-
+seq_hist = None
+seq_labs = None
 def plot_seqs_as_bars(list_of_sequences, ax, ax_merged):
+    global seq_hist
+    global seq_labs
     seq_labs, seq_hist = logisi.sequence_entropy(list_of_sequences, mods)
     seq_str_labs = np.array(logisi.sequence_labels_to_strings(seq_labs))
     seq_lens = np.zeros(len(seq_str_labs), dtype=np.int)
@@ -435,13 +449,24 @@ def plot_seqs_as_bars(list_of_sequences, ax, ax_merged):
     )
 
     # plot by seq length
-    # dont use seq_lens as is, this will just get the permutaitons of labels
-    unique, counts = np.unique(seq_lens[nz_idx], return_counts=True)
-    clrs = 4 * unique + 1
+    # get possible
+    catalog = np.unique(seq_lens)
+    len_hist = np.zeros(len(catalog))
+    lookup = dict()
+    for c in catalog:
+        lookup[c] = np.where(catalog == c)[0][0]
+
+    for sdx, s in enumerate(seq_hist):
+        c = seq_lens[sdx]
+        len_hist[lookup[c]] += s
+
+    assert np.sum(len_hist) == len(list_of_sequences), "sanity check"
+
+    clrs = 4 * catalog + 1
     clrs = mpl.cm.get_cmap("Spectral")(clrs / (5 * len(mods)))
 
     sns.barplot(
-        x=unique, y=counts, dodge=False, palette=clrs, ax=ax_merged,
+        x=catalog, y=len_hist, dodge=False, palette=clrs, ax=ax_merged,
     )
     ax_merged.text(
         0.95,
@@ -458,19 +483,22 @@ def plot_seqs_as_bars(list_of_sequences, ax, ax_merged):
 
 fig3, ax3 = plt.subplots(nrows=2, ncols=1, figsize=[12, 6])
 fig3b, ax3b = plt.subplots(nrows=2, ncols=1, figsize=[6, 6])
-plot_seqs_as_bars(seqs["module_seq"], ax3[0], ax3b[0])
-plot_seqs_as_bars(all_seqs, ax3[1], ax3b[1])
+plot_seqs_as_bars(seqs["module_seq"], ax3[1], ax3b[1])
+plot_seqs_as_bars(all_seqs, ax3[0], ax3b[0])
 
-ax3[0].set_ylabel("From Logisi")
-ax3[1].set_ylabel("From Rates")
-ax3[0].set_title("Sequences")
-ax3b[0].set_ylabel("From Logisi")
-ax3b[1].set_ylabel("From Rates")
-ax3b[0].set_title("Sequence Length")
+ax3[1].set_ylabel("From Logisi")
+ax3[0].set_ylabel("From Rates")
+ax3[1].set_title("Sequences")
+ax3b[1].set_ylabel("From Logisi")
+ax3b[0].set_ylabel("From Rates")
+ax3b[1].set_title("Sequence Length")
 
 for text in args.input_path.split("/"):
-    # if "2x2" in text:
-    fig3.suptitle(f"{text}")
-    fig3b.suptitle(f"{text}")
+    if "stim" in text:
+        fig3.suptitle("stimulation ON")
+        fig3b.suptitle("stimulation ON")
+    if "dyn" in text:
+        fig3.suptitle("stimulation OFF")
+        fig3b.suptitle("stimulation OFF")
 
 
