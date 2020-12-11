@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-01-24 14:13:56
-# @Last Modified: 2020-10-15 17:26:13
+# @Last Modified: 2020-12-11 12:11:32
 # ------------------------------------------------------------------ #
 # script that takes a hdf5 as produced by my cpp simulation
 # as first argument and visualizes the topological features
@@ -351,14 +351,18 @@ pos = {}
 # ------------------------------------------------------------------ #
 
 
-def plot_axons(ax, **kwargs):
+def plot_axons(ax, color_by_module=False):
     try:
         # for i in range(1000):
-        for i in range(len(axon_segments_x)):
+        for n in range(len(axon_segments_x)):
+            if color_by_module:
+                clr = f"C{mod_ids[n]}"
+            else:
+                clr = 'black'
             ax.plot(
-                axon_segments_x[i],
-                axon_segments_y[i],
-                color="black",
+                axon_segments_x[n],
+                axon_segments_y[n],
+                color=clr,
                 lw=0.25,
                 zorder=0,
                 alpha=0.3,
@@ -527,7 +531,7 @@ ax.get_shared_y_axes().join(ax, axes[1, 2])
 ax = axes[1, 2]
 ax.set_title("Axons")
 plot_soma(ax)
-plot_axons(ax)
+plot_axons(ax, color_by_module=True)
 ax.set_aspect(1)
 ax.spines["right"].set_visible(False)
 ax.spines["top"].set_visible(False)
