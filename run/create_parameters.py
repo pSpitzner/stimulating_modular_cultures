@@ -18,9 +18,10 @@ l_gampa = np.array([35])
 l_recovery = np.array([2.0])
 l_alpha = np.array([0.0125])
 l_k_inter = np.array([3])
+l_mod = np.array([0,1,2,3])
 l_rep = range(0, 50)
 
-arg_list = product(l_topo, l_rate, l_gampa, l_recovery, l_alpha, l_k_inter, l_rep)
+arg_list = product(l_topo, l_rate, l_gampa, l_recovery, l_alpha, l_k_inter, l_mod, l_rep)
 
 # we need to create the topology first for every seed!
 
@@ -41,7 +42,8 @@ with open("./parameters_topo.tsv", "w") as f_topo:
                 recovery = i[3]
                 alpha  = i[4]
                 k_inter  = i[5]
-                rep  = i[6]
+                mod  = i[6]
+                rep  = i[7]
 
                 # inter-module connections do not make sense for merged cultures
                 # if topo == "2x2merged" and k_inter != 1:
@@ -49,7 +51,7 @@ with open("./parameters_topo.tsv", "w") as f_topo:
 
                 topo_path = f"./dat/topo/{topo}/gampa={gampa:04.2f}_rate={rate:04.2f}_recovery={recovery:04.2f}_alpha={alpha:.04f}_k={k_inter:d}_rep={rep:02d}.hdf5"
                 dyn_path = f"./dat/dyn/{topo}/gampa={gampa:04.2f}_rate={rate:04.2f}_recovery={recovery:04.2f}_alpha={alpha:.04f}_k={k_inter:d}_rep={rep:02d}.hdf5"
-                stim_path = f"./dat/stim/{topo}/gampa={gampa:04.2f}_rate={rate:04.2f}_recovery={recovery:04.2f}_alpha={alpha:.04f}_k={k_inter:d}_rep={rep:02d}.hdf5"
+                stim_path = f"./dat/jitter_{mod:d}/gampa={gampa:04.2f}_rate={rate:04.2f}_recovery={recovery:04.2f}_alpha={alpha:.04f}_k={k_inter:d}_rep={rep:02d}.hdf5"
 
                 f_topo.write(
                     # topology command
@@ -67,7 +69,8 @@ with open("./parameters_topo.tsv", "w") as f_topo:
                     # dynamic command
                     f"python ./src/ibi.py -i {topo_path} " +
                     f"-o {stim_path} " +
-                    f"-d 10800 -equil 300 -s {seed:d} --stim " +
+                    f"-d 10800 -equil 300 -s {seed:d} " +
+                    f"-stim -jitter -mod {mod:d} " +
                     f"-gA {gampa:04.2f} -tD {recovery:04.2f} -r {rate:04.2f}\n"
                 )
 
