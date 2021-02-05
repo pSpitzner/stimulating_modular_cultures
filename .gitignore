@@ -9,5 +9,6 @@ __pycache__
 *.pyc
 *.svg
 *.pdf
+*.png
 .nfs*
 .ipynb_checkpoints
