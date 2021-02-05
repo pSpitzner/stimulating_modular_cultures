@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2020-10-30 12:01:49
+# @Last Modified: 2021-01-25 10:10:05
 #
 # Scans the provided directory for .hdf5 files and checks if they have the right
 # data to plot a 2d ibi_mean_4d of ibi = f(gA, rate)
@@ -30,6 +30,7 @@ sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/../ana/"))
 import utility as ut
 import logisi as logisi
 
+dbg_var = None
 
 # ------------------------------------------------------------------------------ #
 # settings
@@ -49,7 +50,7 @@ d_obs["k_inter"] = "/meta/topology_k_inter"
 # todo: add description
 def scalar_mean_ibi(candidate=None):
     if candidate is None:
-        return ["ibi_mean", "ibi_var"]
+        return ["ibi_mean", "ibi_var", "ibi_cv"]
     # load spiketimes and calculate ibi
     spiketimes = ut.h5_load(candidate, "/data/spiketimes", silent=True)
     bursttimes = ut.burst_times(spiketimes, bin_size=0.5, threshold=0.75)
@@ -58,6 +59,7 @@ def scalar_mean_ibi(candidate=None):
     res = dict()
     res["ibi_mean"] = np.mean(ibis) if len(ibis) > 0 else np.inf
     res["ibi_var"] = np.var(ibis) if len(ibis) > 0 else np.inf
+    res["ibi_cv"] = np.sqrt(res["ibi_var"]) / res["ibi_mean"]
     return res
 
 
@@ -70,6 +72,7 @@ def scalar_logisi_pasquale(candidate=None):
         return [
             "psq_ibi_mean",
             "psq_ibi_var",
+            "psq_ibi_cv",
             "psq_nb_duration_mean",
             "psq_nb_duration_var",
         ]
@@ -77,7 +80,7 @@ def scalar_logisi_pasquale(candidate=None):
     # load spiketimes and calculate ibi
     spiketimes = ut.h5_load(candidate, "/data/spiketimes", silent=True)
     network_bursts, details = logisi.network_burst_detection(
-        spiketimes, network_fraction=0.75, sort_by="beg"
+        spiketimes, network_fraction=0.75, sort_by="i_beg"
     )
     # if network_bursts is None:
     # ibis = []
@@ -86,17 +89,21 @@ def scalar_logisi_pasquale(candidate=None):
 
     ibis = network_bursts["IBI"]
 
+    global dbg_var
+    dbg_var = details
+
     # network_bursts ["durn"] does not give the right duration because i reused
     # the burst detection function on the network level.
     # patching this inplace, here
     durn = (
-        details["end_times"][network_bursts["end"]]
-        - details["beg_times"][network_bursts["beg"]]
+        details["t_end"][network_bursts["i_end"]]
+        - details["t_beg"][network_bursts["i_beg"]]
     )
 
     res = dict()
     res["psq_ibi_mean"] = np.nanmean(ibis) if len(ibis) > 0 else np.inf
     res["psq_ibi_var"] = np.nanvar(ibis) if len(ibis) > 0 else np.inf
+    res["psq_ibi_cv"] = np.sqrt(res["psq_ibi_var"]) / res["psq_ibi_mean"]
     res["psq_nb_duration_mean"] = np.nanmean(durn) if len(durn) > 0 else np.inf
     res["psq_nb_duration_mean"] = np.nanvar(durn) if len(durn) > 0 else np.inf
 
@@ -244,7 +251,7 @@ for obs in d_axes.keys():
 print(f"Repetitions: ", num_rep)
 
 print(f"Analysing:")
-for candidate in tqdm(l_valid):
+for candidate in tqdm(l_valid, desc="Files"):
     index = ()
     for obs in d_axes.keys():
         # get value

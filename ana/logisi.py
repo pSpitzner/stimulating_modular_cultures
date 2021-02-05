@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-09-28 10:36:48
-# @Last Modified: 2020-12-03 23:01:03
+# @Last Modified: 2021-01-25 10:11:55
 # ------------------------------------------------------------------------------ #
 # My implementation of the logISI historgram burst detection algorithm
 # by Pasuqale et al.
@@ -890,9 +890,9 @@ def network_burst_detection(spiketimes, network_fraction=0.75, sort_by="i_beg"):
 
     details = dict()
     details["neuron_ids"] = np.array([])
-    details["med_times"] = np.array([])
-    details["beg_times"] = np.array([])
-    details["end_times"] = np.array([])
+    details["t_med"] = np.array([])
+    details["t_beg"] = np.array([])
+    details["t_end"] = np.array([])
 
     if len(med_times) == 0:
         return no_bursts, details
