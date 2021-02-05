@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2021-02-05 17:00:18
+# @Last Modified: 2021-02-05 17:00:35
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 and runs the simulations in brian.
@@ -88,7 +88,7 @@ defaultclock.dt = 0.05 * ms
 # whether to record state variables
 record_state = False
 # which variables
-record_state_vars = ["v", "I", "u", "D", "H"]
+record_state_vars = ["v", "I", "u", "D"]
 # for which neurons
 record_state_idxs = [0,1,2,3]
 
