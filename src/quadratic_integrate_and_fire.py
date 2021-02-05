@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2021-02-05 14:51:13
+# @Last Modified: 2021-02-05 17:00:18
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 and runs the simulations in brian.
@@ -73,12 +73,29 @@ gm =  25 * mV      # shot noise (minis) strength, between 10 - 50 mV
                    # (sum of minis arriving at target neuron)
 gs = 300 * mV * mV * ms * ms  # white noise strength, via xi = dt**.5 * randn()
 
+
+# ------------------------------------------------------------------------------ #
+# simulation parameters
+# ------------------------------------------------------------------------------ #
+
 # integration step size
 # this turns out to be quite crucial for synchonization:
 # when too large (brian defaul 0.1ms) this forces sth like an integer cast at
 # some point and may promote synchronized firing. (spike times are not precise enough)
 # heuristically: do not go below 0.05 ms, better 0.01ms
 defaultclock.dt = 0.05 * ms
+
+# whether to record state variables
+record_state = False
+# which variables
+record_state_vars = ["v", "I", "u", "D", "H"]
+# for which neurons
+record_state_idxs = [0,1,2,3]
+
+# whether to record population rates
+record_rates = False
+record_rates_freq = 50 * ms   # with which time resolution should rates be written to h5
+
 
 # ------------------------------------------------------------------------------ #
 # command line arguments
@@ -116,18 +133,21 @@ args.equil_duration *= second
 args.sim_duration *= second
 
 print(f'#{"":#^75}#\n#{"running dynamics in brian":^75}#\n#{"":#^75}#')
-log.info("input topology: %s", args.input_path)
-log.info("output path:    %s", args.output_path)
-log.info("seed:           %s", args.seed)
-log.info("gA:             %s", gA)
-log.info("gm:             %s", gm)
-log.info("tD:             %s", tD)
-log.info("noise rate:     %s", rate)
-log.info("duration:       %s", args.sim_duration)
-log.info("equilibration:  %s", args.equil_duration)
-log.info("stimulation:    %s", args.enable_stimulation)
+log.info("input topology:   %s", args.input_path)
+log.info("output path:      %s", args.output_path)
+log.info("seed:             %s", args.seed)
+log.info("gA:               %s", gA)
+log.info("gm:               %s", gm)
+log.info("tD:               %s", tD)
+log.info("noise rate:       %s", rate)
+log.info("duration:         %s", args.sim_duration)
+log.info("equilibration:    %s", args.equil_duration)
+log.info("stimulation:      %s", args.enable_stimulation)
+log.info("recording states: %s", record_state)
+log.info("recording rates:  %s", record_rates)
 if args.enable_stimulation:
     log.info("stim.   module: %s", args.stimulation_module)
+
 
 # ------------------------------------------------------------------------------ #
 # topology
@@ -216,15 +236,19 @@ if args.enable_stimulation:
 # equilibrate
 run(args.equil_duration, report="stdout", report_period=1 * 60 * second)
 
-# disable state monitors that are not needed for production
-# stat_m = StateMonitor(G, ["v", "I", "u", "D"], record=True)
+# add monitors after equilibration
 spks_m = SpikeMonitor(G)
-# rate_m = PopulationRateMonitor(G)
-# mini_m = SpikeMonitor(mini_g)
+
+if record_state:
+    stat_m = StateMonitor(G, record_state_vars, record=record_state_idxs)
+
+if record_rates:
+    rate_m = PopulationRateMonitor(G)
 
 if args.enable_stimulation:
     stim_m = SpikeMonitor(stim_g)
 
+# run and record
 run(args.sim_duration, report="stdout", report_period=1 * 60 * second)
 
 
@@ -260,8 +284,8 @@ if args.output_path is not None:
                 spiketimes[n, 0 : len(t)] = (t - args.equil_duration) / second
                 spiketimes_as_list[0, last_idx : last_idx + len(t)] = [n] * len(t)
                 spiketimes_as_list[1, last_idx : last_idx + len(t)] = (
-                    (t - args.equil_duration) / second
-                )
+                    t - args.equil_duration
+                ) / second
                 last_idx += len(t)
             return spiketimes, spiketimes_as_list.T
 
@@ -282,44 +306,57 @@ if args.output_path is not None:
             # stimultation timestamps in two different formats
             stim, stim_as_list = convert_brian_spikes_to_pauls(stim_m)
 
-            dset = f.create_dataset("/data/stimulation_times_as_list", data=stim_as_list)
+            dset = f.create_dataset(
+                "/data/stimulation_times_as_list", data=stim_as_list
+            )
             dset.attrs[
                 "description"
             ] = "two-column list of stimulation times. first col is target-neuron id, second col the stimulation time. Beware: we have approximateley one timestep delay between stimulation and spike."
 
-        if False:
+        if record_state:
+            # write the time axis once for all variables and neurons (should be shared!)
+            t_axis = (stat_m.t - args.equil_duration) / second
+            dset = f.create_dataset("/data/state_vars_time", data=t_axis)
+            dset.attrs["description"] = "time axis of all state variables, in seconds"
+
+            for idx, var in enumerate(record_state_vars):
+                data = stat_m.variables[var].get_value()
+                dset = f.create_dataset(f"/data/state_vars_{var}", data=data.T)
+                dset.attrs["description"] = f"state variable {var}, dim 1 neurons, dim 2 value for time, recorded neurons: {record_state_idxs}"
+
+
+        #     for state_var in record_state_vars:
+
+        if record_rates:
             # we could write rates, but
             # at the default timestep, the data files (and RAM requirements) get huge.
-            freq = int(50 * ms / defaultclock.dt)
+            # write with lower frequency, and smooth to not miss sudden changes
+            freq = int(record_rates_freq / defaultclock.dt)
+            width = record_rates_freq
 
             def write_rate(mon, dsetname, description):
-                dset = f.create_dataset(
-                    dsetname,
-                    data=np.array(
-                        [
-                            (mon.t / second - args.equil_duration / second)[::freq],
-                            (mon.smooth_rate(window="gaussian", width=50 * ms) / Hz)[
-                                ::freq
-                            ],
-                        ]
-                    ).T,
-                )
+                tmp = [
+                    (mon.t / second - args.equil_duration / second)[::freq],
+                    (mon.smooth_rate(window="gaussian", width=width) / Hz)[::freq],
+                ]
+                dset = f.create_dataset(dsetname, data=np.array(tmp).T)
                 dset.attrs["description"] = description
 
             # main rate monitor
             write_rate(
                 rate_m,
                 "/data/population_rate_smoothed",
-                "population rate in Hz, smoothed with gaussian kernel of 50ms width, first dim is time in seconds",
+                "population rate in Hz, smoothed with gaussian kernel (of 50ms? width), first dim is time in seconds",
             )
 
-            # and one for every module
-            for mdx, mon in enumerate(mod_rate_m):
-                write_rate(
-                    mon,
-                    "/data/module_rate_smoothed_modid={mods[mdx]:d}",
-                    "same as population rate, just on a per module level",
-                )
+            # and one for every module ...
+            # creating brians monitors in a for loop turned out problematic
+            # for mdx, mon in enumerate(mod_rate_m):
+            #     write_rate(
+            #         mon,
+            #         "/data/module_rate_smoothed_modid={mods[mdx]:d}",
+            #         "same as population rate, just on a per module level",
+            #     )
 
         # meta data of this simulation
         dset = f.create_dataset("/meta/dynamics_gA", data=gA / mV)
