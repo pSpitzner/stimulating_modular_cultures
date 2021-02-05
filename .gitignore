@@ -9,3 +9,4 @@ __pycache__
 *.svg
 *.pdf
 .nfs*
+.ipynb_checkpoints
