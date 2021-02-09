@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2021-02-05 16:55:41
+# @Last Modified: 2021-02-09 10:57:52
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # with homeostatic plasticity
@@ -75,8 +75,8 @@ gm =  25 * mV      # shot noise (minis) strength, between 10 - 50 mV
 gs = 300 * mV * mV * ms * ms  # white noise strength, via xi = dt**.5 * randn()
 
 # homeostatic plasticity
-gH = 1.0 * second       # amplitude, unit should be inverste of target rate rH
-rH = 20.0 * Hz          # target firing rate
+gH = 10.0 * second       # amplitude, unit should be inverse of target rate rH
+rH = 0.2 * Hz           # target firing rate
 tH = 1.0 * 60 * second  # time scale of hom plast
 
 # ------------------------------------------------------------------------------ #
