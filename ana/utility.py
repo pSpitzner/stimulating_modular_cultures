@@ -336,3 +336,38 @@ def spikes_as_matrix_to_spikes_as_list(spikes_as_matrix):
     result[1, :] = spikes_as_list
 
     return result
+
+
+def components_from_connection_matrix(a_ij_sparse, num_n):
+    """
+        find the number of components and return the fraction of the larest one
+
+        a_ij_sparse of shape [num_connections, 2]
+        first column is "from neuron"
+        second column is "to neuron"
+    """
+    from scipy.sparse import csr_matrix
+    from scipy.sparse.csgraph import connected_components
+
+    try:
+        ones = np.ones(a_ij_sparse.shape[0], dtype=np.int8)
+        n_from = a_ij_sparse[:, 0]
+        n_to = a_ij_sparse[:, 1]
+    except:
+        # no connections
+        return 0, 0
+
+    graph = csr_matrix((ones, (n_from, n_to)), shape=(num_n, num_n), dtype=np.int8)
+
+    n_components, labels = connected_components(
+        csgraph=graph, directed=True, connection="weak", return_labels=True
+    )
+
+    # find the largest component
+    size = 0
+    for l in np.unique(labels):
+        s = len(np.where(labels == l)[0])
+        if s > size:
+            size = s
+
+    return n_components, size / num_n
