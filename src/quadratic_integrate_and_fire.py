@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2021-02-05 17:00:35
+# @Last Modified: 2021-02-09 12:07:29
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 and runs the simulations in brian.
@@ -82,7 +82,7 @@ gs = 300 * mV * mV * ms * ms  # white noise strength, via xi = dt**.5 * randn()
 # this turns out to be quite crucial for synchonization:
 # when too large (brian defaul 0.1ms) this forces sth like an integer cast at
 # some point and may promote synchronized firing. (spike times are not precise enough)
-# heuristically: do not go below 0.05 ms, better 0.01ms
+# heuristically: do not go above 0.05 ms, better 0.01ms
 defaultclock.dt = 0.05 * ms
 
 # whether to record state variables
