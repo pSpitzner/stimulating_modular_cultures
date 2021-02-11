@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2021-02-09 10:57:52
+# @Last Modified: 2021-02-11 15:16:15
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # with homeostatic plasticity
@@ -17,7 +17,7 @@ import sys
 import shutil
 import numpy as np
 import logging
-from brian2 import *
+from brian2.units.allunits import *
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)-8s [%(name)s] %(message)s")
 log = logging.getLogger(__name__)
@@ -75,7 +75,7 @@ gm =  25 * mV      # shot noise (minis) strength, between 10 - 50 mV
 gs = 300 * mV * mV * ms * ms  # white noise strength, via xi = dt**.5 * randn()
 
 # homeostatic plasticity
-gH = 10.0 * second       # amplitude, unit should be inverse of target rate rH
+gH = 1.0 * second       # amplitude, keep it at one, only here to match units
 rH = 0.2 * Hz           # target firing rate
 tH = 1.0 * 60 * second  # time scale of hom plast
 
@@ -87,7 +87,7 @@ tH = 1.0 * 60 * second  # time scale of hom plast
 # this turns out to be quite crucial for synchonization:
 # when too large (brian defaul 0.1ms) this forces sth like an integer cast at
 # some point and may promote synchronized firing. (spike times are not precise enough)
-# heuristically: do not go below 0.05 ms, better 0.01ms
+# heuristically: do not go above 0.05 ms, better 0.01ms
 defaultclock.dt = 0.05 * ms
 
 # whether to record state variables
@@ -211,6 +211,9 @@ S.connect(i=a_ij_sparse[:, 0], j=a_ij_sparse[:, 1])
 
 # initalize to a somewhat sensible state. we could have different neuron types
 G.v = "vc + 5*mV*rand()"
+
+# initalize H to ~ 1.0 so that we are close to the dynamic state without homplast
+G.H = "0.9 + 0.2*rand()"
 
 # ------------------------------------------------------------------------------ #
 # Stimulation if requested
