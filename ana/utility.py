@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-21 11:11:40
-# @Last Modified: 2020-10-29 19:07:15
+# @Last Modified: 2021-02-11 15:32:18
 # ------------------------------------------------------------------------------ #
 # Helper functions that are needed in various other scripts
 # ------------------------------------------------------------------------------ #
@@ -20,7 +20,25 @@ log = logging.getLogger(__name__)
 
 
 def h5_load(filenames, dsetname, raise_ex=False, silent=False):
-    def load(filename, dsetname, raise_ex):
+    """
+        load a h5 dset into an array. opens the h5 file and closes it
+        after reading.
+
+        Parameters
+        ----------
+        filenames: str path to h5file(s).
+                   if wildcard given, result from globed files is returned
+        dsetname: which dset to read
+        raise_ex: whether to raise exceptions. default false,
+                  in this case, np.nan is returned if sth fails
+        silent:   if set to true, exceptions will not be reported
+
+        Returns
+        -------
+        res: ndarray or scalar, depending on loaded datatype
+    """
+
+    def load(filename):
         try:
             file = h5py.File(filename, "r")
             try:
@@ -31,7 +49,7 @@ def h5_load(filenames, dsetname, raise_ex=False, silent=False):
             return res
         except Exception as e:
             if not silent:
-                print(f"failed to load {dsetname} from {filename}")
+                log.error(f"failed to load {dsetname} from {filename}")
             if raise_ex:
                 raise e
             else:
@@ -40,7 +58,7 @@ def h5_load(filenames, dsetname, raise_ex=False, silent=False):
     files = glob.glob(filenames)
     res = []
     for f in files:
-        res.append(load(f, dsetname, raise_ex))
+        res.append(load(f))
 
     if len(files) == 1:
         return res[0]
@@ -72,6 +90,27 @@ def h5_ls(filename, dsetname="/"):
         res = []
 
     return res
+
+
+_h5_files_currently_open = []
+
+
+def h5_load_hot(filename, dsetname):
+    """
+        sometimes we do not want to hold the whole dataset in RAM, because it is too
+        large. Remember to close the file after processing!
+    """
+    file = h5py.File(filename, "r")
+    global _h5_files_currently_open
+    _h5_files_currently_open.append(file)
+    return file[dsetname]
+
+
+def h5_close_hot():
+    global _h5_files_currently_open
+    for file in _h5_files_currently_open:
+        file.close()
+    _h5_files_currently_open = []
 
 
 # helper function to convert a list of time stamps
