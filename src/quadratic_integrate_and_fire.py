@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2021-02-12 11:50:05
+# @Last Modified: 2021-02-12 13:04:48
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 and runs the simulations in brian.
@@ -294,12 +294,14 @@ if args.output_path is not None:
         # normal spikes, no stim in two different formats
         spks, spks_as_list = convert_brian_spikes_to_pauls(spks_m)
 
-        dset = f.create_dataset("/data/spiketimes", data=spks)
+        dset = f.create_dataset("/data/spiketimes", compression="gzip", data=spks)
         dset.attrs[
             "description"
         ] = "2d array of spiketimes, neuron x spiketime in seconds, zero-padded"
 
-        dset = f.create_dataset("/data/spiketimes_as_list", data=spks_as_list)
+        dset = f.create_dataset(
+            "/data/spiketimes_as_list", compression="gzip", data=spks_as_list
+        )
         dset.attrs[
             "description"
         ] = "two-column list of spiketimes. first col is neuron id, second col the spiketime. effectively same data as in '/data/spiketimes'. neuron id will need casting to int for indexing."
@@ -309,7 +311,7 @@ if args.output_path is not None:
             stim, stim_as_list = convert_brian_spikes_to_pauls(stim_m)
 
             dset = f.create_dataset(
-                "/data/stimulation_times_as_list", data=stim_as_list
+                "/data/stimulation_times_as_list", compression="gzip", data=stim_as_list
             )
             dset.attrs[
                 "description"
@@ -318,12 +320,16 @@ if args.output_path is not None:
         if record_state:
             # write the time axis once for all variables and neurons (should be shared!)
             t_axis = (stat_m.t - args.equil_duration) / second
-            dset = f.create_dataset("/data/state_vars_time", data=t_axis)
+            dset = f.create_dataset(
+                "/data/state_vars_time", compression="gzip", data=t_axis
+            )
             dset.attrs["description"] = "time axis of all state variables, in seconds"
 
             for idx, var in enumerate(record_state_vars):
                 data = stat_m.variables[var].get_value()
-                dset = f.create_dataset(f"/data/state_vars_{var}", data=data.T)
+                dset = f.create_dataset(
+                    f"/data/state_vars_{var}", compression="gzip", data=data.T
+                )
                 dset.attrs[
                     "description"
                 ] = f"state variable {var}, dim 1 neurons, dim 2 value for time, recorded neurons: {record_state_idxs}"
@@ -342,7 +348,7 @@ if args.output_path is not None:
                     (mon.t / second - args.equil_duration / second)[::freq],
                     (mon.smooth_rate(window="gaussian", width=width) / Hz)[::freq],
                 ]
-                dset = f.create_dataset(dsetname, data=np.array(tmp).T)
+                dset = f.create_dataset(dsetname, compression="gzip", data=np.array(tmp).T)
                 dset.attrs["description"] = description
 
             # main rate monitor
