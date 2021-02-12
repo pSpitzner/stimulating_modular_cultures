@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2021-02-09 12:07:29
+# @Last Modified: 2021-02-12 11:50:05
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 and runs the simulations in brian.
@@ -117,7 +117,8 @@ parser.add_argument("-equil", "--equilibrate",
 parser.add_argument("-stim", "--stimulate",
     dest="enable_stimulation", default=False, action="store_true",)
 parser.add_argument("-mod",
-    dest="stimulation_module", default=0, type=int)
+    dest="stimulation_module", default='0', type=str,
+    help="modules to stimulate, e.g. `0`, or `02` for multiple",)
 # fmt:on
 args = parser.parse_args()
 
@@ -131,6 +132,7 @@ tD = args.tD * second
 rate = args.r * Hz
 args.equil_duration *= second
 args.sim_duration *= second
+args.stimulation_module = [int(i) for i in args.stimulation_module]
 
 print(f'#{"":#^75}#\n#{"running dynamics in brian":^75}#\n#{"":#^75}#')
 log.info("input topology:   %s", args.input_path)
@@ -214,7 +216,7 @@ if args.enable_stimulation:
     stimulus_indices, stimulus_times = stim.stimulation_pattern(
         interval=400 * ms,
         duration=args.equil_duration + args.sim_duration,
-        target_modules=[args.stimulation_module],
+        target_modules=args.stimulation_module,
         mod_ids=mod_ids,
     )
 
@@ -322,8 +324,9 @@ if args.output_path is not None:
             for idx, var in enumerate(record_state_vars):
                 data = stat_m.variables[var].get_value()
                 dset = f.create_dataset(f"/data/state_vars_{var}", data=data.T)
-                dset.attrs["description"] = f"state variable {var}, dim 1 neurons, dim 2 value for time, recorded neurons: {record_state_idxs}"
-
+                dset.attrs[
+                    "description"
+                ] = f"state variable {var}, dim 1 neurons, dim 2 value for time, recorded neurons: {record_state_idxs}"
 
         #     for state_var in record_state_vars:
 

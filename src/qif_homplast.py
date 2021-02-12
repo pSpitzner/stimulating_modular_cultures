@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2021-02-11 15:16:15
+# @Last Modified: 2021-02-12 12:54:20
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # with homeostatic plasticity
@@ -122,7 +122,8 @@ parser.add_argument("-equil", "--equilibrate",
 parser.add_argument("-stim", "--stimulate",
     dest="enable_stimulation", default=False, action="store_true",)
 parser.add_argument("-mod",
-    dest="stimulation_module", default=0, type=int)
+    dest="stimulation_module", default='0', type=str,
+    help="modules to stimulate, e.g. `0`, or `02` for multiple",)
 # fmt:on
 args = parser.parse_args()
 
@@ -136,6 +137,7 @@ tD = args.tD * second
 rate = args.r * Hz
 args.equil_duration *= second
 args.sim_duration *= second
+args.stimulation_module = [int(i) for i in args.stimulation_module]
 
 print(f'#{"":#^75}#\n#{"running dynamics in brian":^75}#\n#{"":#^75}#')
 log.info("input topology:   %s", args.input_path)

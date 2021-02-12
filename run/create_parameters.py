@@ -57,7 +57,7 @@ with open("./parameters_topo.tsv", "w") as f_topo:
                     )
                     f_dyn.write(
                         # dynamic command
-                        f"python ./src/ibi.py -i {topo_path} " +
+                        f"python ./src/quadratic_integrate_and_fire -i {topo_path} " +
                         f"-o {dyn_path} " +
                         f"-d 10800 -equil 300 -s {seed:d} " +
                         f"-gA {gampa:04.2f} -tD {recovery:04.2f} -r {rate:04.2f}\n"
@@ -65,10 +65,10 @@ with open("./parameters_topo.tsv", "w") as f_topo:
 
                     f_stim.write(
                         # dynamic command
-                        f"python ./src/ibi.py -i {topo_path} " +
+                        f"python ./src/quadratic_integrate_and_fire -i {topo_path} " +
                         f"-o {stim_path} " +
                         f"-d 10800 -equil 300 -s {seed:d} " +
-                        f"-stim -jitter -mod {mod:d} " +
+                        f"-stim -mod {mod:d} " +
                         f"-gA {gampa:04.2f} -tD {recovery:04.2f} -r {rate:04.2f}\n"
                     )
 
