@@ -48,7 +48,7 @@ for mod in l_mod:
 
             f_stim.write(
                 # dynamic command
-                f"python ./src/quadratic_integrate_and_fire -i {topo_path} " +
+                f"python ./src/quadratic_integrate_and_fire.py -i {topo_path} " +
                 f"-o {stim_path} " +
                 f"-d 10800 -equil 300 -s {seed:d} " +
                 f"-stim -mod {mod} " +
