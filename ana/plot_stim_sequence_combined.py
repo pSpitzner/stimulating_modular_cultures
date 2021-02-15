@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-12-03 17:56:15
-# @Last Modified: 2020-12-11 10:04:13
+# @Last Modified: 2021-02-15 16:33:16
 # ------------------------------------------------------------------------------ #
 
 import os
@@ -26,11 +26,20 @@ sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/../ana/"))
 import utility as ut
 import logisi as logisi
 
-input_path_off = (
-    "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/dyn/2x2_fixed/*.hdf5"
-)
-input_path_on = "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/stim/2x2_fixed/*.hdf5"
 
+k = 5
+input_path = dict()
+input_path[
+    "off"
+] = f"/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/dyn/2x2_fixed/gampa=35.00_rate=37.00_recovery=2.00_alpha=0.0125_k={k:d}_rep=*.hdf5"
+
+for stim in ["0", "02", "012", "0123"]:
+    input_path[
+        stim
+    ] = f"/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/jitter_{stim}/gampa=35.00_rate=37.00_recovery=2.00_alpha=0.0125_k={k:d}_rep=*.hdf5"
+
+
+super_long_seq_lists = dict()
 
 def process_candidates(
     input_path, Method, stim="Unknown", skip_0=False,
@@ -41,13 +50,6 @@ def process_candidates(
 
     candidates = glob.glob(full_path(input_path))
 
-    if stim == "Unknown":
-        for text in input_path.split("/"):
-            if "stim" in text:
-                stim = "On"
-            elif "dyn" in text:
-                stim = "Off"
-
     for cdx, candidate in enumerate(tqdm(candidates, desc="Candidate files")):
         spikes = ut.h5_load(candidate, "/data/spiketimes", silent=True)
         mod_ids = ut.h5_load(candidate, "/data/neuron_module_id")
@@ -56,7 +58,9 @@ def process_candidates(
             sequence_function = sequences_from_logisi
         elif Method == "Rates":
             sequence_function = sequences_from_rates
+        global seqs, super_long_seq_list
         seqs = sequence_function(spikes, mod_ids)
+        super_long_seq_lists[stim] += seqs
         labels, probs, total = histogram_from_sequences(
             seqs, mods=[0, 1, 2, 3], skip_0=skip_0
         )
@@ -83,7 +87,8 @@ def sequences_from_rates(spikes, mod_ids):
     for m in np.unique(mod_ids):
         selects = np.where(mod_ids == m)[0]
         beg_time, end_time = logisi.burst_detection_pop_rate(
-            spikes[selects], bin_size=0.02, rate_threshold=15  # Hz
+            spikes[selects], bin_size=0.02, rate_threshold=15,  # Hz
+            highres_bin_size = 0.002
         )
 
         beg_time, end_time = logisi.merge_if_below_separation_threshold(
@@ -148,23 +153,24 @@ def histogram_from_sequences(list_of_sequences, mods=[0, 1, 2, 3], skip_0=False)
     return catalog, len_hist / total, total
 
 
-# fmt:off
+df = pd.DataFrame()
+for key in input_path.keys():
+    super_long_seq_lists[key] = []
+    path = input_path[key]
+    df = df.append(
+        process_candidates(path, "Rates", stim=key, skip_0=False), ignore_index=True
+    )
 
-# df = pd.DataFrame()
-# df = df.append(process_candidates(input_path_off, "Rates",  skip_0=False), ignore_index=True)
-# df = df.append(process_candidates(input_path_off, "Logisi", skip_0=False), ignore_index=True)
-# df = df.append(process_candidates(input_path_on,  "Rates",  skip_0=False), ignore_index=True)
-# df = df.append(process_candidates(input_path_on,  "Logisi", skip_0=False), ignore_index=True)
-# df = df.append(process_candidates(input_path_on,  "Rates",  skip_0=True), ignore_index=True)
-# df = df.append(process_candidates(input_path_on,  "Logisi", skip_0=True), ignore_index=True)
 
-# fmt:on
+df.to_hdf(
+    "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/seqs_k={k:d}.hdf5",
+    "/data/df",
+)
+# df = pd.read_hdf("/Users/paul/Desktop/pd.hdf5", "/data/df")
 
-# df.to_hdf("/Users/paul/Desktop/pd.hdf5", "/data/df")
-df = pd.read_hdf("/Users/paul/Desktop/pd.hdf5", "/data/df")
 
-def plot(data, compare, title):
-    fig, ax = plt.subplots(nrows=1, ncols=1, figsize=[8, 6])
+def plot(data, compare, title, **kwargs):
+    fig, ax = plt.subplots(nrows=1, ncols=1, figsize=[4, 2.5])
     # sns.violinplot(
     #     data=data,
     #     x="Seq. Length",
@@ -184,16 +190,17 @@ def plot(data, compare, title):
         x="Seq. Length",
         y="Probability",
         hue=compare,
-        fliersize=.5,
-        linewidth=.5,
+        fliersize=0.5,
+        linewidth=0.5,
         ax=ax,
-        palette={"Off": "C0", "On": "C1"}
+        **kwargs
+        # palette={"Off": "C0", "On": "C1"},
     )
 
     ax.set_title(title)
     ax.get_legend().set_visible(False)
-    ax.axhline(0, ls=':', color='black', lw=.75, zorder=-1)
-    ax.axhline(1, ls=':', color='black', lw=.75, zorder=-1)
+    ax.axhline(0, ls=":", color="black", lw=0.75, zorder=-1)
+    ax.axhline(1, ls=":", color="black", lw=0.75, zorder=-1)
     ax.spines["right"].set_visible(False)
     ax.spines["top"].set_visible(False)
     ax.spines["bottom"].set_visible(False)
@@ -201,55 +208,51 @@ def plot(data, compare, title):
     ax.tick_params(axis="x", which="major", length=0)
     fig.tight_layout()
 
-
-    ax.set_ylim(-.01, 1.01)
+    ax.set_ylim(-0.01, 1.01)
     # ax.set_ylim(-.01,.2)
+    ax.legend()
 
     return fig, ax
 
 
-plot(
+
+def stim_clr(base_as_hex, alpha):
+    import matplotlib.colors as mcolors
+    def rgba_to_rgb(c, bg="white"):
+        bg = mcolors.to_rgb(bg)
+        alpha = c[-1]
+
+        res = (
+            (1 - alpha) * bg[0] + alpha * c[0],
+            (1 - alpha) * bg[1] + alpha * c[1],
+            (1 - alpha) * bg[2] + alpha * c[2],
+        )
+        return res
+    global base
+    base = list(mcolors.to_rgba(base_as_hex))
+    base[3] = alpha
+    return mcolors.to_hex(rgba_to_rgb(base))
+
+c1 = plt.rcParams['axes.prop_cycle'].by_key()['color'][1]
+
+palette={"off": "C0",
+    "0": stim_clr(c1, 0.25),
+    "02": stim_clr(c1, 0.5),
+    "012": stim_clr(c1, 0.75),
+    "0123": stim_clr(c1, 1),
+}
+
+
+fig, ax = plot(
     title="From Rates",
     compare="Stimulation",
     data=df.loc[((df["skip_0"] == False) & (df["Method"] == "Rates"))],
+    palette=palette
 )
 
-plot(
-    title="From Logisi",
-    compare="Stimulation",
-    data=df.loc[((df["skip_0"] == False) & (df["Method"] == "Logisi"))],
-)
-
-plot(
-    title="From Rates, ignoring 0",
-    compare="Stimulation",
-    data=df.loc[
-        (
-            (df["Method"] == "Rates")
-            & (
-                ((df["skip_0"] == True) & (df["Stimulation"] == "On"))
-                | ((df["skip_0"] == False) & (df["Stimulation"] == "Off"))
-            )
-        )
-    ],
-)
-
-plot(
-    title="From Logisi, ignoring 0",
-    compare="Stimulation",
-    data=df.loc[
-        (
-            (df["Method"] == "Logisi")
-            & (
-                ((df["skip_0"] == True) & (df["Stimulation"] == "On"))
-                | ((df["skip_0"] == False) & (df["Stimulation"] == "Off"))
-            )
-        )
-    ]
-)
-
+ax.set_title(f"k={k}")
+plt.show()
 
 # for i in plt.get_fignums():
 #     plt.figure(i)
 #     plt.savefig(f"/Users/paul/Desktop/figure_{i:d}_2.pdf", dpi=600)
-

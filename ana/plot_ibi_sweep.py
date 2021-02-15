@@ -2,10 +2,10 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2020-11-02 20:52:32
+# @Last Modified: 2021-02-15 09:59:25
 #
-# Scans the provided directory for .hdf5 files and checks if they have the right
-# data to plot a 2d heatmap of ibi = f(gA, rate)
+# plot a merged down, multidimensional hdf5 file (from individual simulations)
+# and select which dims to show where
 # ------------------------------------------------------------------------------ #
 
 import os

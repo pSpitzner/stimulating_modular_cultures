@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-09-28 10:36:48
-# @Last Modified: 2021-01-25 10:11:55
+# @Last Modified: 2021-02-15 16:45:04
 # ------------------------------------------------------------------------------ #
 # My implementation of the logISI historgram burst detection algorithm
 # by Pasuqale et al.
@@ -109,24 +109,21 @@ def population_rate(spiketimes, bin_size):
 
 # @jit(nopython=True, parallel=True, fastmath=True, cache=True)
 def burst_detection_pop_rate(
-    spiketimes, bin_size=0.02, rate_threshold=15, extend=False
+    spiketimes, bin_size=0.02, rate_threshold=15, extend=False, highres_bin_size=None
 ):
     """
         find the population rate and define a burst for exceeding a threshold
-
-        Parameters
-        ----------
-        par: type
-            parameter description
-
-        Returns
-        -------
-        something: of_type
     """
 
     num_n = spiketimes.shape[0]
 
-    rate = population_rate(spiketimes, bin_size=bin_size) / bin_size
+    if highres_bin_size is not None:
+        assert highres_bin_size < bin_size
+        rate = population_rate(spiketimes, bin_size=highres_bin_size) / highres_bin_size
+        rate = smooth_rate(rate, clock_dt=highres_bin_size, width=bin_size)
+        bin_size = highres_bin_size
+    else:
+        rate = population_rate(spiketimes, bin_size=bin_size) / bin_size
 
     # work on index level of the `above` array. equivalent to time in steps of bin_size
     above = np.where(rate >= rate_threshold)[0]
@@ -290,10 +287,10 @@ def system_burst_from_module_burst(beg_times, end_times, threshold, modules=None
     # do sequence sorting next
     for pos, idx in enumerate(idx_begs):
         # first module, save sequence as tuple
-        seq = (all_mods[idx], )
+        seq = (all_mods[idx],)
 
         # first time occurences of follower
-        jdx = idx+1
+        jdx = idx + 1
         while jdx <= idx_ends[pos]:
             # get module id of bursts that were in the system burst, add to sequence
             m = all_mods[jdx]
@@ -306,9 +303,84 @@ def system_burst_from_module_burst(beg_times, end_times, threshold, modules=None
         # add this particular sequence
         sequences.append(seq)
 
-
-
     return all_begs[idx_begs], all_ends[idx_ends], sequences
+
+
+def smooth_rate(rate, clock_dt, window="gaussian", width=None):
+    """
+    Return a smooth version of the population rate.
+    Taken from brian2 population rate monitor
+    https://brian2.readthedocs.io/en/2.0rc/_modules/brian2/monitors/ratemonitor.html#PopulationRateMonitor
+
+    Parameters
+    ----------
+    rate : ndarray
+        in hz
+    clock_dt : time in seconds that entries in rate are apart (sampling frequency)
+    window : str, ndarray
+        The window to use for smoothing. Can be a string to chose a
+        predefined window(``'flat'`` for a rectangular, and ``'gaussian'``
+        for a Gaussian-shaped window). In this case the width of the window
+        is determined by the ``width`` argument. Note that for the Gaussian
+        window, the ``width`` parameter specifies the standard deviation of
+        the Gaussian, the width of the actual window is ``4*width + dt``
+        (rounded to the nearest dt). For the flat window, the width is
+        rounded to the nearest odd multiple of dt to avoid shifting the rate
+        in time.
+        Alternatively, an arbitrary window can be given as a numpy array
+        (with an odd number of elements). In this case, the width in units
+        of time depends on the ``dt`` of the simulation, and no ``width``
+        argument can be specified. The given window will be automatically
+        normalized to a sum of 1.
+    width : `Quantity`, optional
+        The width of the ``window`` in seconds (for a predefined window).
+
+    Returns
+    -------
+    rate : ndarrayy
+        The population rate in Hz, smoothed with the given window. Note that
+        the rates are smoothed and not re-binned, i.e. the length of the
+        returned array is the same as the length of the ``rate`` attribute
+        and can be plotted against the `PopulationRateMonitor` 's ``t``
+        attribute.
+    """
+    if width is None and isinstance(window, str):
+        raise TypeError("Need a width when using a predefined window.")
+    if width is not None and not isinstance(window, str):
+        raise TypeError("Can only specify a width for a predefined window")
+
+    if isinstance(window, str):
+        if window == "gaussian":
+            width_dt = int(np.round(2 * width / clock_dt))
+            # Rounding only for the size of the window, not for the standard
+            # deviation of the Gaussian
+            window = np.exp(
+                -np.arange(-width_dt, width_dt + 1) ** 2
+                * 1.0
+                / (2 * (width / clock_dt) ** 2)
+            )
+        elif window == "flat":
+            width_dt = int(width / 2 / clock_dt) * 2 + 1
+            used_width = width_dt * clock_dt
+            if abs(used_width - width) > 1e-6 * clock_dt:
+                logger.info(
+                    "width adjusted from %s to %s" % (width, used_width),
+                    "adjusted_width",
+                    once=True,
+                )
+            window = np.ones(width_dt)
+        else:
+            raise NotImplementedError('Unknown pre-defined window "%s"' % window)
+    else:
+        try:
+            window = np.asarray(window)
+        except TypeError:
+            raise TypeError("Cannot use a window of type %s" % type(window))
+        if window.ndim != 1:
+            raise TypeError("The provided window has to be " "one-dimensional.")
+        if len(window) % 2 != 1:
+            raise TypeError("The window has to have an odd number of " "values.")
+    return np.convolve(rate, window * 1.0 / sum(window), mode="same")
 
 
 # ------------------------------------------------------------------------------ #
@@ -825,11 +897,6 @@ def logisi_find_burst(spikes, min_ibi, min_durn, min_spikes, isi_low, neuron_ids
     return bursts
 
 
-# ------------------------------------------------------------------------------ #
-# network burst detection
-# ------------------------------------------------------------------------------ #
-
-
 def network_burst_detection(spiketimes, network_fraction=0.75, sort_by="i_beg"):
     """
         Detection of network bursts using the logisi method by pasquale et al.
@@ -938,6 +1005,50 @@ def network_burst_detection(spiketimes, network_fraction=0.75, sort_by="i_beg"):
     return nb, details
 
 
+def reformat_network_burst(network_bursts, details, write_to_file=None):
+    """
+        Format network bursts as one np array. optionally, write to hdf5 file.
+
+        Pass network_bursts and details from network_burst_detection()!
+    """
+
+    description = """
+        network bursts, based on the logisi method by pasuqale DOI 10.1007/s10827-009-0175-1
+        2d array, each row is a network burst, 6 columns (col 3-6 will need integer casting):
+        0 - network-burst time: begin
+        1 - network-burst time: median
+        2 - network-burst time: end
+        3 - id of first neuron to spike
+        4 - id of last neuron to spike
+        5 - numer unique neurons involved in the burst
+    """
+    num_bursts = len(network_bursts["i_beg"])
+    dat = np.ones(shape=(num_bursts, 6)) * np.nan
+
+    dat[:, 0] = network_bursts["t_beg"]  # details["beg_times"][network_bursts["i_beg"]]
+    dat[:, 1] = network_bursts["t_med"]  # urgh, this is so inconsistent.
+    dat[:, 2] = network_bursts["t_end"]  # details["end_times"][network_bursts["i_end"]]
+    dat[:, 3] = details["neuron_ids"][network_bursts["i_beg"]]
+    dat[:, 4] = details["neuron_ids"][network_bursts["i_end"]]
+    dat[:, 5] = network_bursts["unique"]
+
+    if write_to_file is not None:
+        log.info("writing network bursts to {write_to_file}")
+        try:
+            f_tar = h5py.File(write_to_file, "r+")
+            try:
+                dset = f_tar.create_dataset("/data/network_bursts_logisi", data=dat)
+            except RuntimeError:
+                dset = f_tar["/data/network_bursts_logisi"]
+                dset[...] = dat
+            dset.attrs["description"] = description
+            f_tar.close()
+        except Exception as e:
+            log.info(e)
+
+    return dat
+
+
 def sequence_detection(network_bursts, details, mod_ids):
     """
         Find in which sequence modules were activated during each network burst.
@@ -988,6 +1099,11 @@ def sequence_detection(network_bursts, details, mod_ids):
     return res
 
 
+# ------------------------------------------------------------------------------ #
+# sequence functions that work for burst and logisi things
+# ------------------------------------------------------------------------------ #
+
+
 def sequence_entropy(sequences, ids):
 
     # create a list of all possible sequences.
@@ -1020,46 +1136,43 @@ def sequence_labels_to_strings(labels):
 
     return res
 
-
-def reformat_network_burst(network_bursts, details, write_to_file=None):
+# %%
+def conditional_probabilities_from_sequences(sequences, mod_ids=[0, 1, 2, 3], only_first = True):
     """
-        Format network bursts as one np array. optionally, write to hdf5 file.
+    calculate the conditional probabilites, e.g.
+    p(mod2 bursts | mod 1bursted)
+    excludes jumps over other modules!
 
-        Pass network_bursts and details from network_burst_detection()!
+    # Parameters
+    sequences : list of tuples of ints
+    mod_ids : list of ints, from 0 to number modules
     """
 
-    description = """
-        network bursts, based on the logisi method by pasuqale DOI 10.1007/s10827-009-0175-1
-        2d array, each row is a network burst, 6 columns (col 3-6 will need integer casting):
-        0 - network-burst time: begin
-        1 - network-burst time: median
-        2 - network-burst time: end
-        3 - id of first neuron to spike
-        4 - id of last neuron to spike
-        5 - numer unique neurons involved in the burst
-    """
-    num_bursts = len(network_bursts["i_beg"])
-    dat = np.ones(shape=(num_bursts, 6)) * np.nan
+    num_mods = mod_ids[-1] + 1
+    prob_counts = np.zeros(shape=(num_mods, num_mods))
+    self_counts = np.zeros(shape=(num_mods))
 
-    dat[:, 0] = network_bursts["t_beg"]  # details["beg_times"][network_bursts["i_beg"]]
-    dat[:, 1] = network_bursts["t_med"]  # urgh, this is so inconsistent.
-    dat[:, 2] = network_bursts["t_end"]  # details["end_times"][network_bursts["i_end"]]
-    dat[:, 3] = details["neuron_ids"][network_bursts["i_beg"]]
-    dat[:, 4] = details["neuron_ids"][network_bursts["i_end"]]
-    dat[:, 5] = network_bursts["unique"]
+    for seq in sequences:
+        for idx in range(len(seq)):
+            if only_first and idx == 1:
+                break
+            i = seq[idx]
+            self_counts[i] += 1
+            # we will still need to deal with sequences that run in cricles
+            if idx < len(seq) -1:
+                j = seq[idx + 1]
+                prob_counts[i][j] += 1
 
-    if write_to_file is not None:
-        log.info("writing network bursts to {write_to_file}")
-        try:
-            f_tar = h5py.File(write_to_file, "r+")
-            try:
-                dset = f_tar.create_dataset("/data/network_bursts_logisi", data=dat)
-            except RuntimeError:
-                dset = f_tar["/data/network_bursts_logisi"]
-                dset[...] = dat
-            dset.attrs["description"] = description
-            f_tar.close()
-        except Exception as e:
-            log.info(e)
+    for idx, norm in enumerate(self_counts):
+        prob_counts[idx, :] = prob_counts[idx, :]/norm
 
-    return dat
+    if True:
+        for idx in range(num_mods):
+            for jdx in range(num_mods):
+                p = prob_counts[idx][jdx]
+                print(f"p({idx} -> {jdx}) = {p:.2f}")
+            print(f"total:      {self_counts[idx]}\n")
+
+    return prob_counts, self_counts
+
+# print(conditional_probabilities_from_sequences(seqs))
