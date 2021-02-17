@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-12-03 17:56:15
-# @Last Modified: 2021-02-15 16:33:16
+# @Last Modified: 2021-02-17 20:18:26
 # ------------------------------------------------------------------------------ #
 
 import os
@@ -15,6 +15,7 @@ import warnings
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+from matplotlib import colors
 import numpy as np
 import seaborn as sns
 import pandas as pd
@@ -25,6 +26,7 @@ warnings.filterwarnings("ignore")  # suppress numpy warnings
 sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/../ana/"))
 import utility as ut
 import logisi as logisi
+import transfer_entropy as treant
 
 
 k = 5
@@ -48,18 +50,24 @@ def process_candidates(
     columns = ["Seq. Length", "Probability", "total", "Stimulation", "skip_0", "Method"]
     df = pd.DataFrame(columns=columns)
 
+    te = np.zeros(shape=(4, 4)) # todo: avoid hard coding this!
+
     candidates = glob.glob(full_path(input_path))
 
     for cdx, candidate in enumerate(tqdm(candidates, desc="Candidate files")):
         spikes = ut.h5_load(candidate, "/data/spiketimes", silent=True)
         mod_ids = ut.h5_load(candidate, "/data/neuron_module_id")
+        sim_duration = ut.h5_load(candidate, "/meta/dynamics_simulation_duration")
 
-        if Method == "Logisi":
-            sequence_function = sequences_from_logisi
-        elif Method == "Rates":
+        if Method == "Rates":
             sequence_function = sequences_from_rates
+        else:
+            # elif Method == "Logisi":
+            # sequence_function = sequences_from_logisi
+            raise NotImplementedError
+
         global seqs, super_long_seq_list
-        seqs = sequence_function(spikes, mod_ids)
+        seqs, beg_times, end_times = sequence_function(spikes, mod_ids)
         super_long_seq_lists[stim] += seqs
         labels, probs, total = histogram_from_sequences(
             seqs, mods=[0, 1, 2, 3], skip_0=skip_0
@@ -74,7 +82,12 @@ def process_candidates(
                 ignore_index=True,
             )
 
-    return df
+        act_mat = treant.burst_times_to_te_time_series(
+            beg_times, end_times, bin_size=0.002, length=sim_duration / 0.002
+        )
+        te += treant.transfer_entropy(act_mat, skip_zeros=True, use_numba=True)
+
+    return df, te/len(candidates)
 
 
 def full_path(path):
@@ -102,16 +115,16 @@ def sequences_from_rates(spikes, mod_ids):
         beg_times, end_times, threshold=0.1
     )
 
-    return all_seqs
+    return all_seqs, beg_times, end_times
 
 
-def sequences_from_logisi(spikes, mod_ids):
-    network_bursts, details = logisi.network_burst_detection(
-        spikes, network_fraction=0.1
-    )
-    all_seqs = logisi.sequence_detection(network_bursts, details, mod_ids)
+# def sequences_from_logisi(spikes, mod_ids):
+#     network_bursts, details = logisi.network_burst_detection(
+#         spikes, network_fraction=0.1
+#     )
+#     all_seqs = logisi.sequence_detection(network_bursts, details, mod_ids)
 
-    return all_seqs["module_seq"]
+#     return all_seqs["module_seq"]
 
 
 def histogram_from_sequences(list_of_sequences, mods=[0, 1, 2, 3], skip_0=False):
@@ -154,12 +167,14 @@ def histogram_from_sequences(list_of_sequences, mods=[0, 1, 2, 3], skip_0=False)
 
 
 df = pd.DataFrame()
+te = dict()
 for key in input_path.keys():
     super_long_seq_lists[key] = []
     path = input_path[key]
-    df = df.append(
-        process_candidates(path, "Rates", stim=key, skip_0=False), ignore_index=True
-    )
+    df_temp, te_temp = process_candidates(path, "Rates", stim=key, skip_0=False)
+    df = df.append(df_temp,  ignore_index=True)
+    te[key] = te_temp
+
 
 
 df.to_hdf(
@@ -169,7 +184,7 @@ df.to_hdf(
 # df = pd.read_hdf("/Users/paul/Desktop/pd.hdf5", "/data/df")
 
 
-def plot(data, compare, title, **kwargs):
+def plot_df(data, compare, title, **kwargs):
     fig, ax = plt.subplots(nrows=1, ncols=1, figsize=[4, 2.5])
     # sns.violinplot(
     #     data=data,
@@ -243,7 +258,7 @@ palette={"off": "C0",
 }
 
 
-fig, ax = plot(
+fig, ax = plot_df(
     title="From Rates",
     compare="Stimulation",
     data=df.loc[((df["skip_0"] == False) & (df["Method"] == "Rates"))],
@@ -251,7 +266,42 @@ fig, ax = plot(
 )
 
 ax.set_title(f"k={k}")
-plt.show()
+
+
+def plot_te(te, vmax=None, vmin=None):
+
+    Nc = len(te.keys())
+    fig, axs = plt.subplots(1, Nc, figsize=(2.4*Nc, 2.4))
+
+    images = []
+    for idx, key in enumerate(te.keys()):
+        # data range varies from one plot to the next.
+        images.append(axs[idx].matshow(te[key], cmap='afmhot', origin='lower'))
+        axs[idx].label_outer()
+        axs[idx].tick_params(top=False, bottom=True, labeltop=False, labelbottom=True)
+        axs[idx].set_title(key)
+
+    # Find the min and max of all colors for use in setting the color scale.
+    if vmin is None:
+        vmin = min(image.get_array().min() for image in images)
+    if vmax is None:
+        vmax = max(image.get_array().max() for image in images)
+    norm = colors.Normalize(vmin=vmin, vmax=vmax)
+
+    print(vmax, vmin)
+
+    for im in images:
+        im.set_norm(norm)
+
+    fig.colorbar(images[0], ax=axs, orientation='horizontal', fraction=.1)
+    fig.suptitle(f"k={k}")
+    # fig.tight_layout()
+
+    return fig, axs
+
+te_fig, te_axs = plot_te(te)
+
+# plt.show()
 
 # for i in plt.get_fignums():
 #     plt.figure(i)
