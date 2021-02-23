@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-17 18:52:17
-# @Last Modified: 2021-02-17 18:59:50
+# @Last Modified: 2021-02-23 11:01:07
 # ------------------------------------------------------------------------------ #
 # helper to calculate transfer entropy, on module level
 # ------------------------------------------------------------------------------ #
@@ -44,7 +44,7 @@ except ImportError:
         return range(*args)
 
 
-def transfer_entropy(act_mat, skip_zeros=True, use_numba=True):
+def transfer_entropy(act_mat, skip_zeros=True, normalize=True, use_numba=True):
     """
         # returns the transfer entropy matrix TE[i,j] = TE from neuron j to i in basis 2.
         # Runtime scales with number of neurons ** 2
@@ -56,6 +56,8 @@ def transfer_entropy(act_mat, skip_zeros=True, use_numba=True):
             skip_zeros : bool
                 whether to skip 0 timebins, gives a speedup, especially for
                 trains that are mostly empty
+            normalize : bool
+                whether to normalize by H(x_i_now | x_i_past).
             use_numba : bool
                 set to false to avoid using numba parallelisation
 
@@ -176,19 +178,26 @@ def transfer_entropy(act_mat, skip_zeros=True, use_numba=True):
     with warnings.catch_warnings(): # silence numpy
         warnings.simplefilter("ignore")
 
-        TE = -np.sum(
+        H_xnow_given_xpast = \
+        -np.sum(
             np.sum(P, axis=4) * np.nan_to_num(np.log2(
                 np.sum(P, axis=4)[:, :, :, :]
                 / np.sum(P, axis=(2, 4))[:, :, None, :])),
             axis=(2, 3),
         )
 
-        TE = TE \
-            + np.sum(P * np.nan_to_num(np.log2(
+        H_xnow_given_xpast_ypast = \
+        - np.sum(P * np.nan_to_num(np.log2(
                 P / np.sum(P, axis=2)[:, :, None, :, :])),
             axis=(2, 3, 4),
         )
 
+        TE = H_xnow_given_xpast - H_xnow_given_xpast_ypast
+
+        if normalize:
+            TE = TE / H_xnow_given_xpast
+
+        TE = np.nan_to_num(TE)
     # fmt: on
 
     return TE
