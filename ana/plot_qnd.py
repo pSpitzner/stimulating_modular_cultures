@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-17 13:43:10
-# @Last Modified: 2021-02-15 12:22:50
+# @Last Modified: 2021-02-25 12:06:26
 # ------------------------------------------------------------------------------ #
 
 
@@ -84,12 +84,14 @@ if len(mod_clrs) == 1:
 
 log.info("Plotting raster")
 ax[0].set_ylabel("Raster")
+ax[0].set_rasterization_zorder(-1)
 for n in range(0, spikes.shape[0]):
     ax[0].plot(
         spikes[n],
         mod_sort(n) * np.ones(len(spikes[n])),
         "|",
         alpha=0.5,
+        zorder=-2,
         color=mod_clrs[mod_ids[n]],
     )
 
@@ -112,14 +114,16 @@ ax[1].set_ylabel("Rates")
 # except Exception as e:
 #     log.info(e)
 
-bs = 0.02
-pop_rate = logisi.population_rate(spikes, bin_size=bs)
-ax[1].plot(
-    np.arange(0, len(pop_rate)) * bs, pop_rate / bs, color="darkgray", label=None
-)
+# global population rate
+# bs = 0.02
+# pop_rate = logisi.population_rate(spikes, bin_size=bs)
+# ax[1].plot(
+#     np.arange(0, len(pop_rate)) * bs, pop_rate / bs, color="darkgray", label=None
+# )
 
 beg_times = []
 end_times = []
+te_series = []
 
 # inconsistency, fix this!
 bs = 0.002
@@ -136,7 +140,7 @@ for m in mods:
     )
     beg_time, end_time = logisi.burst_detection_pop_rate(
         spikes[selects], bin_size=0.02, rate_threshold=15, # Hz
-        highres_bin_size = bs,
+        highres_bin_size = bs
     )
 
     beg_time, end_time = logisi.merge_if_below_separation_threshold(

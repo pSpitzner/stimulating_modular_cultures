@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-09-28 10:36:48
-# @Last Modified: 2021-02-15 16:45:04
+# @Last Modified: 2021-02-16 09:58:15
 # ------------------------------------------------------------------------------ #
 # My implementation of the logISI historgram burst detection algorithm
 # by Pasuqale et al.
@@ -109,7 +109,8 @@ def population_rate(spiketimes, bin_size):
 
 # @jit(nopython=True, parallel=True, fastmath=True, cache=True)
 def burst_detection_pop_rate(
-    spiketimes, bin_size=0.02, rate_threshold=15, extend=False, highres_bin_size=None
+    spiketimes, bin_size=0.02, rate_threshold=15, extend=False, highres_bin_size=None,
+    return_series = False
 ):
     """
         find the population rate and define a burst for exceeding a threshold
@@ -145,7 +146,12 @@ def burst_detection_pop_rate(
         beg_time -= bin_size / 2
         end_time += bin_size / 2
 
-    return beg_time, end_time
+    if not return_series:
+        return beg_time, end_time
+    else:
+        series = np.zeros(len(rate), dtype=np.int )
+        series[above] = 1
+        return beg_time, end_time, series
 
 
 @jit(nopython=True, parallel=False, fastmath=True, cache=True)

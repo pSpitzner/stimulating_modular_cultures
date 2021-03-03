@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-01-24 14:13:56
-# @Last Modified: 2020-12-11 12:11:32
+# @Last Modified: 2021-03-03 09:07:06
 # ------------------------------------------------------------------ #
 # script that takes a hdf5 as produced by my cpp simulation
 # as first argument and visualizes the topological features
@@ -356,7 +356,11 @@ def plot_axons(ax, color_by_module=False):
         # for i in range(1000):
         for n in range(len(axon_segments_x)):
             if color_by_module:
-                clr = f"C{mod_ids[n]}"
+                try:
+                    clr = f"C{mod_ids[n]}"
+                    assert mod_ids[n] >= 0
+                except:
+                    clr = 'black'
             else:
                 clr = 'black'
             ax.plot(

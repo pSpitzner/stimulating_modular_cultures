@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2021-02-12 13:04:48
+# @Last Modified: 2021-02-22 14:56:59
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 and runs the simulations in brian.
@@ -53,7 +53,7 @@ vc = -50 * mV  # reset potential
 
 # soma
 tc = 50 * ms  # time scale of membrane potential
-ta = 50 * ms  # time scale of inhibitory current u
+ta = 50 * ms  # time scale of recovery variable u
 
 k = 0.5 / mV  # resistance over capacity(?), rescaled
 b = 0.5       # sensitivity to sub-threshold fluctuations

@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-17 13:43:10
-# @Last Modified: 2020-12-10 11:53:10
+# @Last Modified: 2021-02-09 11:02:33
 # ------------------------------------------------------------------------------ #
 
 
@@ -61,6 +61,9 @@ spikes = ut.h5_load(args.input_path, "/data/spiketimes")
 spikes = np.where(spikes == 0, np.nan, spikes)
 sim_duration = ut.h5_load(args.input_path, "/meta/dynamics_simulation_duration")
 
+avg_spike_rate = len(np.where(np.isfinite(spikes))[0])/sim_duration/spikes.shape[0]
+log.info(f"neuron spike rate ~ {avg_spike_rate:.2f} Hz")
+
 try:
     stim_times = ut.h5_load(
         args.input_path, "/data/stimulation_times_as_list", raise_ex=True
@@ -86,7 +89,7 @@ for n in range(0, spikes.shape[0]):
         spikes[n],
         mod_sort(n) * np.ones(len(spikes[n])),
         "|",
-        alpha=0.1,
+        alpha=0.5,
         color=mod_clrs[mod_ids[n]],
     )
 
@@ -219,6 +222,21 @@ if "2x2_fixed" in args.input_path:
 
 ax[-1].set_xlabel("Time [seconds]")
 ax[-1].set_xlim(0, sim_duration)
+
+# ------------------------------------------------------------------------------ #
+# state variabels
+# ------------------------------------------------------------------------------ #
+
+try:
+    t = ut.h5_load(args.input_path, '/data/state_vars_time')
+    v = ut.h5_load(args.input_path, '/data/state_vars_v')
+    H = ut.h5_load(args.input_path, '/data/state_vars_H')
+
+    fig, ax = plt.subplots(4, 1, sharex=True, figsize=(4, 7))
+    ax[0].plot(t,v[0])
+    ax[1].plot(t,H[0])
+except:
+    log.info("Skipped state variables")
 
 
 # ------------------------------------------------------------------------------ #
