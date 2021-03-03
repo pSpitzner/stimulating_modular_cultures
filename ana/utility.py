@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-21 11:11:40
-# @Last Modified: 2021-02-11 15:32:18
+# @Last Modified: 2021-03-03 18:55:44
 # ------------------------------------------------------------------------------ #
 # Helper functions that are needed in various other scripts
 # ------------------------------------------------------------------------------ #
@@ -111,6 +111,137 @@ def h5_close_hot():
     for file in _h5_files_currently_open:
         file.close()
     _h5_files_currently_open = []
+
+
+def h5_recursive_ls(filename, dsetname=""):
+    if dsetname == "":
+        dsetname = "/"
+
+    candidates = h5_ls(filename, dsetname)
+    res = candidates.copy()
+    for c in candidates:
+        temp = h5_recursive_ls(filename, dsetname + f"{c}/")
+        if len(temp) > 0:
+            temp = [f"{c}/{el}" for el in temp]
+            res += temp
+    return res
+
+
+def h5_recursive_load(filename, dsetname="/", skip=None, hot=False):
+    """
+        Load a hdf5 file as a nested BetterDict.
+
+        # Paramters:
+        skip : list
+            names of dsets to exclude
+        hot : bool
+            if True, does not load dsets to ram, but only links to the hdf5 file. this keeps the file open, call `h5_close_hot()` when done!
+            Use this if a dataset in your file is ... big
+    """
+    if skip is not None:
+        assert isinstance(skip, list)
+    else:
+        skip = []
+
+    candidates = h5_recursive_ls(filename, dsetname)
+
+    cd_len = []
+    res = BetterDict()
+
+    maxdepth = 0
+    for cd in candidates:
+        l = len(cd.split("/"))
+        cd_len.append(l)
+        if l > maxdepth:
+            maxdepth = l
+
+    # iterate by depth, creating hierarchy
+    for ddx in range(1, maxdepth + 1):
+        for ldx, l in enumerate(cd_len):
+            if l == ddx:
+                cd = candidates[ldx]
+                components = cd.split("/")
+                if len([x for x in skip if x in components]) > 0:
+                    continue
+                temp = res
+                if ddx > 1:
+                    for cp in components[0:-1]:
+                        temp = temp[cp]
+                cp = components[-1]
+                if len(h5_ls(filename, cd)) > 0:
+                    temp[cp] = BetterDict()
+                else:
+                    if hot:
+                        temp[cp] = h5_load_hot(filename, cd)
+                    else:
+                        temp[cp] = h5_load(filename, cd)
+
+    return res
+
+
+class BetterDict(dict):
+    """
+        Class for loaded hdf5 files --- a tweaked dict that supports nesting
+
+        We inherit from dict and also provide keys as attributes, mapped to `.get()` of
+        dict. This avoids the KeyError: if getting parameters via `.the_parname`, we
+        return None when the param does not exist.
+        Avoid using keys that have the same name as class functions etc.
+
+        # Example
+        ```
+        >>> foo = BetterDict(lorem="ipsum")
+        >>> print(foo.lorem)
+        ipsum
+        >>> print(foo.does_not_exist is None)
+        True
+        ```
+    """
+
+    __getattr__ = dict.get
+    __setattr__ = dict.__setitem__
+    __delattr__ = dict.__delitem__
+
+    # copy everything
+    def __deepcopy__(self, memo=None):
+        return SimulationResult(copy.deepcopy(dict(self), memo=memo))
+
+    @property
+    def varnames(self):
+        return [*self]
+
+    @property
+    def depth(self):
+        maxdepth = 0
+        for vdx, var in enumerate(self.varnames):
+            if isinstance(self[var], BetterDict):
+                d = self[var].depth
+                if d > maxdepth:
+                    maxdepth = d
+        return maxdepth + 1
+
+    # printed representation
+    def __repr__(self):
+        res = ""
+        for vdx, var in enumerate(self.varnames):
+            if vdx == len(self.varnames) - 1:
+                sc = "└── "
+                pc = "     "
+            else:
+                sc = "├── "
+                pc = "│    "
+            if isinstance(self[var], BetterDict):
+                temp = repr(self[var])
+                temp = temp.replace("\n", f"\n{pc}", temp.count("\n") - 1)
+                temp = f"{sc}{var}\n{pc}" + temp
+            else:
+                left = f"{sc}{var}"
+                right = f"{self[var].__class__.__name__}"
+                temp = f"{left}{' '*(52-len(left)-len(right))}{right}\n"
+                # temp = f"{left} ({right})\n"
+            res += temp
+
+        return res
 
 
 # helper function to convert a list of time stamps
