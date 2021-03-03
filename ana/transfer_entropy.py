@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-17 18:52:17
-# @Last Modified: 2021-02-23 11:01:07
+# @Last Modified: 2021-02-28 11:41:54
 # ------------------------------------------------------------------------------ #
 # helper to calculate transfer entropy, on module level
 # ------------------------------------------------------------------------------ #
@@ -64,7 +64,9 @@ def transfer_entropy(act_mat, skip_zeros=True, normalize=True, use_numba=True):
 
         # Returns
             TE : 2d np array
-                 size `N` * `N`
+                 size `N` * `N`, with dimensions:
+                 0 target index (i)
+                 1 source index (j)
     """
     global nz, tar_pat_seq, src_pat_seq
     # num neurons, num time steps
