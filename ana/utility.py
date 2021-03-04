@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-21 11:11:40
-# @Last Modified: 2021-03-03 18:55:44
+# @Last Modified: 2021-03-04 10:25:20
 # ------------------------------------------------------------------------------ #
 # Helper functions that are needed in various other scripts
 # ------------------------------------------------------------------------------ #
@@ -41,10 +41,14 @@ def h5_load(filenames, dsetname, raise_ex=False, silent=False):
     def load(filename):
         try:
             file = h5py.File(filename, "r")
-            try:
-                res = file[dsetname][:]
-            except ValueError:
-                res = file[dsetname][()]
+            res = file[dsetname]
+            # map 1 element arrays to scalars
+            if res.shape == (1,):
+                res = res[0]
+            elif res.shape == ():
+                res = res[()]
+            else:
+                res = res[:]
             file.close()
             return res
         except Exception as e:
@@ -103,7 +107,14 @@ def h5_load_hot(filename, dsetname):
     file = h5py.File(filename, "r")
     global _h5_files_currently_open
     _h5_files_currently_open.append(file)
-    return file[dsetname]
+
+    # if its a single value, load it nonetheless
+    if file[dsetname].shape == (1,):
+        return file[dsetname][0]
+    elif file[dsetname].shape == ():
+        return file[dsetname][()]
+    else:
+        return file[dsetname]
 
 
 def h5_close_hot():
@@ -175,6 +186,7 @@ def h5_recursive_load(filename, dsetname="/", skip=None, hot=False):
                         temp[cp] = h5_load_hot(filename, cd)
                     else:
                         temp[cp] = h5_load(filename, cd)
+
 
     return res
 
