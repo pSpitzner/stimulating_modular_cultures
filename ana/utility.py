@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-21 11:11:40
-# @Last Modified: 2021-03-04 10:25:20
+# @Last Modified: 2021-03-04 10:35:05
 # ------------------------------------------------------------------------------ #
 # Helper functions that are needed in various other scripts
 # ------------------------------------------------------------------------------ #
@@ -253,6 +253,11 @@ class BetterDict(dict):
                 # temp = f"{left} ({right})\n"
             res += temp
 
+        return res
+
+    # enable autocompletion. man this is beautiful!
+    def __dir__(self):
+        res = dir(type(self)) + list(self.varnames)
         return res
 
 
