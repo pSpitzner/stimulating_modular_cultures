@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-03-04 16:10:29
+# @Last Modified: 2021-03-05 13:14:24
 # ------------------------------------------------------------------------------ #
 # What's a good level of abstraction?
 # Basic routines that plot on thing or the other, directly from file.
@@ -188,6 +188,48 @@ def plot_module_rates(h5f, ax=None, mark_bursts=True, apply_formatting=True):
         ax.set_ylabel("Rates [Hz]")
         ax.set_xlabel("Time [seconds]")
 
+        fig.tight_layout()
+
+    return ax
+
+
+def plot_parameter_info(h5f, ax=None, apply_formatting=True):
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.get_figure()
+
+    if apply_formatting:
+        ax.tick_params(
+            axis="both",
+            which="both",
+            bottom=False,
+            top=False,
+            left=False,
+            right=False,
+            labelbottom=False,
+            labelleft=False,
+        )
+        ax.margins(x=0, y=0)
+        ax.set_ylabel("Parameters")
+        ax.set_xlabel("")
+
+    dat = []
+    dat.append(['Connections k', h5f.meta.topology_k_inter])
+    dat.append(['', ''])
+    dat.append(['Noise Rate [Hz]', h5f.meta.dynamics_rate])
+    dat.append(['gA [mV]', h5f.meta.dynamics_gA])
+
+    tab = ax.table(dat, loc='center', edges='open')
+    cells = tab.properties()["celld"]
+    for i in range(0, int(len(cells)/2)):
+        cells[i, 1]._loc = 'left'
+
+    if apply_formatting:
+        ax.spines["right"].set_visible(False)
+        ax.spines["left"].set_visible(False)
+        ax.spines["top"].set_visible(False)
+        ax.spines["bottom"].set_visible(False)
         fig.tight_layout()
 
     return ax
