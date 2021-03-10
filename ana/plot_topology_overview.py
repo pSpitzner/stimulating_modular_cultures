@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-01-24 14:13:56
-# @Last Modified: 2021-03-03 09:07:06
+# @Last Modified: 2021-03-03 10:19:29
 # ------------------------------------------------------------------ #
 # script that takes a hdf5 as produced by my cpp simulation
 # as first argument and visualizes the topological features
@@ -17,8 +17,13 @@ import os
 import sys
 import glob
 import h5py
-import matplotlib
 import argparse
+import matplotlib
+
+matplotlib.rcParams["axes.prop_cycle"] = matplotlib.cycler("color", [
+    "#233954", "#ea5e48", "#1e7d72", "#f49546", "#e8bf58", # dark
+    "#5886be", "#f3a093", "#53d8c9", "#f2da9c", "#f9c192", # light
+    ]) # qualitative, somewhat color-blind friendly, in mpl words 'tab5'
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -357,8 +362,8 @@ def plot_axons(ax, color_by_module=False):
         for n in range(len(axon_segments_x)):
             if color_by_module:
                 try:
-                    clr = f"C{mod_ids[n]}"
                     assert mod_ids[n] >= 0
+                    clr = f"C{mod_ids[n]}"
                 except:
                     clr = 'black'
             else:
