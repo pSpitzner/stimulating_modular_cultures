@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-03-05 13:14:24
+# @Last Modified: 2021-03-10 10:11:19
 # ------------------------------------------------------------------------------ #
 # What's a good level of abstraction?
 # Basic routines that plot on thing or the other, directly from file.
@@ -46,10 +46,12 @@ log = logging.getLogger(__name__)
 sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/../ana/"))
 import utility as ut
 import logisi as logisi
+# requires my python helpers https://github.com/pSpitzner/pyhelpers
+import hi5 as h5
+from hi5 import BetterDict
+import colors as cc
 
 # fmt: on
-
-spikes = None
 
 
 def plot_raster(h5f, ax=None, sort_by_module=True, apply_formatting=True):
@@ -67,6 +69,8 @@ def plot_raster(h5f, ax=None, sort_by_module=True, apply_formatting=True):
     """
 
     assert h5f.ana is not None, "`prepare_file(h5f)` before plotting!"
+
+    log.info("Plotting Raster")
 
     if ax is None:
         fig, ax = plt.subplots()
@@ -108,73 +112,56 @@ def plot_module_rates(h5f, ax=None, mark_bursts=True, apply_formatting=True):
 
     assert h5f.ana is not None, "`prepare_file(h5f)` before plotting!"
 
-    bs_large = 0.02
-    bs_small = 0.002  # seconds, small bin size
-    rate_threshold = 15  # Hz
-    merge_threshold = 0.1  # seconds, merge bursts if separated by less than this
+    log.info("Plotting Module Rates")
 
     if ax is None:
         fig, ax = plt.subplots()
     else:
         fig = ax.get_figure()
 
-    beg_times = []
-    end_times = []
-
-    spikes = h5f.data.spiketimes
+    dt = h5f.ana.rates.dt
 
     for m_id in h5f.ana.mods:
-        selects = np.where(h5f.data.neuron_module_id[:] == m_id)[0]
-        pop_rate = logisi.population_rate(spikes[selects], bin_size=bs_small)
-        pop_rate = logisi.smooth_rate(pop_rate, clock_dt=bs_small, width=bs_large)
-        mean_rate = np.nanmean(pop_rate / bs_small)
+        pop_rate = h5f.ana.rates.module_level[m_id]
+        mean_rate = np.nanmean(pop_rate)
         ax.plot(
-            np.arange(0, len(pop_rate)) * bs_small,
-            pop_rate / bs_small,
+            np.arange(0, len(pop_rate)) * dt,
+            pop_rate,
             label=f"{m_id:d}: ({mean_rate:.2f} Hz)",
             color=h5f.ana.mod_colors[m_id],
         )
         if mark_bursts:
-            beg_time, end_time = logisi.burst_detection_pop_rate(
-                spikes[selects],
-                bin_size=bs_large,
-                rate_threshold=rate_threshold,
-                highres_bin_size=bs_small,
-            )
-
-            beg_time, end_time = logisi.merge_if_below_separation_threshold(
-                beg_time, end_time, threshold=merge_threshold
-            )
-
-            beg_times.append(beg_time)
-            end_times.append(end_time)
-
+            beg_times = h5f.ana.bursts.module_level[m_id].beg_times
+            end_times = h5f.ana.bursts.module_level[m_id].end_times
             ax.plot(
-                beg_time,
-                np.ones(len(beg_time)) * (20 + m_id),
+                beg_times,
+                np.ones(len(beg_times)) * (20 + m_id),
                 marker="4",
                 color=h5f.ana.mod_colors[m_id],
                 lw=0,
             )
             ax.plot(
-                end_time,
-                np.ones(len(end_time)) * (20 + m_id),
+                end_times,
+                np.ones(len(end_times)) * (20 + m_id),
                 marker="3",
                 color=h5f.ana.mod_colors[m_id],
                 lw=0,
             )
 
     if mark_bursts:
-        all_begs, all_ends, all_seqs = logisi.system_burst_from_module_burst(
-            beg_times, end_times, threshold=merge_threshold,
+        beg_times = h5f.ana.bursts.system_level.beg_times
+        end_times = h5f.ana.bursts.system_level.end_times
+
+        ax.plot(
+            beg_times, np.ones(len(beg_times)) * (25), marker="4", color="black", lw=0
         )
         ax.plot(
-            all_begs, np.ones(len(all_begs)) * (25), marker="4", color="black", lw=0
+            end_times, np.ones(len(end_times)) * (25), marker="3", color="black", lw=0
         )
-        ax.plot(
-            all_ends, np.ones(len(all_ends)) * (25), marker="3", color="black", lw=0
-        )
-        ax.axhline(y=rate_threshold, ls=":", color="gray")
+        try:
+            ax.axhline(y=h5f.ana.bursts.module_level[0].threshold, ls=":", color="gray")
+        except:
+            pass
 
     leg = ax.legend(loc=1)
 
@@ -194,6 +181,9 @@ def plot_module_rates(h5f, ax=None, mark_bursts=True, apply_formatting=True):
 
 
 def plot_parameter_info(h5f, ax=None, apply_formatting=True):
+
+    log.info("Plotting Parameter Info")
+
     if ax is None:
         fig, ax = plt.subplots()
     else:
@@ -215,15 +205,26 @@ def plot_parameter_info(h5f, ax=None, apply_formatting=True):
         ax.set_xlabel("")
 
     dat = []
-    dat.append(['Connections k', h5f.meta.topology_k_inter])
-    dat.append(['', ''])
-    dat.append(['Noise Rate [Hz]', h5f.meta.dynamics_rate])
-    dat.append(['gA [mV]', h5f.meta.dynamics_gA])
+    dat.append(["Connections k", h5f.meta.topology_k_inter])
+    dat.append(["", ""])
+    dat.append(["Noise Rate [Hz]", h5f.meta.dynamics_rate])
+    dat.append(["gA [mV]", h5f.meta.dynamics_gA])
+    try:
+        stim_neurons = np.unique(h5f.data.stimulation_times_as_list[:, 0]).astype(int)
+        stim_mods = np.unique(h5f.data.neuron_module_id[stim_neurons])
+        stim_str = f"On {str(tuple(stim_mods)).replace(',)', ')')}"
+    except:
+        stim_str = "Off"
+    dat.append(["Stimulation", stim_str])
 
-    tab = ax.table(dat, loc='center', edges='open')
+    for d in dat:
+        if d[0] != "" and d[1] != "":
+            log.info(f"{d[0]:>22}:    {d[1]}")
+
+    tab = ax.table(dat, loc="center", edges="open")
     cells = tab.properties()["celld"]
-    for i in range(0, int(len(cells)/2)):
-        cells[i, 1]._loc = 'left'
+    for i in range(0, int(len(cells) / 2)):
+        cells[i, 1]._loc = "left"
 
     if apply_formatting:
         ax.spines["right"].set_visible(False)
@@ -246,7 +247,12 @@ def prepare_file(h5f, mod_colors="auto"):
         h5f.ana.neuron_ids
     """
 
-    h5f.ana = ut.BetterDict()
+    log.info("Preparing File")
+
+    if isinstance(h5f, str):
+        h5f = h5.recursive_load(h5f, hot=False)
+
+    h5f.ana = BetterDict()
     num_n = h5f.meta.topology_num_neur
 
     # ------------------------------------------------------------------------------ #
@@ -282,7 +288,7 @@ def prepare_file(h5f, mod_colors="auto"):
         h5f.ana.mod_colors = mod_colors
 
     # ------------------------------------------------------------------------------ #
-    # further details
+    # spikes
     # ------------------------------------------------------------------------------ #
 
     # maybe change this to exclude neurons that did not spike
@@ -306,3 +312,69 @@ def prepare_file(h5f, mod_colors="auto"):
     # # the outer array is essentially a list but with fancy indexing.
     # # this is a bit counter-intuitive
     # h5f.ana.spikes_2d = np.array(spikes_2d, dtype=object)
+
+    # ------------------------------------------------------------------------------ #
+    # bursts and module rates
+    # ------------------------------------------------------------------------------ #
+
+    bs_large = 0.02
+    bs_small = 0.002  # seconds, small bin size
+    rate_threshold = 15  # Hz
+    merge_threshold = 0.1  # seconds, merge bursts if separated by less than this
+
+    bursts = BetterDict()
+    bursts.module_level = BetterDict()
+    rates = BetterDict()
+    rates.dt = bs_small
+    rates.module_level = BetterDict()
+
+    beg_times = [] # lists of length num_modules
+    end_times = []
+
+    log.info("Finding Bursts from Rates")
+
+    for m_id in h5f.ana.mods:
+        selects = np.where(h5f.data.neuron_module_id[:] == m_id)[0]
+        pop_rate = logisi.population_rate(spikes[selects], bin_size=bs_small)
+        pop_rate = logisi.smooth_rate(pop_rate, clock_dt=bs_small, width=bs_large)
+        pop_rate = pop_rate / bs_small
+
+        beg_time, end_time = logisi.burst_detection_pop_rate(
+            spikes[selects],
+            bin_size=bs_large,
+            rate_threshold=rate_threshold,
+            highres_bin_size=bs_small,
+        )
+
+        beg_time, end_time = logisi.merge_if_below_separation_threshold(
+            beg_time, end_time, threshold=merge_threshold
+        )
+
+        rates.module_level[m_id] = pop_rate
+        bursts.module_level[m_id] = BetterDict()
+        bursts.module_level[m_id].beg_times = beg_time
+        bursts.module_level[m_id].end_times = end_time
+        bursts.module_level[m_id].rate_threshold = rate_threshold
+
+        beg_times.append(beg_time)
+        end_times.append(end_time)
+
+    pop_rate = logisi.population_rate(spikes[:], bin_size=bs_small)
+    pop_rate = logisi.smooth_rate(pop_rate, clock_dt=bs_small, width=bs_large)
+    pop_rate = pop_rate / bs_small
+    rates.system_level = pop_rate
+
+    all_begs, all_ends, all_seqs = logisi.system_burst_from_module_burst(
+        beg_times, end_times, threshold=merge_threshold,
+    )
+
+    bursts.system_level = BetterDict()
+    bursts.system_level.beg_times = all_begs
+    bursts.system_level.end_times = all_ends
+    bursts.system_level.module_sequences = all_seqs
+
+    h5f.ana.bursts = bursts
+    h5f.ana.rates = rates
+
+
+    return h5f
