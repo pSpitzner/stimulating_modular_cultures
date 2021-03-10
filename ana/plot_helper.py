@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-03-10 10:11:19
+# @Last Modified: 2021-03-10 11:43:16
 # ------------------------------------------------------------------------------ #
 # What's a good level of abstraction?
 # Basic routines that plot on thing or the other, directly from file.
@@ -180,6 +180,59 @@ def plot_module_rates(h5f, ax=None, mark_bursts=True, apply_formatting=True):
     return ax
 
 
+def plot_distribution_burst_duration(h5f, ax=None, apply_formatting=True):
+
+    assert h5f.ana is not None, "`prepare_file(h5f)` before plotting!"
+
+    log.info("Plotting Burst Duration Distribution")
+
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.get_figure()
+
+    kwargs = {
+        "ax": ax,
+        "kde": False,
+        "binwidth": 2.5 / 1000,  # ms
+        # "binrange": (0.06, 0.12),
+        "stat": "probability",
+        # 'multiple' : 'stack',
+        "element": "poly",
+    }
+
+    for m_id in h5f.ana.mods:
+
+        beg_times = h5f.ana.bursts.module_level[m_id].beg_times
+        end_times = h5f.ana.bursts.module_level[m_id].end_times
+        sns.histplot(
+            data=end_times - beg_times,
+            color=h5f.ana.mod_colors[m_id],
+            alpha=0.2,
+            **kwargs,
+            label = f"Module {m_id}"
+        )
+
+    beg_times = h5f.ana.bursts.system_level.beg_times
+    end_times = h5f.ana.bursts.system_level.end_times
+    sns.histplot(
+        data=end_times - beg_times,
+        color='black',
+        alpha=0,
+        **kwargs,
+        label = "System-wide"
+    )
+
+    if apply_formatting:
+        ax.set_xlabel(r"Burst duration $D$ (seconds)")
+        ax.set_ylabel(r"Probability $P(D)$")
+        ax.legend()
+    fig.tight_layout()
+
+    return ax
+
+
+
 def plot_parameter_info(h5f, ax=None, apply_formatting=True):
 
     log.info("Plotting Parameter Info")
@@ -328,7 +381,7 @@ def prepare_file(h5f, mod_colors="auto"):
     rates.dt = bs_small
     rates.module_level = BetterDict()
 
-    beg_times = [] # lists of length num_modules
+    beg_times = []  # lists of length num_modules
     end_times = []
 
     log.info("Finding Bursts from Rates")
@@ -350,14 +403,15 @@ def prepare_file(h5f, mod_colors="auto"):
             beg_time, end_time, threshold=merge_threshold
         )
 
+        beg_times.append(beg_time)
+        end_times.append(end_time)
+
         rates.module_level[m_id] = pop_rate
         bursts.module_level[m_id] = BetterDict()
         bursts.module_level[m_id].beg_times = beg_time
         bursts.module_level[m_id].end_times = end_time
         bursts.module_level[m_id].rate_threshold = rate_threshold
 
-        beg_times.append(beg_time)
-        end_times.append(end_time)
 
     pop_rate = logisi.population_rate(spikes[:], bin_size=bs_small)
     pop_rate = logisi.smooth_rate(pop_rate, clock_dt=bs_small, width=bs_large)
@@ -375,6 +429,5 @@ def prepare_file(h5f, mod_colors="auto"):
 
     h5f.ana.bursts = bursts
     h5f.ana.rates = rates
-
 
     return h5f
