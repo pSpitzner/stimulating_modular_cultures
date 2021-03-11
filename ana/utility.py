@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-21 11:11:40
-# @Last Modified: 2021-03-09 09:53:49
+# @Last Modified: 2021-03-10 13:22:38
 # ------------------------------------------------------------------------------ #
 # Helper functions that are needed in various other scripts
 # ------------------------------------------------------------------------------ #
@@ -19,7 +19,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)-8s [%(name)s] %(mes
 log = logging.getLogger(__name__)
 
 # ------------------------------------------------------------------------------ #
-# neuro stuff
+# old neuro stuff
 # ------------------------------------------------------------------------------ #
 
 # helper function to convert a list of time stamps

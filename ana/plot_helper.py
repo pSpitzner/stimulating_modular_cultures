@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-03-10 11:43:16
+# @Last Modified: 2021-03-11 13:09:21
 # ------------------------------------------------------------------------------ #
 # What's a good level of abstraction?
 # Basic routines that plot on thing or the other, directly from file.
@@ -45,11 +45,12 @@ from brian2.units.allunits import *
 log = logging.getLogger(__name__)
 sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/../ana/"))
 import utility as ut
-import logisi as logisi
+# import logisi as logisi
 # requires my python helpers https://github.com/pSpitzner/pyhelpers
 import hi5 as h5
 from hi5 import BetterDict
 import colors as cc
+import ana_helper as ah
 
 # fmt: on
 
@@ -87,7 +88,7 @@ def plot_raster(h5f, ax=None, sort_by_module=True, apply_formatting=True):
             n_id_sorted = n_id
 
         m_id = h5f.data.neuron_module_id[n_id]
-        spikes = h5f.ana.spikes_2d[n_id]
+        spikes = h5f.data.spiketimes[n_id]
 
         ax.plot(
             spikes,
@@ -184,6 +185,12 @@ def plot_distribution_burst_duration(h5f, ax=None, apply_formatting=True):
 
     assert h5f.ana is not None, "`prepare_file(h5f)` before plotting!"
 
+    if h5f.ana.bursts is None:
+        log.info("Finding Bursts from Rates")
+        h5f.ana.bursts, h5f.ana.rates = ah.find_bursts_from_rates(h5f)
+
+    bursts = h5f.ana.bursts
+
     log.info("Plotting Burst Duration Distribution")
 
     if ax is None:
@@ -202,9 +209,8 @@ def plot_distribution_burst_duration(h5f, ax=None, apply_formatting=True):
     }
 
     for m_id in h5f.ana.mods:
-
-        beg_times = h5f.ana.bursts.module_level[m_id].beg_times
-        end_times = h5f.ana.bursts.module_level[m_id].end_times
+        beg_times = np.array(bursts.module_level[m_id].beg_times)
+        end_times = np.array(bursts.module_level[m_id].end_times)
         sns.histplot(
             data=end_times - beg_times,
             color=h5f.ana.mod_colors[m_id],
@@ -213,8 +219,8 @@ def plot_distribution_burst_duration(h5f, ax=None, apply_formatting=True):
             label = f"Module {m_id}"
         )
 
-    beg_times = h5f.ana.bursts.system_level.beg_times
-    end_times = h5f.ana.bursts.system_level.end_times
+    beg_times = np.array(bursts.system_level.beg_times)
+    end_times = np.array(bursts.system_level.end_times)
     sns.histplot(
         data=end_times - beg_times,
         color='black',
@@ -288,146 +294,3 @@ def plot_parameter_info(h5f, ax=None, apply_formatting=True):
 
     return ax
 
-
-def prepare_file(h5f, mod_colors="auto"):
-    """
-        modifies h5f in place! (not on disk, only in RAM)
-
-        # adds the following attributes:
-        h5f.ana.mod_sort   : function that maps from neuron_id to sorted id, by module
-        h5f.ana.mods       : list of unique module ids
-        h5f.ana.mod_colors : list of colors associated with each module
-        h5f.ana.neuron_ids
-    """
-
-    log.info("Preparing File")
-
-    if isinstance(h5f, str):
-        h5f = h5.recursive_load(h5f, hot=False)
-
-    h5f.ana = BetterDict()
-    num_n = h5f.meta.topology_num_neur
-
-    # ------------------------------------------------------------------------------ #
-    # mod sorting
-    # ------------------------------------------------------------------------------ #
-    try:
-        # get the neurons sorted according to their modules
-        mod_sorted = np.zeros(num_n, dtype=int)
-        mod_ids = h5f.data.neuron_module_id[:]
-        mods = np.sort(np.unique(mod_ids))
-        if len(mods) == 1:
-            raise NotImplementedError  # avoid resorting.
-        temp = np.argsort(mod_ids)
-        for n_id in range(0, num_n):
-            mod_sorted[n_id] = np.argwhere(temp == n_id)
-
-        h5f.ana.mods = mods
-        h5f.ana.mod_sort = lambda x: mod_sorted[x]
-    except:
-        h5f.ana.mods = [0]
-        h5f.ana.mod_sort = lambda x: x
-
-    # ------------------------------------------------------------------------------ #
-    # assign colors to modules so we can use them in every plot consistently
-    # ------------------------------------------------------------------------------ #
-    if mod_colors is False:
-        h5f.ana.mod_colors = ["black"] * len(h5f.ana.mods)
-    elif mod_colors is "auto":
-        h5f.ana.mod_colors = [f"C{x}" for x in range(0, len(h5f.ana.mods))]
-    else:
-        assert isinstance(mod_colors, list)
-        assert len(mod_colors) == len(h5f.ana.mods)
-        h5f.ana.mod_colors = mod_colors
-
-    # ------------------------------------------------------------------------------ #
-    # spikes
-    # ------------------------------------------------------------------------------ #
-
-    # maybe change this to exclude neurons that did not spike
-    # neuron_ids = np.unique(spikes[:, 0]).astype(int, copy=False)
-    neuron_ids = np.arange(0, h5f.meta.topology_num_neur, dtype=int)
-    h5f.ana.neuron_ids = neuron_ids
-
-    # make sure that the 2d_spikes representation is nan-padded, requires loading!
-    spikes = h5f.data.spiketimes[:]
-    spikes[spikes == 0] = np.nan
-    h5f.data.spiketimes = spikes
-
-    # # now we need to load things. [:] loads to ram and makes everything else faster
-    # # convert spikes in the convenient nested (2d) format, first dim neuron,
-    # # then ndarrays of time stamps in seconds
-    # spikes = h5f.data.spiketimes_as_list[:]
-    # spikes_2d = []
-    # for n_id in neuron_ids:
-    #     idx = np.where(spikes[:, 0] == n_id)[0]
-    #     spikes_2d.append(spikes[idx, 1])
-    # # the outer array is essentially a list but with fancy indexing.
-    # # this is a bit counter-intuitive
-    # h5f.ana.spikes_2d = np.array(spikes_2d, dtype=object)
-
-    # ------------------------------------------------------------------------------ #
-    # bursts and module rates
-    # ------------------------------------------------------------------------------ #
-
-    bs_large = 0.02
-    bs_small = 0.002  # seconds, small bin size
-    rate_threshold = 15  # Hz
-    merge_threshold = 0.1  # seconds, merge bursts if separated by less than this
-
-    bursts = BetterDict()
-    bursts.module_level = BetterDict()
-    rates = BetterDict()
-    rates.dt = bs_small
-    rates.module_level = BetterDict()
-
-    beg_times = []  # lists of length num_modules
-    end_times = []
-
-    log.info("Finding Bursts from Rates")
-
-    for m_id in h5f.ana.mods:
-        selects = np.where(h5f.data.neuron_module_id[:] == m_id)[0]
-        pop_rate = logisi.population_rate(spikes[selects], bin_size=bs_small)
-        pop_rate = logisi.smooth_rate(pop_rate, clock_dt=bs_small, width=bs_large)
-        pop_rate = pop_rate / bs_small
-
-        beg_time, end_time = logisi.burst_detection_pop_rate(
-            spikes[selects],
-            bin_size=bs_large,
-            rate_threshold=rate_threshold,
-            highres_bin_size=bs_small,
-        )
-
-        beg_time, end_time = logisi.merge_if_below_separation_threshold(
-            beg_time, end_time, threshold=merge_threshold
-        )
-
-        beg_times.append(beg_time)
-        end_times.append(end_time)
-
-        rates.module_level[m_id] = pop_rate
-        bursts.module_level[m_id] = BetterDict()
-        bursts.module_level[m_id].beg_times = beg_time
-        bursts.module_level[m_id].end_times = end_time
-        bursts.module_level[m_id].rate_threshold = rate_threshold
-
-
-    pop_rate = logisi.population_rate(spikes[:], bin_size=bs_small)
-    pop_rate = logisi.smooth_rate(pop_rate, clock_dt=bs_small, width=bs_large)
-    pop_rate = pop_rate / bs_small
-    rates.system_level = pop_rate
-
-    all_begs, all_ends, all_seqs = logisi.system_burst_from_module_burst(
-        beg_times, end_times, threshold=merge_threshold,
-    )
-
-    bursts.system_level = BetterDict()
-    bursts.system_level.beg_times = all_begs
-    bursts.system_level.end_times = all_ends
-    bursts.system_level.module_sequences = all_seqs
-
-    h5f.ana.bursts = bursts
-    h5f.ana.rates = rates
-
-    return h5f
