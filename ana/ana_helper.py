@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-03-11 14:05:50
+# @Last Modified: 2021-03-12 13:14:43
 # ------------------------------------------------------------------------------ #
 
 
@@ -152,6 +152,7 @@ def find_bursts_from_rates(
     bs_small=0.002,  # seconds, small bin size
     rate_threshold=15,  # Hz
     merge_threshold=0.1,  # seconds, merge bursts if separated by less than this
+    write_to_h5f=True,
 ):
     """
         Based on module-level firing rates, find bursting events.
@@ -210,16 +211,17 @@ def find_bursts_from_rates(
     bursts.system_level.end_times = all_ends.copy()
     bursts.system_level.module_sequences = all_seqs
 
+    if write_to_h5f:
+        h5f.ana.bursts = bursts
+        h5f.ana.rates = rates
+
     return bursts, rates
 
 
-def find_isis_from_bursts(h5f, bursts=None):
+def find_isis(h5f, write_to_h5f=True):
     """
         What are the the inter-spike-intervals within and out of bursts?
     """
-    if bursts is None:
-        assert h5f.ana.bursts is not None
-        bursts = h5f.ana.bursts
 
     # get isi naively np.diff -> avoid boundary effects
     # do it for spike_train and beg_time, end_time
@@ -231,15 +233,23 @@ def find_isis_from_bursts(h5f, bursts=None):
     for m_id in h5f.ana.mods:
         selects = np.where(h5f.data.neuron_module_id[:] == m_id)[0]
         spikes_2d = h5f.data.spiketimes[selects]
+        try:
+            b = h5f.ana.bursts.module_level[m_id].beg_times
+            e = h5f.ana.bursts.module_level[m_id].end_times
+        except:
+            b = None
+            e = None
+
         isis_all, isis_in, isis_out = __inter_spike_intervals(
-            spikes_2d,
-            beg_times=bursts.module_level[m_id].beg_times,
-            end_times=bursts.module_level[m_id].end_times,
+            spikes_2d, beg_times=b, end_times=e,
         )
         isi[m_id] = BetterDict()
         isi[m_id].all = isis_all
         isi[m_id].in_bursts = isis_in
         isi[m_id].out_bursts = isis_out
+
+    if write_to_h5f:
+        h5f.ana.isi = isi
 
     return isi
 
@@ -251,10 +261,10 @@ def find_isis_from_bursts(h5f, bursts=None):
 # turns out this is faster without numba
 def __inter_spike_intervals(spikes_2d, beg_times=None, end_times=None):
     """
-        Returns a list of all interspike intervals, merged down for all neurons in
-        `spikes_2d`.
+        Returns three list, thre first one contains all interspike intervals,
+        merged down for all neurons in `spikes_2d`.
         If `beg_times` and `end_times` are passed, returns two more lists
-        with the isis inside and out of bursts.
+        with the isis inside and out of bursts. otherwise, they are empty.
     """
     isis_all = []
     isis_in_burst = []
@@ -300,10 +310,7 @@ def __inter_spike_intervals(spikes_2d, beg_times=None, end_times=None):
         spikes = spikes[spikes <= e]
         isis_out_burst.extend(np.diff(spikes))
 
-    if beg_times is None or end_times is None:
-        return isis_all
-    else:
-        return isis_all, isis_in_burst, isis_out_burst
+    return isis_all, isis_in_burst, isis_out_burst
 
 
 @jit(nopython=True, parallel=True, fastmath=True, cache=True)
