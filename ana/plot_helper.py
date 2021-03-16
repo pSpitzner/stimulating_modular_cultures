@@ -2,10 +2,12 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-03-16 18:05:25
+# @Last Modified: 2021-03-16 18:48:16
 # ------------------------------------------------------------------------------ #
 # What's a good level of abstraction?
-# Basic routines that plot on thing or the other, directly from file.
+# * Basic routines that plot one thing or the other, directly from file.
+# * target an mpl ax element with normal functions and
+# * provide higher level ones that combine those to `overview` panels
 # ------------------------------------------------------------------------------ #
 
 
@@ -53,6 +55,69 @@ import colors as cc
 import ana_helper as ah
 
 # fmt: on
+
+
+# ------------------------------------------------------------------------------ #
+# overview panels
+# ------------------------------------------------------------------------------ #
+
+
+def plot_overview_topology(h5f, filenames=None):
+    """
+        Plots an overview figure of the topology of `h5f`.
+
+        If `filenames` are provided, they are passed to the underlying plot
+        functions and, where possible, ensemble statistics across filenames are
+        used.
+    """
+    fig, axes = plt.subplots(nrows=2, ncols=3, figsize=[12, 8])
+
+    if h5f.ana is None:
+        ah.prepare_file(h5f)
+
+    plot_distribution_dendritic_tree_size(h5f, axes[0, 0], filenames=filenames)
+    plot_distribution_axon_length(h5f, axes[1, 0], filenames=filenames)
+    plot_distribution_degree_k(h5f, axes[1, 1], filenames=filenames)
+    plot_parameter_info(h5f, axes[0, 1])
+
+    plot_connectivity_layout(h5f, axes[0, 2])
+    plot_axon_layout(h5f, axes[1, 2])
+    axes[0, 2].set_title("Connectivity")
+    axes[1, 2].set_title("Axons")
+    # share zoom between connectivity and axons
+    axes[0, 2].get_shared_x_axes().join(axes[0, 2], axes[1, 2])
+    axes[0, 2].get_shared_y_axes().join(axes[0, 2], axes[1, 2])
+    axes[1, 2].set_aspect(1)
+    axes[1, 2].autoscale()
+
+    fig.tight_layout()
+
+    return fig
+
+
+def plot_overview_dynamic(h5f, filenames=None):
+
+    fig, axes = plt.subplots(4, 1, sharex=True, figsize=(4, 7))
+
+    if h5f.ana is None:
+        ah.prepare_file(h5f)
+
+    plot_parameter_info(h5f, axes[0])
+    plot_raster(h5f, axes[1])
+    plot_module_rates(h5f, axes[2])
+    plot_bursts_into_timeseries(h5f, axes[3])
+
+    axes[1].set_xlabel("")
+    axes[2].set_xlabel("")
+
+    fig.tight_layout()
+
+    return fig
+
+
+# ------------------------------------------------------------------------------ #
+# main plot level functions
+# ------------------------------------------------------------------------------ #
 
 
 def plot_raster(h5f, ax=None, apply_formatting=True, sort_by_module=True):
@@ -130,36 +195,12 @@ def plot_module_rates(h5f, ax=None, apply_formatting=True, mark_bursts=True):
             label=f"{m_id:d}: ({mean_rate:.2f} Hz)",
             color=h5f.ana.mod_colors[m_id],
         )
-        if mark_bursts:
-            beg_times = h5f.ana.bursts.module_level[m_id].beg_times
-            end_times = h5f.ana.bursts.module_level[m_id].end_times
-            ax.plot(
-                beg_times,
-                np.ones(len(beg_times)) * (20 + m_id),
-                marker="4",
-                color=h5f.ana.mod_colors[m_id],
-                lw=0,
-            )
-            ax.plot(
-                end_times,
-                np.ones(len(end_times)) * (20 + m_id),
-                marker="3",
-                color=h5f.ana.mod_colors[m_id],
-                lw=0,
-            )
 
     if mark_bursts:
-        beg_times = h5f.ana.bursts.system_level.beg_times
-        end_times = h5f.ana.bursts.system_level.end_times
-
-        ax.plot(
-            beg_times, np.ones(len(beg_times)) * (25), marker="4", color="black", lw=0
-        )
-        ax.plot(
-            end_times, np.ones(len(end_times)) * (25), marker="3", color="black", lw=0
-        )
         try:
-            ax.axhline(y=h5f.ana.bursts.module_level[0].threshold, ls=":", color="gray")
+            ax.axhline(
+                y=h5f.ana.bursts.module_level[0].rate_threshold, ls=":", color="gray"
+            )
         except:
             pass
 
@@ -175,6 +216,50 @@ def plot_module_rates(h5f, ax=None, apply_formatting=True, mark_bursts=True):
         ax.set_ylabel("Rates [Hz]")
         ax.set_xlabel("Time [seconds]")
 
+        fig.tight_layout()
+
+    return ax
+
+
+def plot_bursts_into_timeseries(h5f, ax=None, apply_formatting=True):
+
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.get_figure()
+
+    pad = 3
+    for m_id in h5f.ana.mods:
+        beg_times = h5f.ana.bursts.module_level[m_id].beg_times
+        end_times = h5f.ana.bursts.module_level[m_id].end_times
+        ax.plot(
+            beg_times,
+            np.ones(len(beg_times)) * (pad + 1 + m_id),
+            marker="4",
+            color=h5f.ana.mod_colors[m_id],
+            lw=0,
+        )
+        ax.plot(
+            end_times,
+            np.ones(len(end_times)) * (pad + 1+ m_id),
+            marker="3",
+            color=h5f.ana.mod_colors[m_id],
+            lw=0,
+        )
+
+    beg_times = h5f.ana.bursts.system_level.beg_times
+    end_times = h5f.ana.bursts.system_level.end_times
+
+    ax.plot(beg_times, np.ones(len(beg_times)) * (pad), marker="4", color="black", lw=0)
+    ax.plot(end_times, np.ones(len(end_times)) * (pad), marker="3", color="black", lw=0)
+
+    ax.set_ylim(0, len(h5f.ana.mods)+2*pad)
+
+    if apply_formatting:
+        ax.margins(x=0, y=0)
+        ax.set_ylabel("Bursts")
+        ax.set_xlabel("Time [seconds]")
+        ax.set_yticks([])
         fig.tight_layout()
 
     return ax
@@ -200,9 +285,10 @@ def plot_parameter_info(h5f, ax=None, apply_formatting=True):
             labelbottom=False,
             labelleft=False,
         )
-        # ax.margins(x=0, y=0)
-        ax.set_ylabel("Parameters")
+        ax.margins(x=0, y=0)
+        ax.set_ylabel("")
         ax.set_xlabel("")
+        ax.set_title("Parameters")
 
     dat = []
     dat.append(["Connections k", h5f.meta.topology_k_inter])
@@ -474,9 +560,7 @@ def plot_distribution_degree_k(h5f, ax=None, apply_formatting=True, filenames=No
         )
 
 
-def plot_distribution_axon_length(
-    h5f, ax=None, apply_formatting=True, filenames=None
-):
+def plot_distribution_axon_length(h5f, ax=None, apply_formatting=True, filenames=None):
     """
         Plot the distribution of the axon length for `h5f`.
 
@@ -524,7 +608,9 @@ def plot_distribution_axon_length(
         fig.tight_layout()
 
 
-def plot_distribution_dendritic_tree_size(h5f, ax=None, apply_formatting=True, filenames=None):
+def plot_distribution_dendritic_tree_size(
+    h5f, ax=None, apply_formatting=True, filenames=None
+):
     """
         Plot the distribution of the size of the dendritic tree for `h5f`.
 
