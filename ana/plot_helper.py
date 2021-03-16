@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-03-12 13:09:16
+# @Last Modified: 2021-03-16 18:05:25
 # ------------------------------------------------------------------------------ #
 # What's a good level of abstraction?
 # Basic routines that plot on thing or the other, directly from file.
@@ -103,8 +103,7 @@ def plot_raster(h5f, ax=None, apply_formatting=True, sort_by_module=True):
         ax.margins(x=0, y=0)
         ax.set_ylabel("Raster")
         ax.set_xlabel("Time [seconds]")
-
-    fig.tight_layout()
+        fig.tight_layout()
 
     return ax
 
@@ -181,6 +180,97 @@ def plot_module_rates(h5f, ax=None, apply_formatting=True, mark_bursts=True):
     return ax
 
 
+def plot_parameter_info(h5f, ax=None, apply_formatting=True):
+
+    log.info("Plotting Parameter Info")
+
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.get_figure()
+
+    if apply_formatting:
+        ax.tick_params(
+            axis="both",
+            which="both",
+            bottom=False,
+            top=False,
+            left=False,
+            right=False,
+            labelbottom=False,
+            labelleft=False,
+        )
+        # ax.margins(x=0, y=0)
+        ax.set_ylabel("Parameters")
+        ax.set_xlabel("")
+
+    dat = []
+    dat.append(["Connections k", h5f.meta.topology_k_inter])
+    if h5f.data.stimulation_times_as_list is None:
+        stim_str = "Off"
+    else:
+        try:
+            stim_neurons = np.unique(h5f.data.stimulation_times_as_list[:, 0]).astype(
+                int
+            )
+            stim_mods = np.unique(h5f.data.neuron_module_id[stim_neurons])
+            stim_str = f"On {str(tuple(stim_mods)).replace(',)', ')')}"
+        except:
+            stim_str = f"Error"
+    dat.append(["Stimulation", stim_str])
+
+    # dat.append(["", ""])
+    # dat.append(["Noise Rate [Hz]", h5f.meta.dynamics_rate])
+    # dat.append(["gA [mV]", h5f.meta.dynamics_gA])
+
+    left = ""
+    right = ""
+    for d in dat:
+        left += f"{d[0]}\n"
+        right += f"{d[1]}\n"
+        if d[0] != "" and d[1] != "":
+            log.info(f"{d[0]:>22}:    {d[1]}")
+
+    # tables stretch rows of axis, so manually place some text instead
+    # tab = ax.table(dat, loc="center", edges="open")
+    # cells = tab.properties()["celld"]
+    # for i in range(0, int(len(cells) / 2)):
+    #     cells[i, 1]._loc = "left"
+
+    # ax.plot([0,1], [0,1], ls=None)
+
+    ax.text(
+        0.46,
+        0.9,
+        left,
+        horizontalalignment="right",
+        verticalalignment="top",
+        transform=ax.transAxes,
+    )
+    ax.text(
+        0.54,
+        0.9,
+        right,
+        horizontalalignment="left",
+        verticalalignment="top",
+        transform=ax.transAxes,
+    )
+
+    if apply_formatting:
+        ax.spines["right"].set_visible(False)
+        ax.spines["left"].set_visible(False)
+        ax.spines["top"].set_visible(False)
+        ax.spines["bottom"].set_visible(False)
+        fig.tight_layout()
+
+    return ax
+
+
+# ------------------------------------------------------------------------------ #
+# distributions
+# ------------------------------------------------------------------------------ #
+
+
 def plot_distribution_burst_duration(h5f, ax=None, apply_formatting=True):
 
     assert h5f.ana is not None, "`prepare_file(h5f)` before plotting!"
@@ -233,7 +323,7 @@ def plot_distribution_burst_duration(h5f, ax=None, apply_formatting=True):
         ax.set_xlabel(r"Burst duration $D$ (seconds)")
         ax.set_ylabel(r"Probability $P(D)$")
         ax.legend()
-    fig.tight_layout()
+        fig.tight_layout()
 
     return ax
 
@@ -311,60 +401,333 @@ def plot_distribution_isi(
         ax.set_xlabel(r"Inter-spike Interval (seconds)")
         ax.set_ylabel(r"Probability")
         ax.legend()
-    fig.tight_layout()
+        fig.tight_layout()
 
 
-def plot_parameter_info(h5f, ax=None, apply_formatting=True):
+def plot_distribution_degree_k(h5f, ax=None, apply_formatting=True, filenames=None):
+    """
+        Plot the distribution of the in-and out degree for `h5f`.
 
-    log.info("Plotting Parameter Info")
-
+        if `filenames` is provided, distribution data is accumulated from all files,
+        and only styling/meta information is used from `h5f`.
+    """
     if ax is None:
         fig, ax = plt.subplots()
     else:
         fig = ax.get_figure()
 
+    if filenames is None:
+        k_in = h5f.data.neuron_k_in[:]
+        k_out = h5f.data.neuron_k_out[:]
+    else:
+        log.info("Loading multiple files to plot degree distributions")
+        k_in = h5.load(filenames, "/data/neuron_k_in")
+        k_out = h5.load(filenames, "/data/neuron_k_out")
+        k_in = np.concatenate(k_in).ravel()
+        k_out = np.concatenate(k_out).ravel()
+
+    maxbin = np.nanmax([k_in, k_out])
+    br = np.arange(0, maxbin, 1)
+
+    kwargs = {
+        "ax": ax,
+        "kde": True,
+        "bins": br,
+        "stat": "probability",
+        # 'multiple' : 'stack',
+        "element": "step",
+        "alpha": 0.25,
+    }
+
+    sns.histplot(
+        k_in,
+        label=r"$k_{in}$",
+        color=matplotlib.cm.get_cmap("tab10").colors[0],
+        **kwargs,
+    )
+    sns.histplot(
+        k_out,
+        label=r"$k_{out}$",
+        color=matplotlib.cm.get_cmap("tab10").colors[1],
+        **kwargs,
+    )
+
     if apply_formatting:
-        ax.tick_params(
-            axis="both",
-            which="both",
-            bottom=False,
-            top=False,
-            left=False,
-            right=False,
-            labelbottom=False,
-            labelleft=False,
+        ax.set_xlabel(f"Degree $k$")
+        ax.set_ylabel(f"Probability $p(k)$")
+        ax.set_title("Degree distribution")
+        ax.legend()
+
+        ax.text(
+            0.05,
+            0.95,
+            f"median:\n" + r"$k_{in} \sim$" + f"{np.nanmedian(k_in):g}\n"
+            r"$k_{out} \sim$"
+            + f"{np.nanmedian(k_out):g}\n\n"
+            + f"mean:\n"
+            + r"$k_{in} \sim$"
+            + f"{np.nanmean(k_in):g}\n"
+            r"$k_{out} \sim$" + f"{np.nanmean(k_out):g}\n",
+            transform=ax.transAxes,
+            ha="left",
+            va="top",
         )
-        ax.margins(x=0, y=0)
-        ax.set_ylabel("Parameters")
-        ax.set_xlabel("")
 
-    dat = []
-    dat.append(["Connections k", h5f.meta.topology_k_inter])
-    dat.append(["", ""])
-    dat.append(["Noise Rate [Hz]", h5f.meta.dynamics_rate])
-    dat.append(["gA [mV]", h5f.meta.dynamics_gA])
-    try:
-        stim_neurons = np.unique(h5f.data.stimulation_times_as_list[:, 0]).astype(int)
-        stim_mods = np.unique(h5f.data.neuron_module_id[stim_neurons])
-        stim_str = f"On {str(tuple(stim_mods)).replace(',)', ')')}"
-    except:
-        stim_str = "Off"
-    dat.append(["Stimulation", stim_str])
 
-    for d in dat:
-        if d[0] != "" and d[1] != "":
-            log.info(f"{d[0]:>22}:    {d[1]}")
+def plot_distribution_axon_length(
+    h5f, ax=None, apply_formatting=True, filenames=None
+):
+    """
+        Plot the distribution of the axon length for `h5f`.
 
-    tab = ax.table(dat, loc="center", edges="open")
-    cells = tab.properties()["celld"]
-    for i in range(0, int(len(cells) / 2)):
-        cells[i, 1]._loc = "left"
+        if `filenames` is provided, distribution data is accumulated from all files,
+        and only styling/meta information is used from `h5f`.
+    """
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.get_figure()
+
+    if filenames is None:
+        alen = h5f.data.neuron_axon_length[:]
+        aete = h5f.data.neuron_axon_end_to_end_distance[:]
+    else:
+        log.info("Loading multiple files for axon length distribution")
+        alen = h5.load(filenames, "/data/neuron_axon_length")
+        aete = h5.load(filenames, "/data/neuron_axon_end_to_end_distance")
+        alen = np.concatenate(alen).ravel()
+        aete = np.concatenate(aete).ravel()
+
+    kwargs = {
+        "ax": ax,
+        "kde": True,
+        "stat": "probability",
+        "element": "step",
+        "alpha": 0.25,
+    }
+
+    sns.histplot(
+        alen, label="length", color=matplotlib.cm.get_cmap("tab10").colors[0], **kwargs
+    )
+    sns.histplot(
+        aete,
+        label="end to end",
+        color=matplotlib.cm.get_cmap("tab10").colors[1],
+        **kwargs,
+    )
+
+    if apply_formatting:
+        ax.set_xlabel(f"Length $l\,[\mu m]$")
+        ax.set_ylabel(f"Probability $p(l)$")
+        ax.set_title("Axon length distribution")
+        ax.legend()
+        fig.tight_layout()
+
+
+def plot_distribution_dendritic_tree_size(h5f, ax=None, apply_formatting=True, filenames=None):
+    """
+        Plot the distribution of the size of the dendritic tree for `h5f`.
+
+        if `filenames` is provided, distribution data is accumulated from all files,
+        and only styling/meta information is used from `h5f`.
+    """
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.get_figure()
+
+    if filenames is None:
+        n_R_d = h5f.data.neuron_radius_dendritic_tree[:]
+    else:
+        log.info("Loading multiple files for distribution of dendritic tree size")
+        n_R_d = h5.load(filenames, "/data/neuron_radius_dendritic_tree")
+        n_R_d = np.concatenate(n_R_d).ravel()
+
+    kwargs = {
+        "ax": ax,
+        "kde": True,
+        "stat": "probability",
+        "element": "step",
+        "alpha": 0.25,
+    }
+
+    sns.histplot(n_R_d, label="dendritic radius", color="gray", **kwargs)
+
+    if apply_formatting:
+        ax.set_xlabel(f"Radius $r\,[\mu m]$")
+        ax.set_ylabel(f"Probability $p(r)$")
+        ax.set_title("Dendritic tree size")
+        fig.tight_layout()
+
+
+# ------------------------------------------------------------------------------ #
+# topology
+# ------------------------------------------------------------------------------ #
+
+
+def plot_axon_layout(h5f, ax=None, apply_formatting=True):
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.get_figure()
+
+    _plot_soma(h5f, ax)
+    _plot_axons(h5f, ax)
 
     if apply_formatting:
         ax.spines["right"].set_visible(False)
-        ax.spines["left"].set_visible(False)
         ax.spines["top"].set_visible(False)
-        ax.spines["bottom"].set_visible(False)
+        ax.spines["left"].set_visible(False)
+        ax.set_yticks([])
+        ax.set_aspect(1)
+        ax.set_xlabel(f"Position $l\,[\mu m]$")
         fig.tight_layout()
 
-    return ax
+
+def plot_connectivity_layout(h5f, ax=None, apply_formatting=True):
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.get_figure()
+
+    if h5f.ana.networkx is not None:
+        G = h5f.ana.networkx.G
+        pos = h5f.ana.networkx.pos
+    else:
+        # add nodes, generate positions in usable format
+        G = nx.DiGraph()
+        G.add_nodes_from(h5f.ana.neuron_ids)
+        pos = dict()
+        for idx, n in enumerate(h5f.ana.neuron_ids):
+            pos[n] = (h5f.data.neuron_pos_x[idx], h5f.data.neuron_pos_y[idx])
+
+        # add edges
+        G.add_edges_from(h5f.data.connectivity_matrix_sparse[:])
+
+        # add to h5f
+        h5f.ana.networkx = BetterDict()
+        h5f.ana.networkx.G = G
+        h5f.ana.networkx.pos = pos
+
+    log.debug("Drawing graph nodes")
+    nx.draw_networkx_nodes(
+        G,
+        pos=pos,
+        ax=ax,
+        node_size=0,  # we draw them with fixed size using _circles
+        node_color="black",
+        with_labels=False,
+    )
+    log.debug("Drawing graph edges")
+    nx.draw_networkx_edges(
+        G, pos=pos, ax=ax, edge_color="black", arrows=False, width=0.1
+    )
+    log.debug("Drawing soma")
+    _plot_soma(h5f, ax)
+
+    if apply_formatting:
+        ax.spines["bottom"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.spines["left"].set_visible(False)
+        ax.spines["top"].set_visible(False)
+        ax.set_aspect(1)
+        fig.tight_layout()
+
+
+def _plot_soma(h5f, ax, n_R_s=7.5):
+    n_x = h5f.data.neuron_pos_x[:]
+    n_y = h5f.data.neuron_pos_y[:]
+    _circles(n_x, n_y, n_R_s, ax=ax, fc="white", ec="black", alpha=1, lw=0.25, zorder=4)
+    # _circles(n_x, n_y, n_R_s, ax=ax, fc="white", ec="none", alpha=1, lw=0.5, zorder=4)
+    # _circles(n_x, n_y, n_R_s, ax=ax, fc="none", ec="black", alpha=0.3, lw=0.5, zorder=5)
+
+
+def _plot_axons(h5f, ax):
+    # axon segments
+    # zero-or-nan-padded 2d arrays
+    seg_x = h5f.data.neuron_axon_segments_x[:]
+    seg_y = h5f.data.neuron_axon_segments_y[:]
+    seg_x = np.where(seg_x == 0, np.nan, seg_x)
+    seg_y = np.where(seg_y == 0, np.nan, seg_y)
+
+    # iterate over neurons to plot axons
+    for n in range(len(seg_x)):
+        m_id = h5f.data.neuron_module_id[n]
+        clr = h5f.ana.mod_colors[m_id]
+        ax.plot(seg_x[n], seg_y[n], color=clr, lw=0.35, zorder=0, alpha=0.5)
+
+
+# circles in data scale
+# https://stackoverflow.com/questions/9081553/python-scatter-plot-size-and-style-of-the-marker
+def _circles(x, y, s, c="b", vmin=None, vmax=None, ax=None, **kwargs):
+    """
+    Make a scatter of circles plot of x vs y, where x and y are sequence
+    like objects of the same lengths. The size of circles are in data scale.
+
+    Parameters
+    ----------
+    x,y : scalar or array_like, shape (n, )
+        Input data
+    s : scalar or array_like, shape (n, )
+        Radius of circle in data unit.
+    c : color or sequence of color, optional, default : 'b'
+        `c` can be a single color format string, or a sequence of color
+        specifications of length `N`, or a sequence of `N` numbers to be
+        mapped to colors using the `cmap` and `norm` specified via kwargs.
+        Note that `c` should not be a single numeric RGB or RGBA sequence
+        because that is indistinguishable from an array of values
+        to be colormapped. (If you insist, use `color` instead.)
+        `c` can be a 2-D array in which the rows are RGB or RGBA, however.
+    vmin, vmax : scalar, optional, default: None
+        `vmin` and `vmax` are used in conjunction with `norm` to normalize
+        luminance data.  If either are `None`, the min and max of the
+        color array is used.
+    kwargs : `~matplotlib.collections.Collection` properties
+        Eg. alpha, edgecolor(ec), facecolor(fc), linewidth(lw), linestyle(ls),
+        norm, cmap, transform, etc.
+
+    Returns
+    -------
+    paths : `~matplotlib.collections.PathCollection`
+
+    Examples
+    --------
+    a = np.arange(11)
+    circles(a, a, a*0.2, c=a, alpha=0.5, edgecolor='none')
+    plt.colorbar()
+
+    License
+    --------
+    This code is under [The BSD 3-Clause License]
+    (http://opensource.org/licenses/BSD-3-Clause)
+    """
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Circle
+    from matplotlib.collections import PatchCollection
+
+    if np.isscalar(c):
+        kwargs.setdefault("color", c)
+        c = None
+    if "fc" in kwargs:
+        kwargs.setdefault("facecolor", kwargs.pop("fc"))
+    if "ec" in kwargs:
+        kwargs.setdefault("edgecolor", kwargs.pop("ec"))
+    if "ls" in kwargs:
+        kwargs.setdefault("linestyle", kwargs.pop("ls"))
+    if "lw" in kwargs:
+        kwargs.setdefault("linewidth", kwargs.pop("lw"))
+
+    patches = [Circle((x_, y_), s_) for x_, y_, s_ in np.broadcast(x, y, s)]
+    collection = PatchCollection(patches, **kwargs)
+    if c is not None:
+        collection.set_array(np.asarray(c))
+        collection.set_clim(vmin, vmax)
+
+    if ax is None:
+        ax = plt.gca()
+    ax.add_collection(collection)
+    ax.autoscale_view()
+    if c is not None:
+        plt.sci(collection)
+    return collection
