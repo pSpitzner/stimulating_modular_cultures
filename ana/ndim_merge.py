@@ -2,11 +2,15 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-01-25 10:10:05
+# @Last Modified: 2021-03-16 19:08:57
 #
-# Scans the provided directory for .hdf5 files and checks if they have the right
-# data to plot a 2d ibi_mean_4d of ibi = f(gA, rate)
-# uses ut.inter_burst_interval to get ibi from spiketimes
+# Needs updating!
+# relies on now depricated `utility.py` in `/ana/legacy`
+#
+# Scans the provided directory for .hdf5 files and merges individual realizsation
+# into an ndim array
+#
+# use `ndim_plot.py` to visualize the result
 # ------------------------------------------------------------------------------ #
 
 import os

@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-02-15 09:59:25
+# @Last Modified: 2021-03-16 19:05:08
 #
 # plot a merged down, multidimensional hdf5 file (from individual simulations)
 # and select which dims to show where
@@ -19,9 +19,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 import pandas as pd
-
-sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/../ana/"))
-import utility as ut
+import hi5 as h5
 
 from mpl_toolkits.mplot3d import Axes3D
 
@@ -74,7 +72,7 @@ elif os.path.isfile(args.input_path):
 # ------------------------------------------------------------------------------ #
 
 # get all observables that qualify (i.e. are not axis)
-l_obs_candidates = ut.h5_ls(input_path, "/data/")
+l_obs_candidates = h5.ls(input_path, "/data/")
 l_obs_candidates = [obs for obs in l_obs_candidates if obs.find("axis_") != 0]
 assert len(l_obs_candidates) > 0
 
@@ -93,12 +91,12 @@ while True:
         print(f"Using {obs_to_plot}")
         break
 
-data_nd = ut.h5_load(input_path, f"/data/{obs_to_plot}", silent=True)
+data_nd = h5.load(input_path, f"/data/{obs_to_plot}", silent=True)
 
-l_axis_candidates = ut.h5_load(input_path, "/meta/axis_overview", silent=True)
+l_axis_candidates = h5.load(input_path, "/meta/axis_overview", silent=True)
 d_axes = dict()
 for obs in l_axis_candidates:
-    d_axes[obs] = ut.h5_load(input_path, "/data/axis_" + obs, silent=True)
+    d_axes[obs] = h5.load(input_path, "/data/axis_" + obs, silent=True)
 
 # select which two axis to show
 options = f""
