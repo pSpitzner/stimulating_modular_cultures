@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-09-28 10:36:48
-# @Last Modified: 2021-03-10 13:35:05
+# @Last Modified: 2021-03-17 15:44:07
 # ------------------------------------------------------------------------------ #
 # My implementation of the logISI historgram burst detection algorithm
 # by Pasuqale et al.
@@ -28,7 +28,6 @@ from tqdm import tqdm
 from itertools import permutations
 
 sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/../ana/"))
-import utility as ut
 
 log = logging.getLogger(__name__)
 # log.setLevel("DEBUG")

@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-03-12 13:14:43
+# @Last Modified: 2021-03-17 16:43:32
 # ------------------------------------------------------------------------------ #
 
 
@@ -66,7 +66,7 @@ except ImportError:
 # ------------------------------------------------------------------------------ #
 
 
-def prepare_file(h5f, mod_colors="auto"):
+def prepare_file(h5f, mod_colors="auto", hot=True):
     """
         modifies h5f in place! (not on disk, only in RAM)
 
@@ -80,7 +80,7 @@ def prepare_file(h5f, mod_colors="auto"):
     log.debug("Preparing File")
 
     if isinstance(h5f, str):
-        h5f = h5.recursive_load(h5f, hot=False)
+        h5f = h5.recursive_load(h5f, hot=hot)
 
     h5f.ana = BetterDict()
     num_n = h5f.meta.topology_num_neur
@@ -148,8 +148,8 @@ def prepare_file(h5f, mod_colors="auto"):
 
 def find_bursts_from_rates(
     h5f,
-    bs_large=0.02,
-    bs_small=0.002,  # seconds, small bin size
+    bs_large=0.02,  # seconds, time bin size to smooth over (gaussian kernel)
+    bs_small=0.001,  # seconds, small bin size
     rate_threshold=15,  # Hz
     merge_threshold=0.1,  # seconds, merge bursts if separated by less than this
     write_to_h5f=True,
@@ -158,7 +158,7 @@ def find_bursts_from_rates(
         Based on module-level firing rates, find bursting events.
 
         returns two BetterDicts, `bursts` and `rates`,
-        does not modify `h5f`
+        modifies `h5f`
     """
 
     assert h5f.ana is not None, "`prepare_file(h5f)` first!"
@@ -222,11 +222,6 @@ def find_isis(h5f, write_to_h5f=True):
     """
         What are the the inter-spike-intervals within and out of bursts?
     """
-
-    # get isi naively np.diff -> avoid boundary effects
-    # do it for spike_train and beg_time, end_time
-    # list of arrays
-    # do this on the
 
     isi = BetterDict()
 

@@ -17,7 +17,7 @@ from tqdm import tqdm
 log = logging.getLogger(__name__)
 warnings.filterwarnings("ignore")  # suppress numpy warnings
 sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/../ana/"))
-import utility as ut
+
 import ana_helper as ah
 import plot_helper as ph
 import colors as cc
@@ -26,12 +26,10 @@ from hi5 import BetterDict
 import transfer_entropy as treant
 
 
-def process_candidates_burst_times_and_isi(input_path, hot=False):
+def process_candidates_burst_times_and_isi(input_path, hot=True):
     """
         get the burst times based on rate for every module and merge it down, so that
         we have ensemble average statistics
-
-        uses remaing info from h5f (spiketimes, modules etc) from first file in input_path
     """
 
     candidates = glob.glob(input_path)
@@ -39,9 +37,10 @@ def process_candidates_burst_times_and_isi(input_path, hot=False):
     assert len(candidates) > 0, "Is the input_path correct?"
 
     res = None
+    mods = None
 
     for cdx, candidate in enumerate(
-        tqdm(candidates, desc="Burst times for files", position=2, leave=False)
+        tqdm(candidates, desc="Bursts and ISIs for files", leave=False)
     ):
         h5f = h5.recursive_load(candidate, hot=hot)
         ah.prepare_file(h5f)
@@ -53,6 +52,11 @@ def process_candidates_burst_times_and_isi(input_path, hot=False):
 
         if cdx == 0:
             res = h5f
+            mods = h5f.ana.mods
+
+        # todo: consistency checks
+        # lets at least check that the modules are consistent across candidates.
+        assert np.all(h5f.ana.mods == mods), "Modules differ between files"
 
         # copy over system level burst
         b = res.ana.bursts.system_level
@@ -71,7 +75,9 @@ def process_candidates_burst_times_and_isi(input_path, hot=False):
                 i[var].extend(this_isi[m_id][var])
 
         if hot:
-            h5.close_hot()
+            # only close the last file (which we opened), and let's hope no other file
+            # was opened in the meantime
+            h5.close_hot(which=-1)
 
     return res
 

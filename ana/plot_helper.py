@@ -2,8 +2,10 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-03-16 18:48:16
+# @Last Modified: 2021-03-17 16:42:00
 # ------------------------------------------------------------------------------ #
+# All the plotting is in here.
+#
 # What's a good level of abstraction?
 # * Basic routines that plot one thing or the other, directly from file.
 # * target an mpl ax element with normal functions and
@@ -46,13 +48,14 @@ from brian2.units.allunits import *
 
 log = logging.getLogger(__name__)
 sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/../ana/"))
-import utility as ut
+
 # import logisi as logisi
 # requires my python helpers https://github.com/pSpitzner/pyhelpers
 import hi5 as h5
 from hi5 import BetterDict
 import colors as cc
 import ana_helper as ah
+import process_batch as batch
 
 # fmt: on
 
@@ -241,7 +244,7 @@ def plot_bursts_into_timeseries(h5f, ax=None, apply_formatting=True):
         )
         ax.plot(
             end_times,
-            np.ones(len(end_times)) * (pad + 1+ m_id),
+            np.ones(len(end_times)) * (pad + 1 + m_id),
             marker="3",
             color=h5f.ana.mod_colors[m_id],
             lw=0,
@@ -253,7 +256,7 @@ def plot_bursts_into_timeseries(h5f, ax=None, apply_formatting=True):
     ax.plot(beg_times, np.ones(len(beg_times)) * (pad), marker="4", color="black", lw=0)
     ax.plot(end_times, np.ones(len(end_times)) * (pad), marker="3", color="black", lw=0)
 
-    ax.set_ylim(0, len(h5f.ana.mods)+2*pad)
+    ax.set_ylim(0, len(h5f.ana.mods) + 2 * pad)
 
     if apply_formatting:
         ax.margins(x=0, y=0)
@@ -357,17 +360,35 @@ def plot_parameter_info(h5f, ax=None, apply_formatting=True):
 # ------------------------------------------------------------------------------ #
 
 
-def plot_distribution_burst_duration(h5f, ax=None, apply_formatting=True):
+def plot_distribution_burst_duration(
+    h5f, ax=None, apply_formatting=True, filenames=None
+):
 
-    assert h5f.ana is not None, "`prepare_file(h5f)` before plotting!"
+    if h5f.ana is None:
+        ah.prepare_file(h5f)
 
     if h5f.ana.bursts is None:
         log.info("Finding Bursts from Rates")
-        h5f.ana.bursts, h5f.ana.rates = ah.find_bursts_from_rates(h5f)
+        ah.find_bursts_from_rates(h5f)
 
-    bursts = h5f.ana.bursts
+    if filenames is None:
+        log.info("Plotting Bursts")
+        bursts = h5f.ana.bursts
+    else:
+        log.info("Gathering Bursts across provided filenames")
+        # merge across files, and save the result
+        if h5f.ana.ensemble is None:
+            h5f.ana.ensemble = BetterDict()
+            h5f.ana.ensemble.filenames = filenames
+            ens = batch.process_candidates_burst_times_and_isi(filenames, hot=True)
+            h5f.ana.ensemble.bursts = ens.ana.bursts
+            h5f.ana.ensemble.isi = ens.ana.isi
+            del ens
 
-    log.info("Plotting Burst Duration Distribution")
+        assert (
+            h5f.ana.ensemble.filenames == filenames
+        ), "Using multiple ensembles is not implemented yet"
+        bursts = h5f.ana.ensemble.bursts
 
     if ax is None:
         fig, ax = plt.subplots()
@@ -377,7 +398,7 @@ def plot_distribution_burst_duration(h5f, ax=None, apply_formatting=True):
     kwargs = {
         "ax": ax,
         "kde": False,
-        "binwidth": 2.5 / 1000,  # ms
+        "binwidth": 2 / 1000,  # ms, beware the timestep of burst analysis (usually 2ms)
         # "binrange": (0.06, 0.12),
         "stat": "probability",
         # 'multiple' : 'stack',
@@ -415,7 +436,7 @@ def plot_distribution_burst_duration(h5f, ax=None, apply_formatting=True):
 
 
 def plot_distribution_isi(
-    h5f, ax=None, apply_formatting=True, log_binning=True, which="all"
+    h5f, ax=None, apply_formatting=True, log_binning=True, which="all", filenames=None,
 ):
     """
         Plot the inter spike intervals in h5f.
@@ -428,15 +449,33 @@ def plot_distribution_isi(
 
         log_binning : bool, True
             set to false for linear bins
+
+        filenames : str
+            if `filenames` are provided, bursts an
     """
     if h5f.ana.isi is None:
         log.info("Finding ISIS")
         assert which == "all", "`find_bursts` before plotting isis other than `all`"
         h5f.ana.isi = ah.find_isis(h5f)
 
-    isi = h5f.ana.isi
+    if filenames is None:
+        log.info("Plotting ISI")
+        isi = h5f.ana.isi
+    else:
+        log.info("Gathering ISI across provided filenames")
+        # merge across files, and save the result
+        if h5f.ana.ensemble is None:
+            h5f.ana.ensemble = BetterDict()
+            h5f.ana.ensemble.filenames = filenames
+            ens = batch.process_candidates_burst_times_and_isi(filenames, hot=True)
+            h5f.ana.ensemble.bursts = ens.ana.bursts
+            h5f.ana.ensemble.isi = ens.ana.isi
+            del ens
 
-    log.info("Plotting ISI")
+        assert (
+            h5f.ana.ensemble.filenames == filenames
+        ), "Using multiple ensembles is not implemented yet"
+        isi = h5f.ana.ensemble.isi
 
     if ax is None:
         fig, ax = plt.subplots()
@@ -446,9 +485,9 @@ def plot_distribution_isi(
     # we want to use the same bins across modules
     max_isi = 0
     for m_id in h5f.ana.mods:
-        assert len(h5f.ana.isi[m_id][which]) > 0, f"No isis in h5f for '{which}'"
-        isi = h5f.ana.isi[m_id][which]
-        this_max_isi = np.max(isi)
+        assert len(isi[m_id][which]) > 0, f"No isis found for '{which}'"
+        mod_isi = isi[m_id][which]
+        this_max_isi = np.max(mod_isi)
         if this_max_isi > max_isi:
             max_isi = this_max_isi
 
@@ -474,7 +513,7 @@ def plot_distribution_isi(
 
     for m_id in h5f.ana.mods:
         sns.histplot(
-            data=h5f.ana.isi[m_id][which],
+            data=isi[m_id][which],
             color=h5f.ana.mod_colors[m_id],
             alpha=0.2,
             **kwargs,
