@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-05 10:30:17
-# @Last Modified: 2021-02-05 13:20:06
+# @Last Modified: 2021-03-19 16:09:18
 # ------------------------------------------------------------------------------ #
 # Create additional spikes that model stimulation
 #
@@ -22,8 +22,6 @@ from brian2.units.allunits import *
 import logging
 
 log = logging.getLogger(__name__)
-sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/../ana/"))
-import utility as ut
 
 
 # ------------------------------------------------------------------------------ #
@@ -41,7 +39,7 @@ def stimulation_pattern(interval, duration, target_modules, mod_ids):
             interval       : time, the time window of stimulation (with brian time unit)
             duration       : time, total duration
             target_modules : list, which modules to target
-            mod_ids        : list, id of the module each neuron of the system is in
+            mod_ids        : ndarry, id of the module each neuron of the system is in
 
         # Returns
             indices
@@ -51,7 +49,7 @@ def stimulation_pattern(interval, duration, target_modules, mod_ids):
     log.info(f"Setting up stimulation {interval} at module {target_modules}")
 
     candidates = _draw_candidates(
-        mod_ids=mod_ids, n_per_mod=5, mod_targets=target_modules
+        mod_ids=mod_ids, n_per_mod=1, mod_targets=target_modules
     )
     candidates = np.array(candidates)
 
@@ -168,3 +166,20 @@ def _time_random(t_start, t_end, num_n):
     """
 
     return np.random.uniform(low=t_start, high=t_end, size=num_n)  # [low, high)
+
+# ------------------------------------------------------------------------------ #
+# explorative helpers
+# ------------------------------------------------------------------------------ #
+
+def _random_windows(interval, duration, p=0.4):
+    num_intervals = int(duration/interval)
+
+    res = []
+    for i in range(1, num_intervals+1):
+        if np.random.uniform(0.0, 1.0) > p:
+            res.append(i*interval)
+
+    return np.array(res)
+
+
+

@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-05 10:37:47
-# @Last Modified: 2021-02-05 12:33:36
+# @Last Modified: 2021-03-19 14:19:42
 # ------------------------------------------------------------------------------ #
 # Helper to load the topology from hdf5
 # ------------------------------------------------------------------------------ #
@@ -12,10 +12,11 @@ import os
 import sys
 import h5py
 import logging
+import hi5 as h5
+from hi5 import BetterDict
 
 log = logging.getLogger(__name__)
-sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/../ana/"))
-import utility as ut
+
 
 
 def load_topology(input_path):
@@ -33,12 +34,12 @@ def load_topology(input_path):
 
     log.info(f"Loading connectivity from {input_path} ")
 
-    a_ij_sparse = ut.h5_load(input_path, "/data/connectivity_matrix_sparse")
+    a_ij_sparse = h5.load(input_path, "/data/connectivity_matrix_sparse")
     a_ij_sparse = a_ij_sparse.astype(int, copy=False)  # brian doesnt like uints
-    num_n = int(ut.h5_load(input_path, "/meta/topology_num_neur"))
+    num_n = int(h5.load(input_path, "/meta/topology_num_neur"))
 
     # get the neurons sorted according to their modules
-    mod_ids = ut.h5_load(input_path, "/data/neuron_module_id")
+    mod_ids = h5.load(input_path, "/data/neuron_module_id")
 
     # if we would need to sort by modules
     # mods = np.unique(mod_ids)

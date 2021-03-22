@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-18 13:06:40
-# @Last Modified: 2021-02-22 20:03:32
+# @Last Modified: 2021-03-19 14:18:45
 # ------------------------------------------------------------------------------ #
 # Small script to investigate dynamic parameters and their impact on the
 # single neuron level
@@ -38,7 +38,6 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)-8s [%(name)s] %(mes
 log = logging.getLogger(__name__)
 
 sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/../ana/"))
-import utility as ut
 import stimulation as stim
 import topology as topo
 
