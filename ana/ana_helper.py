@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-03-17 16:43:32
+# @Last Modified: 2021-03-22 12:48:08
 # ------------------------------------------------------------------------------ #
 
 
@@ -149,7 +149,7 @@ def prepare_file(h5f, mod_colors="auto", hot=True):
 def find_bursts_from_rates(
     h5f,
     bs_large=0.02,  # seconds, time bin size to smooth over (gaussian kernel)
-    bs_small=0.001,  # seconds, small bin size
+    bs_small=0.0005,  # seconds, small bin size
     rate_threshold=15,  # Hz
     merge_threshold=0.1,  # seconds, merge bursts if separated by less than this
     write_to_h5f=True,
@@ -159,6 +159,11 @@ def find_bursts_from_rates(
 
         returns two BetterDicts, `bursts` and `rates`,
         modifies `h5f`
+
+        Note on smoothing: at the moment, we time-bin the activity on the module level
+        and convolute this series with a gaussian kernel to smooth.
+        More precise way would be to convolute the spike-train of each neuron with
+        the kernel (thus, keeping the high precision of each spike time).
     """
 
     assert h5f.ana is not None, "`prepare_file(h5f)` first!"
@@ -348,6 +353,61 @@ def population_rate(spiketimes, bin_size):
     rate = rate / num_n
 
     return rate
+
+
+@jit(nopython=True, parallel=True, fastmath=True, cache=True)
+def population_rate_exact_smoothing(spiketimes, bin_size, smooth_width, length=None):
+    """
+        Applies a gaussian kernel to every spike time, and keeps full precision of the
+        peak. Time binning is only used for the result. This should be a bit more
+        precise than e.g. `smooth_rate(population_rate(...))`.
+
+        Provide all arguments in seconds to get resulting `rate` in Hz
+
+        # Parameters
+        spiketimes :  2d nan-padded ndarray, neurons x spiketimes
+        bin_size   : size of the time step, in same units as `spiketimes`
+        smooth_width : standard deviation (width) of the gaussian kernel
+        length : float or None, how long the resulting time series should be (same
+                   unit as `spiketimes` and `bin_size`)
+
+        #Returns
+        rate : 1d array
+            time series of the rate in 1/(unit of `spiketimes`), normalized per-neuron,
+            in steps of `bin_size`.
+            if `spiketimes` are provided in seconds, rates is in Hz. normalization by
+            `bin_size` is NOT required.
+    """
+
+    sigma = smooth_width
+
+    if length is not None:
+        num_bins = int(np.ceil(length / bin_size))
+    else:
+        t_min = 0.0
+        t_max = np.nanmax(spiketimes) + 4 * sigma
+        num_bins = int(np.ceil((t_max - t_min) / bin_size))
+
+    res = np.zeros(num_bins)
+
+    # precompute factors
+    norm = sigma * np.sqrt(2 * np.pi)
+
+    for n in prange(spiketimes.shape[0]):
+        for mu in spiketimes[n, :]:
+            if np.isnan(mu):
+                break
+            # only consider bins 4 sigma around the spike time
+            bin_beg = int((mu - 4 * sigma) / bin_size)
+            bin_end = int((mu + 4 * sigma) / bin_size)
+
+            for b in range(bin_beg, bin_end + 1):
+                if b >= num_bins:
+                    break
+                x = b * bin_size
+                res[b] += np.exp(-0.5 * ((x - mu) / sigma) * ((x - mu) / sigma)) / norm
+
+    return res / spiketimes.shape[0]
 
 
 def burst_detection_pop_rate(
