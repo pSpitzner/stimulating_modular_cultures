@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-03-17 16:42:00
+# @Last Modified: 2021-03-19 11:56:06
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -107,13 +107,34 @@ def plot_overview_dynamic(h5f, filenames=None):
 
     plot_parameter_info(h5f, axes[0])
     plot_raster(h5f, axes[1])
-    plot_module_rates(h5f, axes[2])
     plot_bursts_into_timeseries(h5f, axes[3])
+    plot_module_rates(h5f, axes[2])
 
     axes[1].set_xlabel("")
     axes[2].set_xlabel("")
 
     fig.tight_layout()
+
+    return fig
+
+
+def plot_overview_burst_duration_and_isi(h5f, filenames=None):
+    fig, axes = plt.subplots(
+        nrows=3, ncols=1, figsize=(4, 6), gridspec_kw=dict(height_ratios=[1, 3, 3]),
+    )
+    plot_distribution_burst_duration(h5f, ax=axes[1], filenames=filenames)
+    plot_distribution_isi(h5f, ax=axes[2], filenames=filenames)
+    comments = [
+        ["hist bin size", "1ms"],
+        ["rate bin size", f"{h5f.ana.rates.dt*1000}ms"]
+    ]
+    plot_parameter_info(h5f, ax=axes[0], add=comments)
+
+    axes[1].set_xlim(0, 0.4)
+    axes[2].set_xlim(1e-3, 1e2)
+
+    for i in range(4):
+        fig.tight_layout()
 
     return fig
 
@@ -186,6 +207,9 @@ def plot_module_rates(h5f, ax=None, apply_formatting=True, mark_bursts=True):
         fig, ax = plt.subplots()
     else:
         fig = ax.get_figure()
+
+    if h5f.ana.rates is None:
+        ah.find_bursts_from_rates(h5f)
 
     dt = h5f.ana.rates.dt
 
@@ -268,7 +292,7 @@ def plot_bursts_into_timeseries(h5f, ax=None, apply_formatting=True):
     return ax
 
 
-def plot_parameter_info(h5f, ax=None, apply_formatting=True):
+def plot_parameter_info(h5f, ax=None, apply_formatting=True, add=[]):
 
     log.info("Plotting Parameter Info")
 
@@ -311,6 +335,13 @@ def plot_parameter_info(h5f, ax=None, apply_formatting=True):
     # dat.append(["", ""])
     # dat.append(["Noise Rate [Hz]", h5f.meta.dynamics_rate])
     # dat.append(["gA [mV]", h5f.meta.dynamics_gA])
+
+    if len(add) > 0:
+        dat.append(["", ""])
+        for el in add:
+            assert len(el) == 2
+            dat.append(el)
+
 
     left = ""
     right = ""
@@ -398,9 +429,9 @@ def plot_distribution_burst_duration(
     kwargs = {
         "ax": ax,
         "kde": False,
-        "binwidth": 2 / 1000,  # ms, beware the timestep of burst analysis (usually 2ms)
+        # "binwidth": 1 / 1000,  # ms, beware the timestep of burst analysis (usually 2ms)
         # "binrange": (0.06, 0.12),
-        "stat": "probability",
+        "stat": "density",  # must use density when comparing across different binsizes!
         # 'multiple' : 'stack',
         "element": "poly",
     }
@@ -410,6 +441,7 @@ def plot_distribution_burst_duration(
         end_times = np.array(bursts.module_level[m_id].end_times)
         sns.histplot(
             data=end_times - beg_times,
+            binwidth=1 / 1000,
             color=h5f.ana.mod_colors[m_id],
             alpha=0.2,
             **kwargs,
@@ -420,6 +452,7 @@ def plot_distribution_burst_duration(
     end_times = np.array(bursts.system_level.end_times)
     sns.histplot(
         data=end_times - beg_times,
+        binwidth=1 / 1000,
         color="black",
         alpha=0,
         **kwargs,
@@ -428,7 +461,7 @@ def plot_distribution_burst_duration(
 
     if apply_formatting:
         ax.set_xlabel(r"Burst duration $D$ (seconds)")
-        ax.set_ylabel(r"Probability $P(D)$")
+        ax.set_ylabel(r"Prob. density $P(D)$")
         ax.legend()
         fig.tight_layout()
 
@@ -491,7 +524,7 @@ def plot_distribution_isi(
         if this_max_isi > max_isi:
             max_isi = this_max_isi
 
-    log.info(f"Largest ISI: {max_isi} (seconds)")
+    log.info(f"Largest ISI: {max_isi:.3f} (seconds)")
 
     if log_binning:
         max_isi = np.ceil(np.log10(max_isi))
@@ -506,6 +539,7 @@ def plot_distribution_isi(
         # "binwidth": 2.5 / 1000,  # ms
         # "binrange": (0.06, 0.12),
         "bins": br,
+        # "stat": "density",
         "stat": "probability",
         # 'multiple' : 'stack',
         "element": "poly",

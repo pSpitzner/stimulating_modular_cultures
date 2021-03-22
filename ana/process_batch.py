@@ -5,6 +5,7 @@ import h5py
 import argparse
 import logging
 import warnings
+import pickle
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -84,38 +85,30 @@ def process_candidates_burst_times_and_isi(input_path, hot=True):
 
 def isi_across_conditions():
 
-    figs = []
     conds = _conditions()
     for k in tqdm(conds.varnames, desc="k values", position=0, leave=False):
         for stim in tqdm(
             conds[k].varnames, desc="stimulation targets", position=1, leave=False
         ):
             h5f = process_candidates_burst_times_and_isi(conds[k][stim])
+            # preprocess so that plot functions wont do it again.
+            # todo: make api consistent
+            h5f.ana.ensemble = BetterDict()
+            h5f.ana.ensemble.filenames = conds[k][stim]
+            h5f.ana.ensemble.bursts = h5f.ana.bursts
+            h5f.ana.ensemble.isi = h5f.ana.isi
+
             logging.getLogger("plot_helper").setLevel("WARNING")
-            fig, axes = plt.subplots(
-                nrows=3,
-                ncols=1,
-                figsize=(4, 6),
-                gridspec_kw=dict(height_ratios=[1, 3, 3]),
-            )
-            ph.plot_parameter_info(h5f, ax=axes[0])
-            ph.plot_distribution_burst_duration(h5f, ax=axes[1])
-            ph.plot_distribution_isi(h5f, ax=axes[2])
-            for i in range(4):
-                fig.tight_layout()
-            figs.append(fig)
+            fig = ph.plot_overview_burst_duration_and_isi(h5f, filenames=conds[k][stim])
             logging.getLogger("plot_helper").setLevel("INFO")
+
+            fig.savefig(f"/Users/paul/mpi/simulation/brian_modular_cultures/_figures/isis/{k}_{stim}.pdf", dpi=300)
+            with open(f"/Users/paul/mpi/simulation/brian_modular_cultures/_figures/isis/pkl/{k}_{stim}.pkl",'wb') as fid:
+                pickle.dump(fig, fid)
+
+            del fig
             del h5f
-
-    # figures=[manager.canvas.figure for manager in matplotlib._pylab_helpers.Gcf.get_all_fig_managers()]
-
-    for f in figs:
-        axes = f.get_axes()
-        axes[1].set_xlim(0, 0.3)
-        axes[2].set_xlim(1e-3, 1e2)
-
-    return figs
-
+            h5.close_hot()
 
 
 def _conditions():
