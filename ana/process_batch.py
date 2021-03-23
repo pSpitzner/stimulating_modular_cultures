@@ -85,8 +85,10 @@ def process_candidates_burst_times_and_isi(input_path, hot=True):
 
 def isi_across_conditions():
 
+    stat = BetterDict()
     conds = _conditions()
     for k in tqdm(conds.varnames, desc="k values", position=0, leave=False):
+        stat[k] = BetterDict()
         for stim in tqdm(
             conds[k].varnames, desc="stimulation targets", position=1, leave=False
         ):
@@ -99,17 +101,27 @@ def isi_across_conditions():
             h5f.ana.ensemble.isi = h5f.ana.isi
 
             logging.getLogger("plot_helper").setLevel("WARNING")
-            fig = ph.plot_overview_burst_duration_and_isi(h5f, filenames=conds[k][stim])
+            fig = ph.overview_burst_duration_and_isi(h5f, filenames=conds[k][stim])
             logging.getLogger("plot_helper").setLevel("INFO")
 
             fig.savefig(f"/Users/paul/mpi/simulation/brian_modular_cultures/_figures/isis/{k}_{stim}.pdf", dpi=300)
             with open(f"/Users/paul/mpi/simulation/brian_modular_cultures/_figures/isis/pkl/{k}_{stim}.pkl",'wb') as fid:
                 pickle.dump(fig, fid)
-
+            plt.close(fig)
             del fig
+
+            # lets print some statistics
+            stat[k][stim] = BetterDict()
+            for m in h5f.ana.ensemble.isi.varnames:
+                try:
+                    stat[k][stim][m] = np.mean(h5f.ana.ensemble.isi[m].in_bursts)
+                except Exception as e:
+                    log.debug(e)
+
             del h5f
             h5.close_hot()
 
+    return stat
 
 def _conditions():
     # fmt:off

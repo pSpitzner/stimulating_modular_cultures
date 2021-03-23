@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-03-22 12:48:08
+# @Last Modified: 2021-03-23 19:24:18
 # ------------------------------------------------------------------------------ #
 
 
@@ -181,9 +181,15 @@ def find_bursts_from_rates(
 
     for m_id in h5f.ana.mods:
         selects = np.where(h5f.data.neuron_module_id[:] == m_id)[0]
-        pop_rate = population_rate(spikes[selects], bin_size=bs_small)
-        pop_rate = smooth_rate(pop_rate, clock_dt=bs_small, width=bs_large)
-        pop_rate = pop_rate / bs_small
+        # pop_rate = population_rate(spikes[selects], bin_size=bs_small)
+        # pop_rate = smooth_rate(pop_rate, clock_dt=bs_small, width=bs_large)
+        # pop_rate = pop_rate / bs_small
+        pop_rate = population_rate_exact_smoothing(
+            spikes[selects],
+            bin_size=bs_small,
+            smooth_width=bs_large,
+            length=h5f.meta.dynamics_simulation_duration,
+        )
 
         beg_time, end_time = burst_detection_pop_rate(
             rate=pop_rate, bin_size=bs_small, rate_threshold=rate_threshold,
@@ -202,9 +208,15 @@ def find_bursts_from_rates(
         bursts.module_level[m_id].end_times = end_time.copy()
         bursts.module_level[m_id].rate_threshold = rate_threshold
 
-    pop_rate = population_rate(spikes[:], bin_size=bs_small)
-    pop_rate = smooth_rate(pop_rate, clock_dt=bs_small, width=bs_large)
-    pop_rate = pop_rate / bs_small
+    # pop_rate = population_rate(spikes[:], bin_size=bs_small)
+    # pop_rate = smooth_rate(pop_rate, clock_dt=bs_small, width=bs_large)
+    # pop_rate = pop_rate / bs_small
+    pop_rate = population_rate_exact_smoothing(
+        spikes[:],
+        bin_size=bs_small,
+        smooth_width=bs_large,
+        length=h5f.meta.dynamics_simulation_duration,
+    )
     rates.system_level = pop_rate
 
     all_begs, all_ends, all_seqs = system_burst_from_module_burst(
@@ -230,13 +242,17 @@ def find_isis(h5f, write_to_h5f=True):
 
     isi = BetterDict()
 
-    for m_id in h5f.ana.mods:
+    for idx, m_id in enumerate(h5f.ana.mods):
         selects = np.where(h5f.data.neuron_module_id[:] == m_id)[0]
         spikes_2d = h5f.data.spiketimes[selects]
         try:
             b = h5f.ana.bursts.module_level[m_id].beg_times
             e = h5f.ana.bursts.module_level[m_id].end_times
         except:
+            if idx == 0:
+                log.info(
+                    "Bursts were not detected before searching ISI. Try `find_bursts_from_rates()`"
+                )
             b = None
             e = None
 

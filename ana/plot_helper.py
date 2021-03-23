@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-03-19 11:56:06
+# @Last Modified: 2021-03-23 19:47:31
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -39,6 +39,7 @@ matplotlib.rcParams["axes.prop_cycle"] = matplotlib.cycler("color", [
     "#5886be", "#f3a093", "#53d8c9", "#f2da9c", "#f9c192", # light
     ]) # qualitative, somewhat color-blind friendly, in mpl words 'tab5'
 
+
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
@@ -65,7 +66,7 @@ import process_batch as batch
 # ------------------------------------------------------------------------------ #
 
 
-def plot_overview_topology(h5f, filenames=None):
+def overview_topology(h5f, filenames=None):
     """
         Plots an overview figure of the topology of `h5f`.
 
@@ -98,7 +99,7 @@ def plot_overview_topology(h5f, filenames=None):
     return fig
 
 
-def plot_overview_dynamic(h5f, filenames=None):
+def overview_dynamic(h5f, filenames=None):
 
     fig, axes = plt.subplots(4, 1, sharex=True, figsize=(4, 7))
 
@@ -107,8 +108,8 @@ def plot_overview_dynamic(h5f, filenames=None):
 
     plot_parameter_info(h5f, axes[0])
     plot_raster(h5f, axes[1])
-    plot_bursts_into_timeseries(h5f, axes[3])
     plot_module_rates(h5f, axes[2])
+    plot_bursts_into_timeseries(h5f, axes[3])
 
     axes[1].set_xlabel("")
     axes[2].set_xlabel("")
@@ -118,15 +119,15 @@ def plot_overview_dynamic(h5f, filenames=None):
     return fig
 
 
-def plot_overview_burst_duration_and_isi(h5f, filenames=None):
+def overview_burst_duration_and_isi(h5f, filenames=None, which="all"):
     fig, axes = plt.subplots(
         nrows=3, ncols=1, figsize=(4, 6), gridspec_kw=dict(height_ratios=[1, 3, 3]),
     )
     plot_distribution_burst_duration(h5f, ax=axes[1], filenames=filenames)
-    plot_distribution_isi(h5f, ax=axes[2], filenames=filenames)
+    plot_distribution_isi(h5f, ax=axes[2], filenames=filenames, which=which)
     comments = [
         ["hist bin size", "1ms"],
-        ["rate bin size", f"{h5f.ana.rates.dt*1000}ms"]
+        ["rate bin size", f"{h5f.ana.rates.dt*1000}ms"],
     ]
     plot_parameter_info(h5f, ax=axes[0], add=comments)
 
@@ -342,7 +343,6 @@ def plot_parameter_info(h5f, ax=None, apply_formatting=True, add=[]):
             assert len(el) == 2
             dat.append(el)
 
-
     left = ""
     right = ""
     for d in dat:
@@ -418,7 +418,7 @@ def plot_distribution_burst_duration(
 
         assert (
             h5f.ana.ensemble.filenames == filenames
-        ), "Using multiple ensembles is not implemented yet"
+        ), "`filenames` dont match. Using multiple ensembles is not implemented yet."
         bursts = h5f.ana.ensemble.bursts
 
     if ax is None:
@@ -486,10 +486,14 @@ def plot_distribution_isi(
         filenames : str
             if `filenames` are provided, bursts an
     """
+    assert which in ["all", "in_bursts", "out_bursts"]
+
     if h5f.ana.isi is None:
         log.info("Finding ISIS")
         assert which == "all", "`find_bursts` before plotting isis other than `all`"
-        h5f.ana.isi = ah.find_isis(h5f)
+        if h5f.ana.bursts is None:
+            ah.find_bursts_from_rates(h5f)
+        ah.find_isis(h5f)
 
     if filenames is None:
         log.info("Plotting ISI")
@@ -507,7 +511,7 @@ def plot_distribution_isi(
 
         assert (
             h5f.ana.ensemble.filenames == filenames
-        ), "Using multiple ensembles is not implemented yet"
+        ), "`filenames` dont match. Using multiple ensembles is not implemented yet."
         isi = h5f.ana.ensemble.isi
 
     if ax is None:
@@ -523,22 +527,25 @@ def plot_distribution_isi(
         this_max_isi = np.max(mod_isi)
         if this_max_isi > max_isi:
             max_isi = this_max_isi
+        try:
+            log.info(
+                f"Mean ISI, in bursts, module {m_id}: {np.mean(isi[m_id].in_bursts)*1000:.1f} (ms)"
+            )
+        except:
+            pass
 
     log.info(f"Largest ISI: {max_isi:.3f} (seconds)")
 
-    if log_binning:
-        max_isi = np.ceil(np.log10(max_isi))
-        # start with one ms
-        br = np.logspace(np.log10(1 / 1000), max_isi, num=100)
-    else:
-        br = np.linspace(0, max_isi / 10, num=100)
-
+    # do log binning manuall -> first transform to log scale, then apply the histogram
+    # and (if desired) manually relabel.
+    # Beware, probability is p(log10 isi) but if relabeling xaxis, we dont show
+    # log isi on a linear scale (for readability). this might be confusing.
     kwargs = {
         "ax": ax,
         "kde": False,
         # "binwidth": 2.5 / 1000,  # ms
         # "binrange": (0.06, 0.12),
-        "bins": br,
+        "bins": np.linspace(-3, 3, num=200),
         # "stat": "density",
         "stat": "probability",
         # 'multiple' : 'stack',
@@ -547,20 +554,26 @@ def plot_distribution_isi(
 
     for m_id in h5f.ana.mods:
         sns.histplot(
-            data=isi[m_id][which],
+            data=np.log10(isi[m_id][which]),
             color=h5f.ana.mod_colors[m_id],
             alpha=0.2,
             **kwargs,
             label=f"Module {m_id} ({which})",
         )
-    if log_binning:
-        ax.set_xscale("log")
 
     if apply_formatting:
+        ax.xaxis.set_major_formatter(
+            matplotlib.ticker.FuncFormatter(_ticklabels_lin_to_log10_power)
+        )
+        ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1))
+        ax.xaxis.set_minor_locator(_ticklocator_lin_to_log_minor())
+        # maybe skip the relabeling and just set xlabel to "log10 ISI (log10 seconds)"
         ax.set_xlabel(r"Inter-spike Interval (seconds)")
-        ax.set_ylabel(r"Probability")
+        ax.set_ylabel(r"Probability Density (log ISI)")
         ax.legend()
         fig.tight_layout()
+
+    return ax
 
 
 def plot_distribution_degree_k(h5f, ax=None, apply_formatting=True, filenames=None):
@@ -632,6 +645,8 @@ def plot_distribution_degree_k(h5f, ax=None, apply_formatting=True, filenames=No
             va="top",
         )
 
+    return ax
+
 
 def plot_distribution_axon_length(h5f, ax=None, apply_formatting=True, filenames=None):
     """
@@ -680,6 +695,8 @@ def plot_distribution_axon_length(h5f, ax=None, apply_formatting=True, filenames
         ax.legend()
         fig.tight_layout()
 
+    return ax
+
 
 def plot_distribution_dendritic_tree_size(
     h5f, ax=None, apply_formatting=True, filenames=None
@@ -717,6 +734,8 @@ def plot_distribution_dendritic_tree_size(
         ax.set_ylabel(f"Probability $p(r)$")
         ax.set_title("Dendritic tree size")
         fig.tight_layout()
+
+    return ax
 
 
 # ------------------------------------------------------------------------------ #
@@ -814,6 +833,60 @@ def _plot_axons(h5f, ax):
         m_id = h5f.data.neuron_module_id[n]
         clr = h5f.ana.mod_colors[m_id]
         ax.plot(seg_x[n], seg_y[n], color=clr, lw=0.35, zorder=0, alpha=0.5)
+
+
+# ------------------------------------------------------------------------------ #
+# helper
+# ------------------------------------------------------------------------------ #
+
+
+def _ticklabels_lin_to_log10(x, pos):
+    """
+        converts ticks of manually logged data (lin ticks) to log ticks, as follows
+         1 -> 10
+         0 -> 1
+        -1 -> 0.1
+
+        # Example
+        ```
+        ax.xaxis.set_major_formatter(
+            matplotlib.ticker.FuncFormatter(_ticklabels_lin_to_log10_power)
+        )
+        ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1))
+        ax.xaxis.set_minor_locator(_ticklocator_lin_to_log_minor())
+        ```
+    """
+    prec = int(np.ceil(-np.minimum(x, 0)))
+    return "{{:.{:1d}f}}".format(prec).format(np.power(10.0, x))
+
+
+def _ticklabels_lin_to_log10_power(x, pos, nicer=True, nice_range=[-1, 0, 1]):
+    """
+        converts ticks of manually logged data (lin ticks) to log ticks, as follows
+         1 -> 10^1
+         0 -> 10^0
+        -1 -> 10^-1
+    """
+    if x.is_integer():
+        # use easy to read formatter if exponents are close to zero
+        if nicer and x in nice_range:
+            return _ticklabels_lin_to_log10(x, pos)
+        else:
+            return r"$10^{{{:d}}}$".format(int(x))
+    else:
+        # return r"$10^{{{:f}}}$".format(x)
+        return ""
+
+
+def _ticklocator_lin_to_log_minor(vmin=-10, vmax=10, nbins=10):
+    """
+        get minor ticks on when manually converting lin to log
+    """
+    locs = []
+    orders = int(np.ceil(vmax - vmin))
+    for o in range(int(np.floor(vmin)), int(np.floor(vmax + 1)), 1):
+        locs.extend([o + np.log10(x) for x in range(2, 10)])
+    return matplotlib.ticker.FixedLocator(locs, nbins=nbins * orders)
 
 
 # circles in data scale
