@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-03-23 19:24:18
+# @Last Modified: 2021-03-23 21:46:51
 # ------------------------------------------------------------------------------ #
 
 
@@ -127,9 +127,12 @@ def prepare_file(h5f, mod_colors="auto", hot=True):
     h5f.ana.neuron_ids = neuron_ids
 
     # make sure that the 2d_spikes representation is nan-padded, requires loading!
-    spikes = h5f.data.spiketimes[:]
-    spikes[spikes == 0] = np.nan
-    h5f.data.spiketimes = spikes
+    try:
+        spikes = h5f.data.spiketimes[:]
+        spikes[spikes == 0] = np.nan
+        h5f.data.spiketimes = spikes
+    except:
+        log.info("No spikes in file, plotting and analysing dynamics will not work.")
 
     # # now we need to load things. [:] loads to ram and makes everything else faster
     # # convert spikes in the convenient nested (2d) format, first dim neuron,
@@ -459,8 +462,18 @@ def burst_detection_pop_rate(
 
     # causes numba deprecation warning. in the future this will need to be a typed list
     # List(foo) will solve this but introduces a new type for everything. not great.
-    beg_time = beg_time.tolist()
-    end_time = end_time.tolist()
+    # beg_time = beg_time.tolist()
+    # end_time = end_time.tolist()
+
+    # workaround
+    from numba.typed import List
+    beg_time = List(beg_time)
+    end_time = List(end_time)
+    if len(beg_time) == 0:
+        beg_time.append(1.0)
+        end_time.append(1.0)
+        del beg_time[0]
+        del end_time[0]
 
     if not return_series:
         return beg_time, end_time
@@ -492,6 +505,9 @@ def merge_if_below_separation_threshold(beg_time, end_time, threshold):
     """
     beg_res = []
     end_res = []
+
+    if len(beg_time) == 0:
+        return beg_res, end_res
 
     # skip a new burst beginning if within threshold of the previous ending
     skip = False
@@ -581,6 +597,7 @@ def system_burst_from_module_burst(beg_times, end_times, threshold, modules=None
             particular burst
     """
 
+
     if modules is None:
         modules = np.arange(len(beg_times))
 
@@ -590,10 +607,14 @@ def system_burst_from_module_burst(beg_times, end_times, threshold, modules=None
         m = modules[mdx]
         mods.append(np.array([m] * len(beg_times[mdx])))
 
-    # stack everything together in one lone flat list
+    # stack everything together in one long flat list
     all_begs = np.hstack(beg_times)
     all_ends = np.hstack(end_times)
     all_mods = np.hstack(mods)
+
+    # if no burst at all, skip the rest
+    if len(all_begs) == 0:
+        return [], [], []
 
     # sort consistently by begin time
     idx = np.argsort(all_begs)

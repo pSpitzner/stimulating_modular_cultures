@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2021-02-22 14:56:59
+# @Last Modified: 2021-03-23 21:24:17
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 and runs the simulations in brian.
@@ -21,8 +21,6 @@ from brian2 import *
 logging.basicConfig(level=logging.INFO, format="%(levelname)-8s [%(name)s] %(message)s")
 log = logging.getLogger(__name__)
 
-sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/../ana/"))
-import utility as ut
 import stimulation as stim
 import topology as topo
 
@@ -112,13 +110,23 @@ parser.add_argument("-tD", dest="tD",          help="in seconds",  default=tD / 
 parser.add_argument("-s",  dest="seed",        help="rng",         default=117,         type=int)
 parser.add_argument("-d",
     dest="sim_duration",   help="in seconds",  default=20 * 60, type=float)
+
 parser.add_argument("-equil", "--equilibrate",
     dest="equil_duration", help="in seconds",  default= 2 * 60, type=float)
-parser.add_argument("-stim", "--stimulate",
-    dest="enable_stimulation", default=False, action="store_true",)
+
+parser.add_argument("-stim",
+    dest="stimulation_type", default="off", type=str,
+    help="if/how to stimulate: 'off', 'poisson', 'hideaki'",)
+
 parser.add_argument("-mod",
     dest="stimulation_module", default='0', type=str,
     help="modules to stimulate, e.g. `0`, or `02` for multiple",)
+
+# we may want to give neurons that bridge two modules a smaller synaptic weight [0, 1]
+parser.add_argument("--bridge_weight",
+    dest="bridge_weight",  default= 1.0, type=float,
+    help="synaptic weight of bridge neurons [0, 1]")
+
 # fmt:on
 args = parser.parse_args()
 
@@ -144,11 +152,12 @@ log.info("tD:               %s", tD)
 log.info("noise rate:       %s", rate)
 log.info("duration:         %s", args.sim_duration)
 log.info("equilibration:    %s", args.equil_duration)
-log.info("stimulation:      %s", args.enable_stimulation)
+log.info("stimulation:      %s", args.stimulation_type)
 log.info("recording states: %s", record_state)
 log.info("recording rates:  %s", record_rates)
-if args.enable_stimulation:
+if args.stimulation_type != "off":
     log.info("stim.   module: %s", args.stimulation_module)
+log.info("bridge weight:    %s", args.bridge_weight)
 
 
 # ------------------------------------------------------------------------------ #
@@ -169,6 +178,7 @@ G = NeuronGroup(
         dI/dt = -I/tA                          : volt       # [9, 10]
         du/dt = ( b*(v-vr) -u )/ta             : volt       # [7] inhibitory current
         dD/dt = ( 1-D)/tD                      : 1          # [11] recovery to one
+        bw                                     : 1    # neuron specific synaptic weight
     """,
     threshold="v > vp",
     reset="""
@@ -184,7 +194,7 @@ S = Synapses(
     source=G,
     target=G,
     on_pre="""
-        I_post += D_pre * gA    # [10]
+        I_post += D_pre * gA * bw_pre    # [10]
     """,
 )
 
@@ -197,7 +207,7 @@ S = Synapses(
 
 # treat minis as spikes, add directly to current
 # for homogeneous rates, this is faster. here, N=1 is the input per neuron
-# @JZ: is this RNG seeded/drawn during runtime or would stimulation change it?
+# maybe exclude the bridging neurons, when looking at `1x1_projected` topology
 mini_g = PoissonInput(target=G, target_var="I", N=1, rate=rate, weight=gm)
 
 # connect synapses
@@ -207,11 +217,17 @@ S.connect(i=a_ij_sparse[:, 0], j=a_ij_sparse[:, 1])
 # initalize to a somewhat sensible state. we could have different neuron types
 G.v = "vc + 5*mV*rand()"
 
+# optionally, give bridging neurons different weights
+bridge_ids = topo.load_bridging_neurons(args.input_path)
+G.bw = 1.0
+for n_id in bridge_ids:
+    G.bw[n_id] = args.bridge_weight
+
 # ------------------------------------------------------------------------------ #
 # Stimulation if requested
 # ------------------------------------------------------------------------------ #
 
-if args.enable_stimulation:
+if args.stimulation_type == "hideaki":
 
     stimulus_indices, stimulus_times = stim.stimulation_pattern(
         interval=400 * ms,
@@ -231,11 +247,20 @@ if args.enable_stimulation:
     stim_s = Synapses(stim_g, G, on_pre="v_post = 2*vp", name="apply_stimulation",)
     stim_s.connect(condition="i == j")
 
+elif args.stimulation_type == "poisson":
+    log.warning("Stimulation 'poisson' is not fully implemeted yet.")
+    # lets assume bridge_ids are consecutive
+    stim_g = G[bridge_ids]
+    PoissonInput(
+        target=stim_g, target_var="v", N=1, rate=rate, weight=vp
+    )
+
+
 # ------------------------------------------------------------------------------ #
 # Running
 # ------------------------------------------------------------------------------ #
 
-# equilibrate
+log.info("Equilibrating")
 run(args.equil_duration, report="stdout", report_period=1 * 60 * second)
 
 # add monitors after equilibration
@@ -247,10 +272,10 @@ if record_state:
 if record_rates:
     rate_m = PopulationRateMonitor(G)
 
-if args.enable_stimulation:
+if args.stimulation_type != "off":
     stim_m = SpikeMonitor(stim_g)
 
-# run and record
+log.info("Recording data")
 run(args.sim_duration, report="stdout", report_period=1 * 60 * second)
 
 
@@ -258,7 +283,9 @@ run(args.sim_duration, report="stdout", report_period=1 * 60 * second)
 # Writing
 # ------------------------------------------------------------------------------ #
 
-if args.output_path is not None:
+if args.output_path is None:
+    log.error("No output path provided. try `-o`")
+else:
     print(f'#{"":#^75}#\n#{"saving to disk":^75}#\n#{"":#^75}#')
 
     try:
@@ -274,6 +301,7 @@ if args.output_path is not None:
 
         def convert_brian_spikes_to_pauls(spks_m):
             trains = spks_m.spike_trains()
+            num_n = len(trains) # monitor may be defined on a subgroup
             tmax = 0
             for tdx in trains.keys():
                 if len(trains[tdx]) > tmax:
@@ -306,7 +334,7 @@ if args.output_path is not None:
             "description"
         ] = "two-column list of spiketimes. first col is neuron id, second col the spiketime. effectively same data as in '/data/spiketimes'. neuron id will need casting to int for indexing."
 
-        if args.enable_stimulation:
+        if args.stimulation_type != 'off':
             # stimultation timestamps in two different formats
             stim, stim_as_list = convert_brian_spikes_to_pauls(stim_m)
 
@@ -348,7 +376,9 @@ if args.output_path is not None:
                     (mon.t / second - args.equil_duration / second)[::freq],
                     (mon.smooth_rate(window="gaussian", width=width) / Hz)[::freq],
                 ]
-                dset = f.create_dataset(dsetname, compression="gzip", data=np.array(tmp).T)
+                dset = f.create_dataset(
+                    dsetname, compression="gzip", data=np.array(tmp).T
+                )
                 dset.attrs["description"] = description
 
             # main rate monitor
@@ -398,9 +428,6 @@ if args.output_path is not None:
 
     except Exception as e:
         log.exception("Unable to save to disk")
-
-else:
-    log.error("No output path provided. try `-o`")
 
 # remove cython caches
 try:

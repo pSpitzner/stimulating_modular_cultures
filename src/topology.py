@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-05 10:37:47
-# @Last Modified: 2021-03-19 14:19:42
+# @Last Modified: 2021-03-23 20:28:49
 # ------------------------------------------------------------------------------ #
 # Helper to load the topology from hdf5
 # ------------------------------------------------------------------------------ #
@@ -51,6 +51,13 @@ def load_topology(input_path):
     # mod_sort = lambda x: mod_sorted[x]
 
     return num_n, a_ij_sparse, mod_ids
+
+def load_bridging_neurons(input_path):
+    try:
+        return h5.load(input_path, "/data/neuron_bridge_ids").astype(int, copy=False)  # brian doesnt like uints
+    except Exception as e:
+        log.debug(e)
+        return []
 
 
 def connect_synapses_from(S, a_ij):
