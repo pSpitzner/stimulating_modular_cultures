@@ -6,75 +6,60 @@ from itertools import product
 os.chdir(os.path.dirname(__file__))
 
 # seed for rank 0, will increase per thread
-seed = 6_000
+seed = 1_000
 
 # parameters to scan, noise rate, ampa strength, and a few repetitons for statistics
-l_topo = ['2x2_fixed']
-# l_rate = np.arange(25,41)
-# l_gampa = np.arange(20,51)
-# extend region
-l_rate = np.array([37])
-l_gampa = np.array([35])
-l_recovery = np.array([2.0])
-l_alpha = np.array([0.0125])
-l_k_inter = np.array([0])
-l_mod = np.array([0])
-l_rep = range(0, 10)
+l_topo = ["2x2_fixed"]
+l_k_inter = np.array([1, 2, 3, 5])
+l_mod = np.array(["off", "0", "02", "012", "0123"])
+l_rep = range(0, 25)
 
-arg_list = product(l_topo, l_rate, l_gampa, l_recovery, l_alpha, l_k_inter, l_rep)
+bridge_weight = 0.5
 
-# we need to create the topology first for every seed!
+arg_list = product(l_topo, l_k_inter, l_rep)
 
-count = 0
+count_dynamic = 0
+count_topo = 0
 with open("./parameters_topo.tsv", "w") as f_topo:
     with open("./parameters_dyn.tsv", "w") as f_dyn:
-        with open("./parameters_stim.tsv", "w") as f_stim:
 
-            # set the cli arguments
-            f_topo.write("# commands to create topology\n")
-            f_dyn.write("# commands to run dynamics on existing topology\n")
-            f_stim.write("# commands with stimulation enabled\n")
+        # set the cli arguments
+        f_topo.write("# commands to create topology\n")
+        f_dyn.write("# commands to run dynamics on existing topology\n")
 
-            for i in arg_list:
-                topo = i[0]
-                rate = i[1]
-                gampa = i[2]
-                recovery = i[3]
-                alpha  = i[4]
-                k_inter  = i[5]
-                rep  = i[6]
+        for i in arg_list:
+            topo = i[0]
+            k_inter = i[1]
+            rep = i[2]
 
-                # we want the same seeds for all modules.
-                for mod in l_mod:
+            topo_path = f"./dat/bridge_weights/topo/k={k_inter:d}_bw={bridge_weight:03.2f}_rep={rep:02d}.hdf5"
+            f_topo.write(
+                # topology command
+                f"/data.nst/share/projects/paul_brian_modular_cultures/topology_orlandi_standalone/exe/orlandi_standalone "
+                + f"-N 100 -s {seed:d} -o {topo_path} "
+                + f"-f {topo} -a 0.0125 -a_weighted 1 -k {k_inter}\n"
+            )
+            count_topo += 1
 
-                    topo_path = f"./dat/topo/{topo}/gampa={gampa:04.2f}_rate={rate:04.2f}_recovery={recovery:04.2f}_alpha={alpha:.04f}_k={k_inter:d}_rep={rep:02d}.hdf5"
-                    dyn_path = f"./dat/dyn/{topo}/gampa={gampa:04.2f}_rate={rate:04.2f}_recovery={recovery:04.2f}_alpha={alpha:.04f}_k={k_inter:d}_rep={rep:02d}.hdf5"
-                    stim_path = f"./dat/jitter_{mod:d}/gampa={gampa:04.2f}_rate={rate:04.2f}_recovery={recovery:04.2f}_alpha={alpha:.04f}_k={k_inter:d}_rep={rep:02d}.hdf5"
+            for mod in l_mod:
+                dyn_path = f"./dat/bridge_weights/dyn/k={k_inter:d}_stim={mod}_bw={bridge_weight:03.2f}_rep={rep:02d}.hdf5"
 
-                    f_topo.write(
-                        # topology command
-                        f"/data.nst/share/projects/paul_brian_modular_cultures/topology_orlandi_standalone/exe/orlandi_standalone -N 100 -s {seed:d} -o {topo_path} -f {topo} -a {alpha} -a_weighted 1 -k {k_inter}\n"
-                    )
-                    f_dyn.write(
-                        # dynamic command
-                        f"python ./src/quadratic_integrate_and_fire.py -i {topo_path} " +
-                        f"-o {dyn_path} " +
-                        f"-d 10800 -equil 300 -s {seed:d} " +
-                        f"-gA {gampa:04.2f} -tD {recovery:04.2f} -r {rate:04.2f}\n"
-                    )
+                if mod == "off":
+                    stim_arg = ""
+                else:
+                    stim_arg = f"-stim hideaki -mod {mod}"
 
-                    f_stim.write(
-                        # dynamic command
-                        f"python ./src/quadratic_integrate_and_fire.py -i {topo_path} " +
-                        f"-o {stim_path} " +
-                        f"-d 10800 -equil 300 -s {seed:d} " +
-                        f"-stim -mod {mod:d} " +
-                        f"-gA {gampa:04.2f} -tD {recovery:04.2f} -r {rate:04.2f}\n"
-                    )
+                f_dyn.write(
+                    # dynamic command
+                    f"python ./src/quadratic_integrate_and_fire.py -i {topo_path} "
+                    + f"-o {dyn_path} "
+                    + f"-d 10800 -equil 300 -s {seed:d} "
+                    + f"{stim_arg}\n"
+                )
 
-                    count += 1
-
+                count_dynamic += 1
                 seed += 1
 
 
-print(f"number of argument combinations: {count}")
+print(f"number of argument combinations for topology: {count_topo}")
+print(f"number of argument combinations for dynamics: {count_dynamic}")

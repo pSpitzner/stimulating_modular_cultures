@@ -21,7 +21,7 @@ date
 source /home/pspitzner/.bashrc
 conda activate brian
 
-vargs=$(awk "NR==$(($SGE_TASK_ID + 1))" ./run/parameters_dyn.tsv)
+vargs=$(awk "NR==$(($SGE_TASK_ID + 1))" ./run/parameters_topo.tsv)
 echo "${vargs[$id]}"
 ${vargs[$id]}
 
