@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2021-03-23 21:24:17
+# @Last Modified: 2021-03-24 15:45:36
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 and runs the simulations in brian.
@@ -178,7 +178,7 @@ G = NeuronGroup(
         dI/dt = -I/tA                          : volt       # [9, 10]
         du/dt = ( b*(v-vr) -u )/ta             : volt       # [7] inhibitory current
         dD/dt = ( 1-D)/tD                      : 1          # [11] recovery to one
-        bw                                     : 1    # neuron specific synaptic weight
+        bw     : 1  (constant)                 # neuron specific synaptic weight
     """,
     threshold="v > vp",
     reset="""
@@ -251,9 +251,7 @@ elif args.stimulation_type == "poisson":
     log.warning("Stimulation 'poisson' is not fully implemeted yet.")
     # lets assume bridge_ids are consecutive
     stim_g = G[bridge_ids]
-    PoissonInput(
-        target=stim_g, target_var="v", N=1, rate=rate, weight=vp
-    )
+    PoissonInput(target=stim_g, target_var="v", N=1, rate=rate, weight=vp)
 
 
 # ------------------------------------------------------------------------------ #
@@ -301,7 +299,7 @@ else:
 
         def convert_brian_spikes_to_pauls(spks_m):
             trains = spks_m.spike_trains()
-            num_n = len(trains) # monitor may be defined on a subgroup
+            num_n = len(trains)  # monitor may be defined on a subgroup
             tmax = 0
             for tdx in trains.keys():
                 if len(trains[tdx]) > tmax:
@@ -334,7 +332,7 @@ else:
             "description"
         ] = "two-column list of spiketimes. first col is neuron id, second col the spiketime. effectively same data as in '/data/spiketimes'. neuron id will need casting to int for indexing."
 
-        if args.stimulation_type != 'off':
+        if args.stimulation_type != "off":
             # stimultation timestamps in two different formats
             stim, stim_as_list = convert_brian_spikes_to_pauls(stim_m)
 
@@ -421,6 +419,11 @@ else:
             "/meta/dynamics_equilibration_duration", data=args.equil_duration / second
         )
         dset.attrs["description"] = "in seconds"
+
+        dset = f.create_dataset("/meta/dynamics_bridge_weight", data=args.bridge_weight)
+        dset.attrs[
+            "description"
+        ] = "synaptic weight of bridging neurons. get applied as a factor to outgoing synaptic currents."
 
         f.close()
 
