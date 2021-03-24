@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-05 10:30:17
-# @Last Modified: 2021-03-19 16:09:18
+# @Last Modified: 2021-03-24 17:10:35
 # ------------------------------------------------------------------------------ #
 # Create additional spikes that model stimulation
 #
@@ -29,7 +29,7 @@ log = logging.getLogger(__name__)
 # ------------------------------------------------------------------------------ #
 
 
-def stimulation_pattern(interval, duration, target_modules, mod_ids):
+def stimulation_pattern(interval, duration, target_modules, mod_ids, min_dt=0):
     """
         Generate times and indices (of neurons) that are stimulated.
         We induce on average one extra spike in the `interval`,
@@ -40,6 +40,8 @@ def stimulation_pattern(interval, duration, target_modules, mod_ids):
             duration       : time, total duration
             target_modules : list, which modules to target
             mod_ids        : ndarry, id of the module each neuron of the system is in
+            min_dt         : time, subsequent spikes of same neurons are ensured to
+                            be separated by at least `min_dt`. set to brians timestep
 
         # Returns
             indices
@@ -49,40 +51,65 @@ def stimulation_pattern(interval, duration, target_modules, mod_ids):
     log.info(f"Setting up stimulation {interval} at module {target_modules}")
 
     candidates = _draw_candidates(
-        mod_ids=mod_ids, n_per_mod=1, mod_targets=target_modules
+        mod_ids=mod_ids, n_per_mod=5, mod_targets=target_modules,
     )
     candidates = np.array(candidates)
-
-    s_indxs = []
-    s_times = []
-
     jitter = True
-    for step in range(1, int(duration / interval) - 1):
-        t = step * interval / second
-        n_targets = _draw_pattern_from_candidates(
-            candidates=candidates, p_per_candidate=0.4
-        ).tolist()
-        if False:
-            # in the past we had completely determinstic spiking every 400ms
-            s_indxs += n_targets
-            s_times += [t] * len(n_targets)
-        else:
-            # instead of a fixed spike time, add poisson drive to every target
-            num_segments = 100.0
-            dt = interval / num_segments / second
-            p = 1.0 / num_segments
-            for n in n_targets:
-                for t_segment in np.arange(t, t + interval / second, dt):
-                    if np.random.uniform(0, 1) < p:
-                        s_indxs += [n]
-                        s_times += [
-                            np.random.uniform(low=t_segment, high=t_segment + dt)
-                        ]
 
-    # sort and cast to array
+    global s_indxs
+    global seps_for_c
+
+    tries = 0
+    while True:
+        tries += 1
+        s_indxs = []
+        s_times = []
+        for step in range(1, int(duration / interval) - 1):
+            t = step * interval / second
+            n_targets = _draw_pattern_from_candidates(
+                candidates=candidates, p_per_candidate=0.4
+            ).tolist()
+            if False:
+                # in the past we had completely determinstic spiking every 400ms
+                s_indxs += n_targets
+                s_times += [t] * len(n_targets)
+            else:
+                # instead of a fixed spike time, add poisson drive to every target
+                num_segments = 100.0
+                dt = interval / num_segments / second
+                p = 1.0 / num_segments
+                for n in n_targets:
+                    for t_segment in np.arange(t, t + interval / second, dt):
+                        if np.random.uniform(0, 1) < p:
+                            s_indxs += [n]
+                            s_times += [
+                                np.random.uniform(low=t_segment, high=t_segment + dt)
+                            ]
+
+        # case to numpy array
+        s_times = np.array(s_times)
+        s_indxs = np.array(s_indxs)
+
+        # make sure we did not draw two consecutive spikes that are smaller than
+        # the simulation timestep
+        smallest_sep_is_long_enough = True
+        for c in candidates:
+            seps_for_c = np.diff(s_times[s_indxs == c])
+            if np.nanmin(seps_for_c) < min_dt / second:
+                smallest_sep_is_long_enough = False
+                break
+        if smallest_sep_is_long_enough:
+            break
+        # if we exceed tries, throw an exception
+        assert (
+            tries < 1000
+        ), f"could not generate times that are separated by {min_dt} in 1000 attempts"
+
+
+    # sort by spike time
     idx = np.argsort(s_times)
-    s_times = np.array(s_times)[idx] * second
-    s_indxs = np.array(s_indxs)[idx]
+    s_times = s_times[idx] * second
+    s_indxs = s_indxs[idx]
 
     return s_indxs, s_times
 
@@ -167,19 +194,18 @@ def _time_random(t_start, t_end, num_n):
 
     return np.random.uniform(low=t_start, high=t_end, size=num_n)  # [low, high)
 
+
 # ------------------------------------------------------------------------------ #
 # explorative helpers
 # ------------------------------------------------------------------------------ #
 
+
 def _random_windows(interval, duration, p=0.4):
-    num_intervals = int(duration/interval)
+    num_intervals = int(duration / interval)
 
     res = []
-    for i in range(1, num_intervals+1):
+    for i in range(1, num_intervals + 1):
         if np.random.uniform(0.0, 1.0) > p:
-            res.append(i*interval)
+            res.append(i * interval)
 
     return np.array(res)
-
-
-

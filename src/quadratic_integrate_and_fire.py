@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2021-03-24 15:45:36
+# @Last Modified: 2021-03-24 16:53:40
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 and runs the simulations in brian.
@@ -234,6 +234,7 @@ if args.stimulation_type == "hideaki":
         duration=args.equil_duration + args.sim_duration,
         target_modules=args.stimulation_module,
         mod_ids=mod_ids,
+        min_dt=defaultclock.dt * 1.001
     )
 
     stim_g = SpikeGeneratorGroup(
