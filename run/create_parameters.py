@@ -54,6 +54,7 @@ with open("./parameters_topo.tsv", "w") as f_topo:
                     f"python ./src/quadratic_integrate_and_fire.py -i {topo_path} "
                     + f"-o {dyn_path} "
                     + f"-d 10800 -equil 300 -s {seed:d} "
+                    + f"--bridge_weight {bridge_weight} "
                     + f"{stim_arg}\n"
                 )
 
