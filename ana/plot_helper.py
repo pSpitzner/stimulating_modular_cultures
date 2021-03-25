@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-03-23 19:47:31
+# @Last Modified: 2021-03-25 16:13:28
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -56,7 +56,6 @@ import hi5 as h5
 from hi5 import BetterDict
 import colors as cc
 import ana_helper as ah
-import process_batch as batch
 
 # fmt: on
 
@@ -132,7 +131,7 @@ def overview_burst_duration_and_isi(h5f, filenames=None, which="all"):
     plot_parameter_info(h5f, ax=axes[0], add=comments)
 
     axes[1].set_xlim(0, 0.4)
-    axes[2].set_xlim(1e-3, 1e2)
+    axes[2].set_xlim(-3, 2)
 
     for i in range(4):
         fig.tight_layout()
@@ -411,7 +410,7 @@ def plot_distribution_burst_duration(
         if h5f.ana.ensemble is None:
             h5f.ana.ensemble = BetterDict()
             h5f.ana.ensemble.filenames = filenames
-            ens = batch.process_candidates_burst_times_and_isi(filenames, hot=True)
+            ens = ah.batch_candidates_burst_times_and_isi(filenames, hot=True)
             h5f.ana.ensemble.bursts = ens.ana.bursts
             h5f.ana.ensemble.isi = ens.ana.isi
             del ens
@@ -504,7 +503,7 @@ def plot_distribution_isi(
         if h5f.ana.ensemble is None:
             h5f.ana.ensemble = BetterDict()
             h5f.ana.ensemble.filenames = filenames
-            ens = batch.process_candidates_burst_times_and_isi(filenames, hot=True)
+            ens = ah.batch_candidates_burst_times_and_isi(filenames, hot=True)
             h5f.ana.ensemble.bursts = ens.ana.bursts
             h5f.ana.ensemble.isi = ens.ana.isi
             del ens
