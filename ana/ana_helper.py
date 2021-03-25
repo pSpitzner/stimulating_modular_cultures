@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-03-23 21:46:51
+# @Last Modified: 2021-03-25 16:06:59
 # ------------------------------------------------------------------------------ #
 
 
@@ -259,13 +259,8 @@ def find_isis(h5f, write_to_h5f=True):
             b = None
             e = None
 
-        isis_all, isis_in, isis_out = __inter_spike_intervals(
-            spikes_2d, beg_times=b, end_times=e,
-        )
-        isi[m_id] = BetterDict()
-        isi[m_id].all = isis_all
-        isi[m_id].in_bursts = isis_in
-        isi[m_id].out_bursts = isis_out
+        ll_isi = _inter_spike_intervals(spikes_2d, beg_times=b, end_times=e,)
+        isi[m_id] = ll_isi
 
     if write_to_h5f:
         h5f.ana.isi = isi
@@ -400,24 +395,33 @@ def batch_conditions():
 # ------------------------------------------------------------------------------ #
 
 # turns out this is faster without numba
-def __inter_spike_intervals(spikes_2d, beg_times=None, end_times=None):
+def _inter_spike_intervals(spikes_2d, beg_times=None, end_times=None):
     """
         Returns three list, thre first one contains all interspike intervals,
         merged down for all neurons in `spikes_2d`.
         If `beg_times` and `end_times` are passed, returns two more lists
         with the isis inside and out of bursts. otherwise, they are empty.
     """
+
     isis_all = []
-    isis_in_burst = []
-    isis_out_burst = []
+    isis_in = []
+    isis_out = []
+    cvs_all = []
+    cvs_in = []
+    cvs_out = []
+
     if beg_times is None or end_times is None:
         num_bursts = 0
     else:
         num_bursts = len(beg_times)
 
     for n in range(spikes_2d.shape[0]):
-        diffs = np.diff(spikes_2d[n])
-        isis_all.extend(diffs[~np.isnan(diffs)])
+        spikes = spikes_2d[n]
+        spikes = spikes[~np.isnan(spikes)]
+        diffs = np.diff(spikes)
+        isis_all.extend(diffs)
+        if len(diffs) > 0:
+            cvs_all.append(np.std(diffs) / np.mean(diffs))
 
         # check on burst level
         for idx in range(0, num_bursts):
@@ -427,7 +431,10 @@ def __inter_spike_intervals(spikes_2d, beg_times=None, end_times=None):
             spikes = spikes_2d[n]
             spikes = spikes[spikes >= b]
             spikes = spikes[spikes <= e]
-            isis_in_burst.extend(np.diff(spikes))
+            diffs = np.diff(spikes)
+            isis_in.extend(diffs)
+            if len(diffs) > 0:
+                cvs_in.append(np.std(diffs) / np.mean(diffs))
 
             e = beg_times[idx]
             if idx > 0:
@@ -438,7 +445,10 @@ def __inter_spike_intervals(spikes_2d, beg_times=None, end_times=None):
             spikes = spikes_2d[n]
             spikes = spikes[spikes >= b]
             spikes = spikes[spikes <= e]
-            isis_out_burst.extend(np.diff(spikes))
+            diffs = np.diff(spikes)
+            isis_out.extend(spikes)
+            if len(diffs) > 0:
+                cvs_out.append(np.std(diffs) / np.mean(diffs))
 
         # after last burst
         e = np.inf
@@ -449,9 +459,23 @@ def __inter_spike_intervals(spikes_2d, beg_times=None, end_times=None):
         spikes = spikes_2d[n]
         spikes = spikes[spikes >= b]
         spikes = spikes[spikes <= e]
-        isis_out_burst.extend(np.diff(spikes))
+        diffs = np.diff(spikes)
+        isis_out.extend(spikes)
+        if len(diffs) > 0:
+            cvs_out.append(np.std(diffs) / np.mean(diffs))
 
-    return isis_all, isis_in_burst, isis_out_burst
+        cv_all = np.mean(cvs_all)
+        cv_in_bursts = np.mean(cvs_in)
+        cv_out_bursts = np.mean(cvs_out)
+
+    return BetterDict(
+        all=isis_all,
+        in_bursts=isis_in,
+        out_bursts=isis_out,
+        cv_all=cv_all,
+        cv_in_bursts=cv_in_bursts,
+        cv_out_bursts=cv_out_bursts,
+    )
 
 
 @jit(nopython=True, parallel=True, fastmath=True, cache=True)
@@ -589,6 +613,7 @@ def burst_detection_pop_rate(
 
     # workaround
     from numba.typed import List
+
     beg_time = List(beg_time)
     end_time = List(end_time)
     if len(beg_time) == 0:
@@ -719,7 +744,6 @@ def system_burst_from_module_burst(beg_times, end_times, threshold, modules=None
             particular burst
     """
 
-
     if modules is None:
         modules = np.arange(len(beg_times))
 
@@ -775,41 +799,41 @@ def system_burst_from_module_burst(beg_times, end_times, threshold, modules=None
 
 def smooth_rate(rate, clock_dt, window="gaussian", width=None):
     """
-    Return a smooth version of the population rate.
-    Taken from brian2 population rate monitor
-    https://brian2.readthedocs.io/en/2.0rc/_modules/brian2/monitors/ratemonitor.html#PopulationRateMonitor
+        Return a smooth version of the population rate.
+        Taken from brian2 population rate monitor
+        https://brian2.readthedocs.io/en/2.0rc/_modules/brian2/monitors/ratemonitor.html#PopulationRateMonitor
 
-    Parameters
-    ----------
-    rate : ndarray
-        in hz
-    clock_dt : time in seconds that entries in rate are apart (sampling frequency)
-    window : str, ndarray
-        The window to use for smoothing. Can be a string to chose a
-        predefined window(``'flat'`` for a rectangular, and ``'gaussian'``
-        for a Gaussian-shaped window). In this case the width of the window
-        is determined by the ``width`` argument. Note that for the Gaussian
-        window, the ``width`` parameter specifies the standard deviation of
-        the Gaussian, the width of the actual window is ``4*width + dt``
-        (rounded to the nearest dt). For the flat window, the width is
-        rounded to the nearest odd multiple of dt to avoid shifting the rate
-        in time.
-        Alternatively, an arbitrary window can be given as a numpy array
-        (with an odd number of elements). In this case, the width in units
-        of time depends on the ``dt`` of the simulation, and no ``width``
-        argument can be specified. The given window will be automatically
-        normalized to a sum of 1.
-    width : `Quantity`, optional
-        The width of the ``window`` in seconds (for a predefined window).
+        Parameters
+        ----------
+        rate : ndarray
+            in hz
+        clock_dt : time in seconds that entries in rate are apart (sampling frequency)
+        window : str, ndarray
+            The window to use for smoothing. Can be a string to chose a
+            predefined window(``'flat'`` for a rectangular, and ``'gaussian'``
+            for a Gaussian-shaped window). In this case the width of the window
+            is determined by the ``width`` argument. Note that for the Gaussian
+            window, the ``width`` parameter specifies the standard deviation of
+            the Gaussian, the width of the actual window is ``4*width + dt``
+            (rounded to the nearest dt). For the flat window, the width is
+            rounded to the nearest odd multiple of dt to avoid shifting the rate
+            in time.
+            Alternatively, an arbitrary window can be given as a numpy array
+            (with an odd number of elements). In this case, the width in units
+            of time depends on the ``dt`` of the simulation, and no ``width``
+            argument can be specified. The given window will be automatically
+            normalized to a sum of 1.
+        width : `Quantity`, optional
+            The width of the ``window`` in seconds (for a predefined window).
 
-    Returns
-    -------
-    rate : ndarrayy
-        The population rate in Hz, smoothed with the given window. Note that
-        the rates are smoothed and not re-binned, i.e. the length of the
-        returned array is the same as the length of the ``rate`` attribute
-        and can be plotted against the `PopulationRateMonitor` 's ``t``
-        attribute.
+        Returns
+        -------
+        rate : ndarrayy
+            The population rate in Hz, smoothed with the given window. Note that
+            the rates are smoothed and not re-binned, i.e. the length of the
+            returned array is the same as the length of the ``rate`` attribute
+            and can be plotted against the `PopulationRateMonitor` 's ``t``
+            attribute.
     """
     if width is None and isinstance(window, str):
         raise TypeError("Need a width when using a predefined window.")
