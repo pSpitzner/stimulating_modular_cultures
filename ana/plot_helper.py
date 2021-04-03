@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-03-25 16:13:28
+# @Last Modified: 2021-03-30 10:01:35
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -108,6 +108,7 @@ def overview_dynamic(h5f, filenames=None):
     plot_parameter_info(h5f, axes[0])
     plot_raster(h5f, axes[1])
     plot_module_rates(h5f, axes[2])
+    plot_system_rate(h5f, axes[2])
     plot_bursts_into_timeseries(h5f, axes[3])
 
     axes[1].set_xlabel("")
@@ -247,6 +248,45 @@ def plot_module_rates(h5f, ax=None, apply_formatting=True, mark_bursts=True):
 
     return ax
 
+
+def plot_system_rate(h5f, ax=None, apply_formatting=True):
+    assert h5f.ana is not None, "`prepare_file(h5f)` before plotting!"
+
+    log.info("Plotting System Rate")
+
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.get_figure()
+
+    if h5f.ana.rates is None:
+        ah.find_bursts_from_rates(h5f)
+
+    dt = h5f.ana.rates.dt
+
+    pop_rate = h5f.ana.rates.system_level
+    mean_rate = np.nanmean(pop_rate)
+    ax.plot(
+        np.arange(0, len(pop_rate)) * dt,
+        pop_rate,
+        label=f"system rate: ({mean_rate:.2f} Hz)",
+        color="black",
+    )
+
+    leg = ax.legend(loc=1)
+
+    if apply_formatting:
+        leg.get_frame().set_linewidth(0.0)
+        leg.get_frame().set_facecolor("#e4e5e6")
+        leg.get_frame().set_alpha(0.95)
+
+        ax.margins(x=0, y=0)
+        ax.set_ylabel("Rates [Hz]")
+        ax.set_xlabel("Time [seconds]")
+
+        fig.tight_layout()
+
+    return ax
 
 def plot_bursts_into_timeseries(h5f, ax=None, apply_formatting=True):
 
