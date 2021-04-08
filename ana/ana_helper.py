@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-03-25 16:06:59
+# @Last Modified: 2021-04-08 12:22:06
 # ------------------------------------------------------------------------------ #
 
 
@@ -11,9 +11,12 @@ import sys
 import glob
 import h5py
 import numpy as np
+import pandas as pd
 
 import hi5 as h5
 from hi5 import BetterDict
+from tqdm import tqdm
+from itertools import permutations
 
 import logging
 import warnings
@@ -110,7 +113,7 @@ def prepare_file(h5f, mod_colors="auto", hot=True):
     # ------------------------------------------------------------------------------ #
     if mod_colors is False:
         h5f.ana.mod_colors = ["black"] * len(h5f.ana.mods)
-    elif mod_colors is "auto":
+    elif mod_colors == "auto":
         h5f.ana.mod_colors = [f"C{x}" for x in range(0, len(h5f.ana.mods))]
     else:
         assert isinstance(mod_colors, list)
@@ -129,6 +132,8 @@ def prepare_file(h5f, mod_colors="auto", hot=True):
     # make sure that the 2d_spikes representation is nan-padded, requires loading!
     try:
         spikes = h5f.data.spiketimes[:]
+        if spikes is None:
+            raise ValueError
         spikes[spikes == 0] = np.nan
         h5f.data.spiketimes = spikes
     except:
@@ -145,6 +150,22 @@ def prepare_file(h5f, mod_colors="auto", hot=True):
     # # the outer array is essentially a list but with fancy indexing.
     # # this is a bit counter-intuitive
     # h5f.ana.spikes_2d = np.array(spikes_2d, dtype=object)
+
+    # Stimulation description
+    stim_str = "Unknown"
+    if h5f.data.stimulation_times_as_list is None:
+        stim_str = "Off"
+    else:
+        try:
+            stim_neurons = np.unique(h5f.data.stimulation_times_as_list[:, 0]).astype(
+                int
+            )
+            stim_mods = np.unique(h5f.data.neuron_module_id[stim_neurons])
+            stim_str = f"On {str(tuple(stim_mods)).replace(',)', ')')}"
+        except:
+            stim_str = f"Error"
+
+    h5f.ana.stimulation_description = stim_str
 
     return h5f
 
@@ -184,23 +205,28 @@ def find_bursts_from_rates(
 
     for m_id in h5f.ana.mods:
         selects = np.where(h5f.data.neuron_module_id[:] == m_id)[0]
-        # pop_rate = population_rate(spikes[selects], bin_size=bs_small)
-        # pop_rate = smooth_rate(pop_rate, clock_dt=bs_small, width=bs_large)
-        # pop_rate = pop_rate / bs_small
         pop_rate = population_rate_exact_smoothing(
             spikes[selects],
             bin_size=bs_small,
             smooth_width=bs_large,
             length=h5f.meta.dynamics_simulation_duration,
         )
+        # pop_rate = population_rate(
+        #     spikes[selects],
+        #     bin_size=bs_small,
+        #     length=h5f.meta.dynamics_simulation_duration,
+        # )
+        # pop_rate = smooth_rate(pop_rate, clock_dt=bs_small, width=bs_large)
+        # pop_rate = pop_rate / bs_small
 
         beg_time, end_time = burst_detection_pop_rate(
             rate=pop_rate, bin_size=bs_small, rate_threshold=rate_threshold,
         )
 
-        beg_time, end_time = merge_if_below_separation_threshold(
-            beg_time, end_time, threshold=merge_threshold
-        )
+        if len(beg_time) > 0:
+            beg_time, end_time = merge_if_below_separation_threshold(
+                beg_time, end_time, threshold=merge_threshold
+            )
 
         beg_times.append(beg_time)
         end_times.append(end_time)
@@ -211,9 +237,6 @@ def find_bursts_from_rates(
         bursts.module_level[m_id].end_times = end_time.copy()
         bursts.module_level[m_id].rate_threshold = rate_threshold
 
-    # pop_rate = population_rate(spikes[:], bin_size=bs_small)
-    # pop_rate = smooth_rate(pop_rate, clock_dt=bs_small, width=bs_large)
-    # pop_rate = pop_rate / bs_small
     pop_rate = population_rate_exact_smoothing(
         spikes[:],
         bin_size=bs_small,
@@ -232,6 +255,13 @@ def find_bursts_from_rates(
     bursts.system_level.module_sequences = all_seqs
 
     if write_to_h5f:
+        if isinstance(h5f.ana.bursts, BetterDict):
+            h5f.ana.bursts.clear()
+        if isinstance(h5f.ana.rates, BetterDict):
+            h5f.ana.rates.clear()
+        # so, overwriting keys with dicts (nesting) can cause memory leaks.
+        # to avoid this, call .clear() before assigning the new dict
+        # testwise I made this the default for setting keys of BetterDict
         h5f.ana.bursts = bursts
         h5f.ana.rates = rates
 
@@ -273,7 +303,76 @@ def find_isis(h5f, write_to_h5f=True):
 # ------------------------------------------------------------------------------ #
 
 
-def batch_candidates_burst_times_and_isi(input_path, hot=True):
+def batch_sequence_length_probabilities(list_of_filenames):
+    """
+        Create a pandas data frame (long form, every row corresponds to one sequence
+        length that occured - usually, 4 rows per realization).
+        Remaining columns include meta data, conditions etc.
+        This can be directly used for box plotting in seaborn.
+
+        # Parameters:
+        list_of_filenames: list of str,
+            each str will be globbed and process
+    """
+
+    if isinstance(list_of_filenames, str):
+        list_of_filenames = [list_of_filenames]
+
+    # create a dict where the key is the column name and the value is a function
+    # that takes the h5f instance to retrieve the column entry
+    columns = [
+        "Sequence length",
+        "Probability",
+        "Total",  # Number of entries contributing to probability
+        "Stimulation",
+        "Connections",
+        "Bridge weight",
+    ]
+    df = pd.DataFrame(columns=columns)
+
+    candidates = [glob.glob(f) for f in list_of_filenames]
+    candidates = [item for sublist in candidates for item in sublist]  # flatten
+
+    assert len(candidates) > 0, f"Are the filenames correct?"
+
+    for candidate in tqdm(candidates, desc="Seq. length for files"):
+        h5f = prepare_file(candidate, hot=True)
+        # this adds the required entry for sequences
+        find_bursts_from_rates(h5f)
+        labels, probs, total = sequence_length_histogram_from_list(
+            list_of_sequences=h5f.ana.bursts.system_level.module_sequences,
+            mods=h5f.ana.mods,
+        )
+
+        # fetch meta data for every row
+        stim = h5f.ana.stimulation_description
+        bridge_weight = h5f.meta.dynamics_bridge_weight
+        if bridge_weight is None:
+            bridge_weight = 1.0
+        num_connections = h5f.meta.topology_k_inter
+
+        for ldx, l in enumerate(labels):
+            df = df.append(
+                pd.DataFrame(
+                    data=[
+                        [
+                            labels[ldx],
+                            probs[ldx],
+                            total,
+                            stim,
+                            num_connections,
+                            bridge_weight,
+                        ]
+                    ],
+                    columns=columns,
+                ),
+                ignore_index=True,
+            )
+
+    return df
+
+
+def batch_candidates_burst_times_and_isi(input_path, hot=False):
     """
         get the burst times based on rate for every module and merge it down, so that
         we have ensemble average statistics
@@ -324,7 +423,11 @@ def batch_candidates_burst_times_and_isi(input_path, hot=True):
         if hot:
             # only close the last file (which we opened), and let's hope no other file
             # was opened in the meantime
-            h5.close_hot(which=-1)
+            # h5.close_hot(which=-1)
+            try:
+                h5f.h5_file.close()
+            except:
+                log.debug("Failed to close file")
 
     return res
 
@@ -479,7 +582,7 @@ def _inter_spike_intervals(spikes_2d, beg_times=None, end_times=None):
 
 
 @jit(nopython=True, parallel=True, fastmath=True, cache=True)
-def population_rate(spiketimes, bin_size):
+def population_rate(spiketimes, bin_size, length=None):
     """
         Calculate the activity across the whole population. naive binning,
         no sliding window.
@@ -502,10 +605,14 @@ def population_rate(spiketimes, bin_size):
     num_n = spiketimes.shape[0]
 
     # target array
-    t_max = np.nanmax(spiketimes)
-    t_index_max = int(np.ceil(t_max / bin_size) + 1)
+    if length is not None:
+        num_bins = int(np.ceil(length / bin_size))
+    else:
+        t_min = 0.0
+        t_max = np.nanmax(spiketimes)
+        num_bins = int(np.ceil((t_max - t_min) / bin_size))
 
-    rate = np.zeros(t_index_max)
+    rate = np.zeros(num_bins)
 
     for n_id in range(0, num_n):
         train = spiketimes[n_id]
@@ -563,6 +670,7 @@ def population_rate_exact_smoothing(spiketimes, bin_size, smooth_width, length=N
             if np.isnan(mu):
                 break
             # only consider bins 4 sigma around the spike time
+            # bin_beg = int((mu - 0 * sigma) / bin_size)
             bin_beg = int((mu - 4 * sigma) / bin_size)
             bin_end = int((mu + 4 * sigma) / bin_size)
 
@@ -608,19 +716,19 @@ def burst_detection_pop_rate(
 
     # causes numba deprecation warning. in the future this will need to be a typed list
     # List(foo) will solve this but introduces a new type for everything. not great.
-    # beg_time = beg_time.tolist()
-    # end_time = end_time.tolist()
+    beg_time = beg_time.tolist()
+    end_time = end_time.tolist()
 
     # workaround
-    from numba.typed import List
+    # from numba.typed import List
 
-    beg_time = List(beg_time)
-    end_time = List(end_time)
-    if len(beg_time) == 0:
-        beg_time.append(1.0)
-        end_time.append(1.0)
-        del beg_time[0]
-        del end_time[0]
+    # beg_time = List(beg_time)
+    # end_time = List(end_time)
+    # if len(beg_time) == 0:
+    #     beg_time.append(1.0)
+    #     end_time.append(1.0)
+    #     del beg_time[0]
+    #     del end_time[0]
 
     if not return_series:
         return beg_time, end_time
@@ -854,7 +962,7 @@ def smooth_rate(rate, clock_dt, window="gaussian", width=None):
             width_dt = int(width / 2 / clock_dt) * 2 + 1
             used_width = width_dt * clock_dt
             if abs(used_width - width) > 1e-6 * clock_dt:
-                logger.info(
+                log.info(
                     "width adjusted from %s to %s" % (width, used_width),
                     "adjusted_width",
                     once=True,
@@ -872,3 +980,131 @@ def smooth_rate(rate, clock_dt, window="gaussian", width=None):
         if len(window) % 2 != 1:
             raise TypeError("The window has to have an odd number of " "values.")
     return np.convolve(rate, window * 1.0 / sum(window), mode="same")
+
+
+# ------------------------------------------------------------------------------ #
+# sequences
+# ------------------------------------------------------------------------------ #
+
+
+def sequence_histogram(ids, sequences=None):
+
+    """
+        create a histogram for every occuring sequences.
+        If no `sequences` are provided, only gives the possible combinations (based on
+        `ids`) that could have occured.
+        sequnces should be a list of tuples (or arrays?)
+    """
+
+    labels = []
+    for r in range(0, len(ids)):
+        labels += list(permutations(ids, r + 1))
+
+    if sequences is None:
+        return labels
+
+    histogram = np.zeros(len(labels), dtype=np.int64)
+
+    for s in sequences:
+        # get the right label, cast arrays to tuples for comparison
+        idx = labels.index(tuple(s))
+        histogram[idx] += 1
+
+    return labels, histogram
+
+
+def sequence_labels_to_strings(labels):
+    # helper to convert the labels from list of tuples to list of strings
+
+    res = []
+    for l in labels:
+        s = str(l)
+        s = s.replace("(", "")
+        s = s.replace(")", "")
+        s = s.replace(",", "")
+        s = s.replace(" ", "")
+        res.append(s)
+
+    return res
+
+
+def sequence_conditional_probabilities(
+    sequences, mod_ids=[0, 1, 2, 3], only_first=True
+):
+    """
+        calculate the conditional probabilites, e.g.
+        p(mod2 bursts | mod 1bursted)
+        excludes jumps over other modules!
+
+        # Parameters
+        sequences : list of tuples of ints
+        mod_ids : list of ints, from 0 to number modules
+    """
+
+    num_mods = mod_ids[-1] + 1
+    prob_counts = np.zeros(shape=(num_mods, num_mods))
+    self_counts = np.zeros(shape=(num_mods))
+
+    for seq in sequences:
+        for idx in range(len(seq)):
+            if only_first and idx == 1:
+                break
+            i = seq[idx]
+            self_counts[i] += 1
+            # we will still need to deal with sequences that run in cricles
+            if idx < len(seq) - 1:
+                j = seq[idx + 1]
+                prob_counts[i][j] += 1
+
+    for idx, norm in enumerate(self_counts):
+        prob_counts[idx, :] = prob_counts[idx, :] / norm
+
+    if True:
+        for idx in range(num_mods):
+            for jdx in range(num_mods):
+                p = prob_counts[idx][jdx]
+                print(f"p({idx} -> {jdx}) = {p:.2f}")
+            print(f"total:      {self_counts[idx]}\n")
+
+    return prob_counts, self_counts
+
+
+def sequence_length_histogram_from_list(list_of_sequences, mods=[0, 1, 2, 3]):
+    """
+        Provide a list of sequences as tuples and get a histogram of sequence lengths.
+
+        # Returns
+        catalog : nd array with the sequences
+        probs : nd array with probabilities of each sequence (normalized counts)
+        total : int, number of total histogram entries
+    """
+    seq_labs, seq_hist = sequence_histogram(mods, list_of_sequences)
+
+    seq_str_labs = np.array(sequence_labels_to_strings(seq_labs))
+    seq_lens = np.zeros(len(seq_str_labs), dtype=np.int)
+    seq_begs = np.zeros(len(seq_str_labs), dtype=np.int)
+    for idx, s in enumerate(seq_str_labs):
+        seq_lens[idx] = len(s)
+        seq_begs[idx] = int(s[0])
+
+    skip_empty = True
+    if skip_empty:
+        nz_idx = np.where(seq_hist != 0)[0]
+    else:
+        nz_idx = slice(None)
+
+    catalog = np.unique(seq_lens)
+    len_hist = np.zeros(len(catalog))
+    lookup = dict()
+    for c in catalog:
+        lookup[c] = np.where(catalog == c)[0][0]
+
+    for sdx, s in enumerate(seq_hist):
+        c = seq_lens[sdx]
+        len_hist[lookup[c]] += s
+
+    # assert np.sum(len_hist) == len(list_of_sequences), "sanity check"
+    # total = len(list_of_sequences)
+    total = np.sum(len_hist)
+
+    return catalog, len_hist / total, total

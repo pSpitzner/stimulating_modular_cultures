@@ -1,8 +1,8 @@
-# ------------------------------------------------------------------------------ #
+
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-12-03 17:56:15
-# @Last Modified: 2021-02-23 18:48:18
+# @Last Modified: 2021-04-06 10:01:42
 # ------------------------------------------------------------------------------ #
 
 import os
@@ -275,7 +275,7 @@ def plot_te(te, vmax=None, vmin=None):
     return fig, axs
 
 
-def stim_clr(base_as_hex, alpha):
+def stim_clr(base, alpha):
     import matplotlib.colors as mcolors
 
     def rgba_to_rgb(c, bg="white"):
@@ -289,10 +289,9 @@ def stim_clr(base_as_hex, alpha):
         )
         return res
 
-    global base
-    base = list(mcolors.to_rgba(base_as_hex))
-    base[3] = alpha
-    return mcolors.to_hex(rgba_to_rgb(base))
+    new_base = list(mcolors.to_rgba(base))
+    new_base[3] = alpha
+    return mcolors.to_hex(rgba_to_rgb(new_base))
 
 
 c1 = plt.rcParams["axes.prop_cycle"].by_key()["color"][1]

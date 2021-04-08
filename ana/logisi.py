@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-09-28 10:36:48
-# @Last Modified: 2021-03-17 15:44:07
+# @Last Modified: 2021-04-03 15:22:28
 # ------------------------------------------------------------------------------ #
 # My implementation of the logISI historgram burst detection algorithm
 # by Pasuqale et al.
@@ -775,80 +775,5 @@ def sequence_detection(network_bursts, details, mod_ids):
     return res
 
 
-# ------------------------------------------------------------------------------ #
-# sequence functions that work for burst and logisi things
-# ------------------------------------------------------------------------------ #
 
 
-def sequence_entropy(sequences, ids):
-
-    # create a list of all possible sequences.
-    # each sequence is a tuple
-    labels = []
-    for r in range(0, len(ids)):
-        labels += list(permutations(ids, r + 1))
-
-    histogram = np.zeros(len(labels), dtype=np.int64)
-
-    for s in sequences:
-        # get the right label, cast arrays to tuples for comparison
-        idx = labels.index(tuple(s))
-        histogram[idx] += 1
-
-    return labels, histogram
-
-
-def sequence_labels_to_strings(labels):
-    # helper to convert the labels from list of tuples to list of strings
-
-    res = []
-    for l in labels:
-        s = str(l)
-        s = s.replace("(", "")
-        s = s.replace(")", "")
-        s = s.replace(",", "")
-        s = s.replace(" ", "")
-        res.append(s)
-
-    return res
-
-# %%
-def conditional_probabilities_from_sequences(sequences, mod_ids=[0, 1, 2, 3], only_first = True):
-    """
-    calculate the conditional probabilites, e.g.
-    p(mod2 bursts | mod 1bursted)
-    excludes jumps over other modules!
-
-    # Parameters
-    sequences : list of tuples of ints
-    mod_ids : list of ints, from 0 to number modules
-    """
-
-    num_mods = mod_ids[-1] + 1
-    prob_counts = np.zeros(shape=(num_mods, num_mods))
-    self_counts = np.zeros(shape=(num_mods))
-
-    for seq in sequences:
-        for idx in range(len(seq)):
-            if only_first and idx == 1:
-                break
-            i = seq[idx]
-            self_counts[i] += 1
-            # we will still need to deal with sequences that run in cricles
-            if idx < len(seq) -1:
-                j = seq[idx + 1]
-                prob_counts[i][j] += 1
-
-    for idx, norm in enumerate(self_counts):
-        prob_counts[idx, :] = prob_counts[idx, :]/norm
-
-    if True:
-        for idx in range(num_mods):
-            for jdx in range(num_mods):
-                p = prob_counts[idx][jdx]
-                print(f"p({idx} -> {jdx}) = {p:.2f}")
-            print(f"total:      {self_counts[idx]}\n")
-
-    return prob_counts, self_counts
-
-# print(conditional_probabilities_from_sequences(seqs))

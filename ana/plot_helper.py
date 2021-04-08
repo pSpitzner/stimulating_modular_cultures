@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-03-30 10:01:35
+# @Last Modified: 2021-04-06 17:31:23
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -138,6 +138,41 @@ def overview_burst_duration_and_isi(h5f, filenames=None, which="all"):
         fig.tight_layout()
 
     return fig
+
+
+def overview_sequence_length():
+    # hard coded for now
+    list_of_filenames = [
+        "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/bridge_weights/dyn/*rep=*.hdf5",
+        "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/dyn/2x2_fixed/*.hdf5",
+        "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/jitter_0/*.hdf5",
+        "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/jitter_02/*.hdf5",
+        "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/jitter_012/*.hdf5",
+        "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/jitter_0123/*.hdf5",
+    ]
+    df_path = "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/bridge_weights/pd/sequence_length.hdf5"
+
+    # load if already done the processing
+    try:
+        df = pd.read_hdf(df_path, "/data/df")
+        raise FileNotFoundError
+    except FileNotFoundError:
+        pass
+        df = ah.batch_sequence_length_probabilities(list_of_filenames)
+        df.to_hdf(df_path, "/data/df")
+
+    plot_pd_sequence_length(df, k=1, bw=0.5)
+    plot_pd_sequence_length(df, k=2, bw=0.5)
+    plot_pd_sequence_length(df, k=3, bw=0.5)
+    plot_pd_sequence_length(df, k=5, bw=0.5)
+
+    plot_pd_sequence_length(df, k=0, bw=1)
+    plot_pd_sequence_length(df, k=1, bw=1)
+    plot_pd_sequence_length(df, k=2, bw=1)
+    plot_pd_sequence_length(df, k=3, bw=1)
+    plot_pd_sequence_length(df, k=5, bw=1)
+
+    return df
 
 
 # ------------------------------------------------------------------------------ #
@@ -288,6 +323,7 @@ def plot_system_rate(h5f, ax=None, apply_formatting=True):
 
     return ax
 
+
 def plot_bursts_into_timeseries(h5f, ax=None, apply_formatting=True):
 
     if ax is None:
@@ -359,18 +395,7 @@ def plot_parameter_info(h5f, ax=None, apply_formatting=True, add=[]):
 
     dat = []
     dat.append(["Connections k", h5f.meta.topology_k_inter])
-    if h5f.data.stimulation_times_as_list is None:
-        stim_str = "Off"
-    else:
-        try:
-            stim_neurons = np.unique(h5f.data.stimulation_times_as_list[:, 0]).astype(
-                int
-            )
-            stim_mods = np.unique(h5f.data.neuron_module_id[stim_neurons])
-            stim_str = f"On {str(tuple(stim_mods)).replace(',)', ')')}"
-        except:
-            stim_str = f"Error"
-    dat.append(["Stimulation", stim_str])
+    dat.append(["Stimulation", h5f.ana.stimulation_description])
 
     # dat.append(["", ""])
     # dat.append(["Noise Rate [Hz]", h5f.meta.dynamics_rate])
@@ -423,6 +448,75 @@ def plot_parameter_info(h5f, ax=None, apply_formatting=True, add=[]):
         fig.tight_layout()
 
     return ax
+
+
+def plot_pd_sequence_length(df, ax=None, apply_formatting=True, bw=0.5, k=1):
+
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.get_figure()
+
+    # get the right subset of the data frame
+    # data = df.loc[((df["skip_0"] == False) & (df["Method"] == "Rates"))]
+    data = df.loc[((df["Connections"] == k) & (df["Bridge weight"] == bw))]
+
+    # make a nice color map
+    c0 = "#1f77b4"  # matplotlib.cm.get_cmap("tab10").colors[0] # blue
+    c1 = "#ff7f0e"  # matplotlib.cm.get_cmap("tab10").colors[1] # orange
+
+    palette = {
+        "Off": c0,
+        "On (0)": cc.alpha_to_solid_on_bg(base=c1, alpha=0.25, bg="white"),
+        "On (0, 2)": cc.alpha_to_solid_on_bg(base=c1, alpha=0.50, bg="white"),
+        "On (0, 1, 2)": cc.alpha_to_solid_on_bg(base=c1, alpha=0.75, bg="white"),
+        "On (0, 1, 2, 3)": cc.alpha_to_solid_on_bg(base=c1, alpha=1.00, bg="white"),
+    }
+
+    # sns.violinplot(
+    #     data=data,
+    #     x="Seq. Length",
+    #     y="Probability",
+    #     hue=compare,
+    #     scale_hue=True,
+    #     scale='width',
+    #     split=True,
+    #     inner="quartile",
+    #     linewidth=.5,
+    #     ax=ax,
+    #     palette=palette
+    # )
+
+    sns.boxplot(
+        data=data,
+        x="Sequence length",
+        y="Probability",
+        hue="Stimulation",
+        hue_order=palette.keys(),
+        fliersize=0.5,
+        linewidth=0.5,
+        ax=ax,
+        palette=palette,
+    )
+
+    if apply_formatting:
+        ax.set_title(f"bw = {bw}", loc="right")
+        ax.set_title(f"k = {k}", loc="left")
+        ax.legend()
+        ax.get_legend().set_visible(False)
+        ax.axhline(0, ls=":", color="black", lw=0.75, zorder=-1)
+        ax.axhline(1, ls=":", color="black", lw=0.75, zorder=-1)
+        ax.spines["right"].set_visible(False)
+        ax.spines["top"].set_visible(False)
+        ax.spines["bottom"].set_visible(False)
+        ax.spines["left"].set_position(("outward", 10))
+        ax.tick_params(axis="x", which="major", length=0)
+        fig.tight_layout()
+
+    ax.set_ylim(-0.01, 1.01)
+    # ax.set_ylim(-.01,.2)
+
+    return fig, ax
 
 
 # ------------------------------------------------------------------------------ #
