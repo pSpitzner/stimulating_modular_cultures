@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-04-06 17:31:23
+# @Last Modified: 2021-04-08 16:30:42
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -758,14 +758,14 @@ def plot_distribution_degree_k(h5f, ax=None, apply_formatting=True, filenames=No
     )
 
     if apply_formatting:
-        ax.set_xlabel(f"Degree $k$")
+        ax.set_xlabel(f"Degree $k$ (per neuron)")
         ax.set_ylabel(f"Probability $p(k)$")
         ax.set_title("Degree distribution")
-        ax.legend()
+        ax.legend(loc="upper right")
 
         ax.text(
-            0.05,
             0.95,
+            0.7,
             f"median:\n" + r"$k_{in} \sim$" + f"{np.nanmedian(k_in):g}\n"
             r"$k_{out} \sim$"
             + f"{np.nanmedian(k_out):g}\n\n"
@@ -774,7 +774,7 @@ def plot_distribution_degree_k(h5f, ax=None, apply_formatting=True, filenames=No
             + f"{np.nanmean(k_in):g}\n"
             r"$k_{out} \sim$" + f"{np.nanmean(k_out):g}\n",
             transform=ax.transAxes,
-            ha="left",
+            ha="right",
             va="top",
         )
 
@@ -927,7 +927,7 @@ def plot_connectivity_layout(h5f, ax=None, apply_formatting=True):
         ax=ax,
         node_size=0,  # we draw them with fixed size using _circles
         node_color="black",
-        with_labels=False,
+        # with_labels=False,
     )
     log.debug("Drawing graph edges")
     nx.draw_networkx_edges(
