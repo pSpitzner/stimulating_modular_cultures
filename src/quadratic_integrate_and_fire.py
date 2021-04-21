@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2021-03-24 18:53:17
+# @Last Modified: 2021-04-21 08:48:44
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 and runs the simulations in brian.
@@ -234,7 +234,7 @@ if args.stimulation_type == "hideaki":
         duration=args.equil_duration + args.sim_duration,
         target_modules=args.stimulation_module,
         mod_ids=mod_ids,
-        min_dt=defaultclock.dt * 1.001
+        min_dt=defaultclock.dt * 1.001,
     )
 
     stim_g = SpikeGeneratorGroup(
@@ -249,10 +249,20 @@ if args.stimulation_type == "hideaki":
     stim_s.connect(condition="i == j")
 
 elif args.stimulation_type == "poisson":
-    log.warning("Stimulation 'poisson' is not fully implemeted yet.")
-    # lets assume bridge_ids are consecutive
-    stim_g = G[bridge_ids]
-    PoissonInput(target=stim_g, target_var="v", N=1, rate=rate, weight=vp)
+    # to target birde neurons only, assume bridge_ids are consecutive
+    # stim_g = G[bridge_ids]
+    # PoissonInput(target=stim_g, target_var="v", N=1, rate=rate, weight=vp)
+
+    poisson_rate = np.zeros(num_n)
+    for mod in args.stimulation_module:
+        stim_idx = np.where(mod_ids == mod)[0]
+        poisson_rate[stim_idx] = 0.4 * (5 / 25) * 1 / (400 * ms)
+
+    print(poisson_rate)
+
+    stim_g = PoissonGroup(num_n, poisson_rate, name="create_stimulation")
+    stim_s = Synapses(stim_g, G, on_pre="v_post = 2*vp", name="apply_stimulation")
+    stim_s.connect("i == j")
 
 
 # ------------------------------------------------------------------------------ #
