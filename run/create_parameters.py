@@ -6,7 +6,7 @@ from itertools import product
 os.chdir(os.path.dirname(__file__))
 
 # seed for rank 0, will increase per thread
-seed = 1_000
+seed = 2_000
 
 # parameters to scan, noise rate, ampa strength, and a few repetitons for statistics
 l_topo = ["2x2_fixed"]
@@ -14,7 +14,7 @@ l_k_inter = np.array([1, 2, 3, 5])
 l_mod = np.array(["off", "0", "02", "012", "0123"])
 l_rep = range(0, 25)
 
-bridge_weight = 0.5
+bridge_weight = 0.75
 
 arg_list = product(l_topo, l_k_inter, l_rep)
 

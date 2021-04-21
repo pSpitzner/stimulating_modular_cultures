@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2021-04-21 08:48:44
+# @Last Modified: 2021-04-21 14:03:45
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 and runs the simulations in brian.
@@ -270,7 +270,7 @@ elif args.stimulation_type == "poisson":
 # ------------------------------------------------------------------------------ #
 
 log.info("Equilibrating")
-run(args.equil_duration, report="stdout", report_period=1 * 60 * second)
+run(args.equil_duration, report="stdout", report_period=60 * 60 * second)
 
 # add monitors after equilibration
 spks_m = SpikeMonitor(G)
