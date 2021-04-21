@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-04-08 12:22:06
+# @Last Modified: 2021-04-20 14:20:27
 # ------------------------------------------------------------------------------ #
 
 
@@ -303,7 +303,7 @@ def find_isis(h5f, write_to_h5f=True):
 # ------------------------------------------------------------------------------ #
 
 
-def batch_sequence_length_probabilities(list_of_filenames):
+def batch_pd_sequence_length_probabilities(list_of_filenames):
     """
         Create a pandas data frame (long form, every row corresponds to one sequence
         length that occured - usually, 4 rows per realization).
@@ -318,8 +318,6 @@ def batch_sequence_length_probabilities(list_of_filenames):
     if isinstance(list_of_filenames, str):
         list_of_filenames = [list_of_filenames]
 
-    # create a dict where the key is the column name and the value is a function
-    # that takes the h5f instance to retrieve the column entry
     columns = [
         "Sequence length",
         "Probability",
@@ -371,6 +369,70 @@ def batch_sequence_length_probabilities(list_of_filenames):
 
     return df
 
+def batch_pd_burst_durtion(list_of_filenames):
+    """
+        Create a pandas data frame (long form, every row corresponds to one burst.
+        Remaining columns include meta data, conditions etc.
+        This can be directly used for box plotting in seaborn.
+
+        # Parameters:
+        list_of_filenames: list of str,
+            each str will be globbed and process
+    """
+
+    if isinstance(list_of_filenames, str):
+        list_of_filenames = [list_of_filenames]
+
+    columns = [
+        "Duration",
+        "Number of modules",
+        "First module",
+        "Stimulation",
+        "Connections",
+        "Bridge weight",
+    ]
+    df = pd.DataFrame(columns=columns)
+
+    candidates = [glob.glob(f) for f in list_of_filenames]
+    candidates = [item for sublist in candidates for item in sublist]  # flatten
+
+    assert len(candidates) > 0, f"Are the filenames correct?"
+
+    for candidate in tqdm(candidates, desc="Burst duration for files"):
+        h5f = prepare_file(candidate, hot=False)
+        # this adds the required entries
+        find_bursts_from_rates(h5f)
+
+        # fetch meta data for every row
+        stim = h5f.ana.stimulation_description
+        bridge_weight = h5f.meta.dynamics_bridge_weight
+        if bridge_weight is None:
+            bridge_weight = 1.0
+        num_connections = h5f.meta.topology_k_inter
+
+        data = h5f.ana.bursts.system_level
+        for idx in range(0, len(data.beg_times)):
+            duration = data.end_times[idx] - data.beg_times[idx]
+            num_mods = len(data.module_sequences[idx])
+            first_mod = data.module_sequences[idx][0]
+            df = df.append(
+                pd.DataFrame(
+                    data=[
+                        [
+                            duration,
+                            num_mods,
+                            first_mod,
+                            stim,
+                            num_connections,
+                            bridge_weight,
+                        ]
+                    ],
+                    columns=columns,
+                ),
+                ignore_index=True,
+            )
+
+    return df
 
 def batch_candidates_burst_times_and_isi(input_path, hot=False):
     """
