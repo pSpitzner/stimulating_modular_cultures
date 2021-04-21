@@ -982,6 +982,37 @@ def smooth_rate(rate, clock_dt, window="gaussian", width=None):
     return np.convolve(rate, window * 1.0 / sum(window), mode="same")
 
 
+def get_threshold_via_signal_to_noise_ratio(time_series, snr=5, iterations=1):
+
+    mean_orig = np.nanmean(time_series)
+    mean = mean_orig
+    std = np.nanstd(time_series)
+
+    idx = None
+    for i in range(0, iterations):
+        idx = np.where(time_series <= mean + snr*std)[0]
+        mean = np.nanmean(time_series[idx])
+        std = np.nanstd(time_series[idx])
+
+    return mean + snr*std
+
+def get_threshold_from_logisi_distribution(list_of_isi, area_fraction = 0.3):
+    bins = np.linspace(-3, 3, num=200)
+    hist, edges = np.histogram(np.log10(list_of_isi), bins=bins)
+    hist = hist / np.sum(hist)
+
+    log.info(np.sum(hist))
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots()
+    ax.plot(edges[0:-1], hist)
+    area = 0
+    for idx in range(0, len(edges)):
+        area += hist[idx]
+        edge = edges[idx]
+        if area > area_fraction:
+            ax.axvline(edge,0,1, color="gray")
+            return 1/pow(10, edge)
+
 # ------------------------------------------------------------------------------ #
 # sequences
 # ------------------------------------------------------------------------------ #
