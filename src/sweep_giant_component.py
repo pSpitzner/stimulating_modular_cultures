@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-11 15:04:12
-# @Last Modified: 2021-04-08 16:57:12
+# @Last Modified: 2021-04-09 15:22:08
 # ------------------------------------------------------------------------------ #
 import h5py
 import argparse
@@ -45,10 +45,10 @@ ratio = 20
 # alpha_weighted = [0.0125]
 # alpha_unweighted = [0.0125 * ratio]
 alpha_weighted = np.logspace(np.log10(1e-4), np.log10(1e0), base=10, num=50)
-alpha_unweighted = np.logspace(np.log10(1e-4 * ratio), np.log10(1e0), base=10, num=50)
+alpha_unweighted = np.logspace(np.log10(1e-4), np.log10(1e0), base=10, num=50)
 
 
-reps = 20
+reps = 50
 n_weighted = np.ones(shape=(reps, len(alpha_weighted))) * np.nan
 g_weighted = np.ones(shape=(reps, len(alpha_weighted))) * np.nan
 k_weighted = np.ones(shape=(reps, len(alpha_weighted))) * np.nan
@@ -124,61 +124,34 @@ for idx, a in enumerate(tqdm(alpha_weighted)):
 plt.ion()
 
 
-def w2uw(x):
-    return x * 20
-
-def uw2w(x):
-    return x / 20
-
-
 # giant component
-fig, wax = plt.subplots()
-uwax = wax.secondary_xaxis('top', functions=(w2uw, uw2w))
+fig, ax = plt.subplots()
 
-wax.set_xlabel(f"Connection probability $\\alpha$ (weighted)")
-lines = wax.plot(alpha_unweighted / ratio, np.mean(g_unweighted, axis=0), label="unweighted", color="C1")
-clr = lines[0].get_color()
-uwax.tick_params(axis='x', colors=clr, which='both')
-uwax.xaxis.label.set_color(clr)
+ax.set_xlabel(f"Connection probability $\\alpha$")
+ax.plot(alpha_unweighted, np.mean(g_unweighted, axis=0), label="unweighted", color="C1")
 
-uwax.set_xlabel(f"Connection probability $\\alpha$ (unweighted)")
-lines = wax.plot(alpha_weighted, np.mean(g_weighted, axis=0), label="weighted", color="C0")
-clr = lines[0].get_color()
-wax.tick_params(axis='x', colors=clr, which='both')
-wax.xaxis.label.set_color(clr)
-wax.axvline(0.0125, 0, 1, ls=":", color="gray")
+ax.plot(alpha_weighted, np.mean(g_weighted, axis=0), label="weighted", color="C0")
+idx = np.where(alpha_weighted * ratio <= 1)[0]
+ax.plot(alpha_weighted[idx] * ratio, np.mean(g_weighted, axis=0)[idx], label="weighted\n(shifted)", color="C0", ls="--")
 
-wax.set_ylabel(f"Fraction of largest component")
-wax.set_xscale("log")
-wax.legend()
+ax.axvline(0.0125, 0, 1, ls=":", color="gray")
+ax.set_ylabel(f"Fraction of largest component")
+ax.set_xscale("log")
+ax.legend()
 fig.tight_layout()
 
 
+# average degree
+fig, ax = plt.subplots()
 
-# in and out degree
-fig, wax = plt.subplots()
-uwax = wax.secondary_xaxis('top', functions=(w2uw, uw2w))
+ax.set_xlabel(f"Connection probability $\\alpha$")
+ax.plot(alpha_unweighted, np.mean(k_unweighted, axis=0)/num_n, label="unweighted", color="C1")
 
-wax.set_xlabel(f"Connection probability $\\alpha$ (weighted)")
-lines = wax.plot(alpha_unweighted / ratio, np.mean(k_unweighted, axis=0)/num_n, label="unweighted", color="C1")
-clr = lines[0].get_color()
-uwax.tick_params(axis='x', colors=clr, which='both')
-uwax.xaxis.label.set_color(clr)
+ax.plot(alpha_weighted, np.mean(k_weighted, axis=0)/num_n, label="weighted", color="C0")
 
-
-uwax.set_xlabel(f"Connection probability $\\alpha$ (unweighted)")
-lines = wax.plot(alpha_weighted, np.mean(k_weighted, axis=0)/num_n, label="weighted", color="C0")
-clr = lines[0].get_color()
-wax.tick_params(axis='x', colors=clr, which='both')
-wax.xaxis.label.set_color(clr)
-ticks = wax.get_xticks()
-
-wax.set_ylabel(f"Number of Connections")
-wax.set_xscale("log")
-wax.legend()
+ax.axvline(0.0125, 0, 1, ls=":", color="C0")
+ax.axvline(0.0125 * ratio, 0, 1, ls=":", color="C1")
+ax.set_ylabel(f"Connections per neuron")
+ax.set_xscale("log")
+ax.legend()
 fig.tight_layout()
-wax.axvline(0.0125, 0, 1, ls=":", color="gray")
-
-# only until alpha=1
-# wax.set_xticks(wax.get_xticks()[wax.get_xticks()<=1])
-uwax.set_xticks(uwax.get_xticks()[uwax.get_xticks()<=1])
