@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2021-04-21 14:03:45
+# @Last Modified: 2021-04-27 14:40:04
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 and runs the simulations in brian.
@@ -127,6 +127,10 @@ parser.add_argument("--bridge_weight",
     dest="bridge_weight",  default= 1.0, type=float,
     help="synaptic weight of bridge neurons [0, 1]")
 
+parser.add_argument("--inhibition_fraction",
+    dest="inhibition_fraction",  default= 0.0, type=float,
+    help="how many neurons should be inhibitory")
+
 # fmt:on
 args = parser.parse_args()
 
@@ -158,12 +162,14 @@ log.info("recording rates:  %s", record_rates)
 if args.stimulation_type != "off":
     log.info("stim.   module: %s", args.stimulation_module)
 log.info("bridge weight:    %s", args.bridge_weight)
+log.info("inhibition:       %s (fraction of all neurons)", args.inhibition_fraction)
 
 
 # ------------------------------------------------------------------------------ #
 # topology
 # ------------------------------------------------------------------------------ #
 
+assert os.path.isfile(args.input_path), "Specify the right input path"
 num_n, a_ij_sparse, mod_ids = topo.load_topology(args.input_path)
 
 # ------------------------------------------------------------------------------ #
@@ -178,7 +184,7 @@ G = NeuronGroup(
         dI/dt = -I/tA                          : volt       # [9, 10]
         du/dt = ( b*(v-vr) -u )/ta             : volt       # [7] inhibitory current
         dD/dt = ( 1-D)/tD                      : 1          # [11] recovery to one
-        bw     : 1  (constant)                 # neuron specific synaptic weight
+        g     : volt  (constant)                   # neuron specific synaptic weight
     """,
     threshold="v > vp",
     reset="""
@@ -194,7 +200,7 @@ S = Synapses(
     source=G,
     target=G,
     on_pre="""
-        I_post += D_pre * gA * bw_pre    # [10]
+        I_post += D_pre * g    # [10]
     """,
 )
 
@@ -216,12 +222,21 @@ S.connect(i=a_ij_sparse[:, 0], j=a_ij_sparse[:, 1])
 
 # initalize to a somewhat sensible state. we could have different neuron types
 G.v = "vc + 5*mV*rand()"
+G.g = gA
+
+# optionally, make a fraction of neurons inhibitiory. For now, only change `g`.
+num_inhib = int(num_n * args.inhibition_fraction)
+inhibition_ids = np.sort(np.random.choice(num_n, size=num_inhib, replace=False))
+for n_id in inhibition_ids:
+    G.g[n_id] = -gA / args.inhibition_fraction
+
+if len(inhibition_ids > 0):
+    log.info(f"inhibitory neurons: {inhibition_ids}")
 
 # optionally, give bridging neurons different weights
 bridge_ids = topo.load_bridging_neurons(args.input_path)
-G.bw = 1.0
 for n_id in bridge_ids:
-    G.bw[n_id] = args.bridge_weight
+    G.g[n_id] *= args.bridge_weight
 
 # ------------------------------------------------------------------------------ #
 # Stimulation if requested
@@ -435,6 +450,16 @@ else:
         dset.attrs[
             "description"
         ] = "synaptic weight of bridging neurons. get applied as a factor to outgoing synaptic currents."
+
+        dset = f.create_dataset("/data/neuron_g", data=G.g)
+        dset.attrs[
+            "description"
+        ] = "synaptic weight that was ultimately used for each neuron in the dynamic simulation"
+
+        dset = f.create_dataset("/data/neuron_inhibitory_ids", data=inhibition_ids)
+        dset.attrs[
+            "description"
+        ] = "List of neuron ids that were set to be inhibitory"
 
         f.close()
 
