@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-04-20 14:47:48
+# @Last Modified: 2021-04-27 14:46:20
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -34,6 +34,7 @@ matplotlib.rcParams["ytick.color"] = "black"
 # matplotlib.rcParams["axes.spines.left"] = False
 # matplotlib.rcParams["axes.spines.bottom"] = False
 matplotlib.rcParams["figure.figsize"] = [3.4, 2.7]  # APS single column
+matplotlib.rcParams['figure.dpi'] = 150
 matplotlib.rcParams["axes.prop_cycle"] = matplotlib.cycler("color", [
     "#233954", "#ea5e48", "#1e7d72", "#f49546", "#e8bf58", # dark
     "#5886be", "#f3a093", "#53d8c9", "#f2da9c", "#f9c192", # light
@@ -166,6 +167,11 @@ def overview_conditions_sequence_length(load_from_disk=True):
     plot_pd_boxplot(df.query("`Bridge weight` == 0.5 & `Connections` == 3"))
     plot_pd_boxplot(df.query("`Bridge weight` == 0.5 & `Connections` == 5"))
 
+    plot_pd_boxplot(df.query("`Bridge weight` == 0.75 & `Connections` == 1"))
+    plot_pd_boxplot(df.query("`Bridge weight` == 0.75 & `Connections` == 2"))
+    plot_pd_boxplot(df.query("`Bridge weight` == 0.75 & `Connections` == 3"))
+    plot_pd_boxplot(df.query("`Bridge weight` == 0.75 & `Connections` == 5"))
+
     plot_pd_boxplot(df.query("`Bridge weight` == 1 & `Connections` == 0"))
     plot_pd_boxplot(df.query("`Bridge weight` == 1 & `Connections` == 1"))
     plot_pd_boxplot(df.query("`Bridge weight` == 1 & `Connections` == 2"))
@@ -198,15 +204,26 @@ def overview_conditions_burst_duration(load_from_disk=True):
 
     x = "Stimulation"
     y = "Duration"
-    plot_pd_violin(df.query("`Bridge weight` == 1 & `Connections` == 1"), x, y)
-    plot_pd_violin(df.query("`Bridge weight` == 1 & `Connections` == 2"), x, y)
-    plot_pd_violin(df.query("`Bridge weight` == 1 & `Connections` == 3"), x, y)
-    plot_pd_violin(df.query("`Bridge weight` == 1 & `Connections` == 5"), x, y)
+    df2 = df.query("Stimulation == 'Off' | Stimulation == 'On (0, 2)'")
+    # plot_pd_violin(df.query("`Bridge weight` == 1 & `Connections` == 1"), x, y)
+    # plot_pd_violin(df.query("`Bridge weight` == 1 & `Connections` == 2"), x, y)
+    # plot_pd_violin(df.query("`Bridge weight` == 1 & `Connections` == 3"), x, y)
+    # plot_pd_violin(df.query("`Bridge weight` == 1 & `Connections` == 5"), x, y)
 
-    plot_pd_violin(df.query("`Bridge weight` == 0.5 & `Connections` == 1"), x, y)
-    plot_pd_violin(df.query("`Bridge weight` == 0.5 & `Connections` == 2"), x, y)
-    plot_pd_violin(df.query("`Bridge weight` == 0.5 & `Connections` == 3"), x, y)
-    plot_pd_violin(df.query("`Bridge weight` == 0.5 & `Connections` == 5"), x, y)
+    # plot_pd_violin(df.query("`Bridge weight` == 0.5 & `Connections` == 1"), x, y)
+    # plot_pd_violin(df.query("`Bridge weight` == 0.5 & `Connections` == 2"), x, y)
+    # plot_pd_violin(df.query("`Bridge weight` == 0.5 & `Connections` == 3"), x, y)
+    # plot_pd_violin(df.query("`Bridge weight` == 0.5 & `Connections` == 5"), x, y)
+
+    x = "Connections"
+    plot_pd_violin(df2.query("`Bridge weight` == 1"), x, y)
+    plot_pd_violin(df2.query("`Bridge weight` == 0.75"), x, y)
+    plot_pd_violin(df2.query("`Bridge weight` == 0.5"), x, y)
+
+    df2 = df.query("Stimulation == 'On (0, 2)' | Stimulation == 'On (0, 1, 2, 3)'")
+    plot_pd_violin(df2.query("`Bridge weight` == 1"), x, y)
+    plot_pd_violin(df2.query("`Bridge weight` == 0.75"), x, y)
+    plot_pd_violin(df2.query("`Bridge weight` == 0.5"), x, y)
 
     return df
 
@@ -593,15 +610,40 @@ def plot_pd_violin(df, x, y, ax=None, apply_formatting=True):
         "On (0, 1, 2, 3)": cc.alpha_to_solid_on_bg(base=c1, alpha=1.00, bg="white"),
     }
 
+    order = None
+    if x == "Stimulation":
+        order = palette.keys()
+    if x == "Connections":
+        hue_order = []
+        stim_of_df = df["Stimulation"].unique()
+        for stim in palette.keys():
+            if stim in stim_of_df:
+                hue_order.append(stim)
+
+    # sns.stripplot(
+    #     data=df,
+    #     x=x,
+    #     y=y,
+    #     hue="Stimulation",
+    #     order = order,
+    #     size=0.25,
+    #     edgecolor=(0,0,0,0),
+    #     linewidth=0.5,
+    #     ax=ax,
+    #     palette=palette,
+    # )
+
     sns.violinplot(
         data=df,
         x=x,
         y=y,
         hue="Stimulation",
+        # order = order,
+        hue_order = hue_order,
         scale_hue=True,
-        scale="width",
-        split=False,
-        inner="quartile",
+        scale="area",
+        split=True,
+        inner=None,
         linewidth=0.5,
         ax=ax,
         palette=palette,
