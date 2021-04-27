@@ -6,7 +6,7 @@ from itertools import product
 os.chdir(os.path.dirname(__file__))
 
 # seed for rank 0, will increase per thread
-seed = 2_000
+seed = 3_000
 
 # parameters to scan, noise rate, ampa strength, and a few repetitons for statistics
 l_topo = ["2x2_fixed"]
@@ -14,7 +14,11 @@ l_k_inter = np.array([1, 2, 3, 5])
 l_mod = np.array(["off", "0", "02", "012", "0123"])
 l_rep = range(0, 25)
 
-bridge_weight = 0.75
+bridge_weight = 1.0
+inh_frac = 0.20
+# without inhibition we had around gA 35mV, at this value, the activity is a bit lower
+# lets compensate somewhat
+gA = 39
 
 arg_list = product(l_topo, l_k_inter, l_rep)
 
@@ -32,7 +36,7 @@ with open("./parameters_topo.tsv", "w") as f_topo:
             k_inter = i[1]
             rep = i[2]
 
-            topo_path = f"./dat/bridge_weights/topo/k={k_inter:d}_bw={bridge_weight:03.2f}_rep={rep:02d}.hdf5"
+            topo_path = f"./dat/inhibition/topo/k={k_inter:d}_bw={bridge_weight:03.2f}_inh={inh_frac:03.2f}_gA={gA:.1f}_rep={rep:02d}.hdf5"
             f_topo.write(
                 # topology command
                 f"/data.nst/share/projects/paul_brian_modular_cultures/topology_orlandi_standalone/exe/orlandi_standalone "
@@ -42,7 +46,7 @@ with open("./parameters_topo.tsv", "w") as f_topo:
             count_topo += 1
 
             for mod in l_mod:
-                dyn_path = f"./dat/bridge_weights/dyn/k={k_inter:d}_stim={mod}_bw={bridge_weight:03.2f}_rep={rep:02d}.hdf5"
+                dyn_path = f"./dat/inhibition/dyn/k={k_inter:d}_stim={mod}_bw={bridge_weight:03.2f}_inh={inh_frac:03.2f}_gA={gA:.1f}_rep={rep:02d}.hdf5"
 
                 if mod == "off":
                     stim_arg = ""
@@ -55,6 +59,7 @@ with open("./parameters_topo.tsv", "w") as f_topo:
                     + f"-o {dyn_path} "
                     + f"-d 10800 -equil 300 -s {seed:d} "
                     + f"--bridge_weight {bridge_weight} "
+                    + f"--inhibition {inh_frac} -gA {gA} "
                     + f"{stim_arg}\n"
                 )
 
