@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-04-28 17:06:55
+# @Last Modified: 2021-04-28 17:31:48
 # ------------------------------------------------------------------------------ #
 
 
@@ -313,28 +313,6 @@ def find_isis(h5f, write_to_h5f=True):
 # ------------------------------------------------------------------------------ #
 
 
-def batch_pd_bursts(load_from_disk=True):
-    list_of_filenames = [
-        "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/inhibition/dyn/*rep=*.hdf5",
-        "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/bridge_weights/dyn/*rep=*.hdf5",
-        "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/dyn/2x2_fixed/*.hdf5",
-        "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/jitter_0/*.hdf5",
-        "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/jitter_02/*.hdf5",
-        "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/jitter_012/*.hdf5",
-        "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/jitter_0123/*.hdf5",
-    ]
-    df_path = "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/inhibition/pd/bursts.hdf5"
-
-    try:
-        df = pd.read_hdf(df_path, "/data/df")
-        if not load_from_disk:
-            raise FileNotFoundError
-    except FileNotFoundError:
-        df = ah.batch_pd_burst_durtion(list_of_filenames)
-        df.to_hdf(df_path, "/data/df")
-
-    return df
-
 def batch_pd_sequence_length_probabilities(list_of_filenames):
     """
         Create a pandas data frame (long form, every row corresponds to one sequence
@@ -401,7 +379,7 @@ def batch_pd_sequence_length_probabilities(list_of_filenames):
 
     return df
 
-def batch_pd_burst_durtion(list_of_filenames):
+def batch_pd_bursts(load_from_disk=True, list_of_filenames=None, df_path=None):
     """
         Create a pandas data frame (long form, every row corresponds to one burst.
         Remaining columns include meta data, conditions etc.
@@ -411,9 +389,29 @@ def batch_pd_burst_durtion(list_of_filenames):
         list_of_filenames: list of str,
             each str will be globbed and process
     """
-
-    if isinstance(list_of_filenames, str):
+    if list_of_filenames is None:
+        list_of_filenames = [
+            "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/inhibition/dyn/*rep=*.hdf5",
+            "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/bridge_weights/dyn/*rep=*.hdf5",
+            "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/dyn/2x2_fixed/*.hdf5",
+            "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/jitter_0/*.hdf5",
+            "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/jitter_02/*.hdf5",
+            "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/jitter_012/*.hdf5",
+            "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/jitter_0123/*.hdf5",
+        ]
+    elif isinstance(list_of_filenames, str):
         list_of_filenames = [list_of_filenames]
+
+    if df_path is None:
+        df_path = "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/inhibition/pd/bursts.hdf5"
+
+    if load_from_disk:
+        try:
+            df = pd.read_hdf(df_path, "/data/df")
+            return df
+        except Exception as e:
+            log.info("Could not load from disk, (re-)processing data")
+            log.debug(e)
 
     columns = [
         "Duration",
@@ -483,6 +481,12 @@ def batch_pd_burst_durtion(list_of_filenames):
                 ),
                 ignore_index=True,
             )
+
+
+    try:
+        df.to_hdf(df_path, "/data/df")
+    except Exception as e:
+        log.debug(e)
 
     return df
 
