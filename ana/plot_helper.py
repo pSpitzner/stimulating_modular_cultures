@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-04-27 14:46:20
+# @Last Modified: 2021-04-28 17:07:17
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -144,6 +144,7 @@ def overview_burst_duration_and_isi(h5f, filenames=None, which="all"):
 def overview_conditions_sequence_length(load_from_disk=True):
     # hard coded for now
     list_of_filenames = [
+        "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/inhibition/dyn/*rep=*.hdf5",
         "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/bridge_weights/dyn/*rep=*.hdf5",
         "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/dyn/2x2_fixed/*.hdf5",
         "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/jitter_0/*.hdf5",
@@ -167,44 +168,29 @@ def overview_conditions_sequence_length(load_from_disk=True):
     plot_pd_boxplot(df.query("`Bridge weight` == 0.5 & `Connections` == 3"))
     plot_pd_boxplot(df.query("`Bridge weight` == 0.5 & `Connections` == 5"))
 
-    plot_pd_boxplot(df.query("`Bridge weight` == 0.75 & `Connections` == 1"))
-    plot_pd_boxplot(df.query("`Bridge weight` == 0.75 & `Connections` == 2"))
-    plot_pd_boxplot(df.query("`Bridge weight` == 0.75 & `Connections` == 3"))
-    plot_pd_boxplot(df.query("`Bridge weight` == 0.75 & `Connections` == 5"))
+    # plot_pd_boxplot(df.query("`Bridge weight` == 0.75 & `Connections` == 1"))
+    # plot_pd_boxplot(df.query("`Bridge weight` == 0.75 & `Connections` == 2"))
+    # plot_pd_boxplot(df.query("`Bridge weight` == 0.75 & `Connections` == 3"))
+    # plot_pd_boxplot(df.query("`Bridge weight` == 0.75 & `Connections` == 5"))
 
-    plot_pd_boxplot(df.query("`Bridge weight` == 1 & `Connections` == 0"))
-    plot_pd_boxplot(df.query("`Bridge weight` == 1 & `Connections` == 1"))
-    plot_pd_boxplot(df.query("`Bridge weight` == 1 & `Connections` == 2"))
-    plot_pd_boxplot(df.query("`Bridge weight` == 1 & `Connections` == 3"))
-    plot_pd_boxplot(df.query("`Bridge weight` == 1 & `Connections` == 5"))
+    # plot_pd_boxplot(df.query("`Bridge weight` == 1 & `Connections` == 0"))
+    # plot_pd_boxplot(df.query("`Bridge weight` == 1 & `Connections` == 1"))
+    # plot_pd_boxplot(df.query("`Bridge weight` == 1 & `Connections` == 2"))
+    # plot_pd_boxplot(df.query("`Bridge weight` == 1 & `Connections` == 3"))
+    # plot_pd_boxplot(df.query("`Bridge weight` == 1 & `Connections` == 5"))
 
     return df
 
 
-def overview_conditions_burst_duration(load_from_disk=True):
-    # hard coded for now
-    list_of_filenames = [
-        "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/bridge_weights/dyn/*rep=*.hdf5",
-        "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/dyn/2x2_fixed/*.hdf5",
-        "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/jitter_0/*.hdf5",
-        "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/jitter_02/*.hdf5",
-        "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/jitter_012/*.hdf5",
-        "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/jitter_0123/*.hdf5",
-    ]
-    df_path = "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/bridge_weights/pd/burst_duration.hdf5"
+def overview_conditions_burst_duration(df=None):
 
-    # load if already done the processing
-    try:
-        df = pd.read_hdf(df_path, "/data/df")
-        if not load_from_disk:
-            raise FileNotFoundError
-    except FileNotFoundError:
-        df = ah.batch_pd_burst_durtion(list_of_filenames)
-        df.to_hdf(df_path, "/data/df")
+    if df is None:
+        ah.batch_pd_bursts(load_from_disk=True)
 
     x = "Stimulation"
     y = "Duration"
-    df2 = df.query("Stimulation == 'Off' | Stimulation == 'On (0, 2)'")
+    df = df.query("Connections > 0")
+    # df2 = df.query("Stimulation == 'Off' | Stimulation == 'On (0, 2)'")
     # plot_pd_violin(df.query("`Bridge weight` == 1 & `Connections` == 1"), x, y)
     # plot_pd_violin(df.query("`Bridge weight` == 1 & `Connections` == 2"), x, y)
     # plot_pd_violin(df.query("`Bridge weight` == 1 & `Connections` == 3"), x, y)
@@ -216,14 +202,27 @@ def overview_conditions_burst_duration(load_from_disk=True):
     # plot_pd_violin(df.query("`Bridge weight` == 0.5 & `Connections` == 5"), x, y)
 
     x = "Connections"
-    plot_pd_violin(df2.query("`Bridge weight` == 1"), x, y)
-    plot_pd_violin(df2.query("`Bridge weight` == 0.75"), x, y)
-    plot_pd_violin(df2.query("`Bridge weight` == 0.5"), x, y)
+    # df2 = df.query("Stimulation == 'Off' | Stimulation == 'On (0, 2)'")
+    df2 = df.query("Stimulation == 'Off' | Stimulation == 'On (0, 1, 2, 3)'")
+    ax = plot_pd_violin(
+        df2.query("`Bridge weight` == 1 & `Number of modules` == 1"), x, y
+    )
+    ax.set_title("L=1", loc="left")
+    ax = plot_pd_violin(
+        df2.query("`Bridge weight` == 1 & `Number of modules` == 2"), x, y
+    )
+    ax.set_title("L=2", loc="left")
+    ax = plot_pd_violin(
+        df2.query("`Bridge weight` == 1 & `Number of modules` > 1"), x, y
+    )
+    ax.set_title("L>1", loc="left")
+    # plot_pd_violin(df2.query("`Bridge weight` == 0.75"), x, y)
+    # plot_pd_violin(df2.query("`Bridge weight` == 0.5"), x, y)
 
-    df2 = df.query("Stimulation == 'On (0, 2)' | Stimulation == 'On (0, 1, 2, 3)'")
-    plot_pd_violin(df2.query("`Bridge weight` == 1"), x, y)
-    plot_pd_violin(df2.query("`Bridge weight` == 0.75"), x, y)
-    plot_pd_violin(df2.query("`Bridge weight` == 0.5"), x, y)
+    # df2 = df.query("Stimulation == 'Off' | Stimulation == 'On (0, 1, 2, 3)'")
+    # plot_pd_violin(df2.query("`Bridge weight` == 1"), x, y)
+    # plot_pd_violin(df2.query("`Bridge weight` == 0.75"), x, y)
+    # plot_pd_violin(df2.query("`Bridge weight` == 0.5"), x, y)
 
     return df
 
@@ -611,6 +610,7 @@ def plot_pd_violin(df, x, y, ax=None, apply_formatting=True):
     }
 
     order = None
+    hue_order = None
     if x == "Stimulation":
         order = palette.keys()
     if x == "Connections":
@@ -620,15 +620,18 @@ def plot_pd_violin(df, x, y, ax=None, apply_formatting=True):
             if stim in stim_of_df:
                 hue_order.append(stim)
 
+
     # sns.stripplot(
     #     data=df,
     #     x=x,
     #     y=y,
     #     hue="Stimulation",
+    #     hue_order = hue_order,
     #     order = order,
-    #     size=0.25,
+    #     size=0.3,
     #     edgecolor=(0,0,0,0),
     #     linewidth=0.5,
+    #     dodge=True,
     #     ax=ax,
     #     palette=palette,
     # )
@@ -639,10 +642,10 @@ def plot_pd_violin(df, x, y, ax=None, apply_formatting=True):
         y=y,
         hue="Stimulation",
         # order = order,
-        hue_order = hue_order,
-        scale_hue=True,
+        hue_order=hue_order,
+        scale_hue=False,
         scale="area",
-        split=True,
+        # split=True,
         inner=None,
         linewidth=0.5,
         ax=ax,
@@ -676,8 +679,30 @@ def plot_pd_violin(df, x, y, ax=None, apply_formatting=True):
         ax.tick_params(axis="x", which="major", length=0)
         fig.tight_layout()
 
-    ax.set_ylim(-0.01, 0.4)
+    ax.set_ylim(-0.01, 0.5)
     # ax.set_ylim(-.01,.2)
+
+    return ax
+
+
+def plot_pd_seqlen_vs_burst_duration(df, ax=None, apply_formatting=True):
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.get_figure()
+
+    sns.scatterplot(
+        x="Number of modules",
+        y="Duration",
+        hue = "Number of modules",
+        data=df,
+        ax=ax,
+    )
+
+    if apply_formatting:
+        ax.legend()
+        ax.get_legend().set_visible(False)
+        fig.tight_layout()
 
     return ax
 

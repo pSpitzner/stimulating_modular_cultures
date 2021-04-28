@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-04-20 14:20:27
+# @Last Modified: 2021-04-28 17:06:55
 # ------------------------------------------------------------------------------ #
 
 
@@ -10,6 +10,8 @@ import os
 import sys
 import glob
 import h5py
+import re
+import numbers
 import numpy as np
 import pandas as pd
 
@@ -164,8 +166,16 @@ def prepare_file(h5f, mod_colors="auto", hot=True):
             stim_str = f"On {str(tuple(stim_mods)).replace(',)', ')')}"
         except:
             stim_str = f"Error"
-
     h5f.ana.stimulation_description = stim_str
+
+    # Guess the repetition from filename, convention: `foo/bar_parameters_rep=09.hdf5`
+    try:
+        fname = str(h5f.uname.original_file_path.decode("UTF-8"))
+        rep = re.search('(?<=rep=)(\d+)', fname)[0] # we only use the first match
+        h5f.ana.repetition = int(rep)
+    except Exception as e:
+        log.debug(e)
+        h5f.ana.repetition = -1
 
     return h5f
 
@@ -303,6 +313,28 @@ def find_isis(h5f, write_to_h5f=True):
 # ------------------------------------------------------------------------------ #
 
 
+def batch_pd_bursts(load_from_disk=True):
+    list_of_filenames = [
+        "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/inhibition/dyn/*rep=*.hdf5",
+        "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/bridge_weights/dyn/*rep=*.hdf5",
+        "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/dyn/2x2_fixed/*.hdf5",
+        "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/jitter_0/*.hdf5",
+        "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/jitter_02/*.hdf5",
+        "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/jitter_012/*.hdf5",
+        "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/jitter_0123/*.hdf5",
+    ]
+    df_path = "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/inhibition/pd/bursts.hdf5"
+
+    try:
+        df = pd.read_hdf(df_path, "/data/df")
+        if not load_from_disk:
+            raise FileNotFoundError
+    except FileNotFoundError:
+        df = ah.batch_pd_burst_durtion(list_of_filenames)
+        df.to_hdf(df_path, "/data/df")
+
+    return df
+
 def batch_pd_sequence_length_probabilities(list_of_filenames):
     """
         Create a pandas data frame (long form, every row corresponds to one sequence
@@ -385,11 +417,14 @@ def batch_pd_burst_durtion(list_of_filenames):
 
     columns = [
         "Duration",
-        "Number of modules",
+        "Sequence length",
         "First module",
         "Stimulation",
         "Connections",
         "Bridge weight",
+        "Number of inhibitory neurons",
+        "Repetition",
+
     ]
     df = pd.DataFrame(columns=columns)
 
@@ -400,31 +435,48 @@ def batch_pd_burst_durtion(list_of_filenames):
 
     for candidate in tqdm(candidates, desc="Burst duration for files"):
         h5f = prepare_file(candidate, hot=False)
-        # this adds the required entries
-        find_bursts_from_rates(h5f)
 
-        # fetch meta data for every row
+        # fetch meta data for every repetition (applied to multiple rows)
         stim = h5f.ana.stimulation_description
+        rep = h5f.ana.repetition
         bridge_weight = h5f.meta.dynamics_bridge_weight
         if bridge_weight is None:
             bridge_weight = 1.0
         num_connections = h5f.meta.topology_k_inter
+        try:
+            num_inhibitory = len(h5f.data.neuron_inhibitory_ids[:])
+        except Exception as e:
+            log.debug(e)
+            # maybe its a single number, instead of a list
+            if isinstance(h5f.data.neuron_inhibitory_ids, numbers.Number):
+                num_inhibitory = 1
+            else:
+                num_inhibitory = 0
+
+        # do the analysis, entries are directly added to the h5f
+        # for the system with inhibition, we might need a lower threshold (Hz)
+        if num_inhibitory > 0:
+            find_bursts_from_rates(h5f, rate_threshold=7.5)
+        else:
+            find_bursts_from_rates(h5f, rate_threshold=7.5)
 
         data = h5f.ana.bursts.system_level
         for idx in range(0, len(data.beg_times)):
             duration = data.end_times[idx] - data.beg_times[idx]
-            num_mods = len(data.module_sequences[idx])
+            seq_len = len(data.module_sequences[idx])
             first_mod = data.module_sequences[idx][0]
             df = df.append(
                 pd.DataFrame(
                     data=[
                         [
                             duration,
-                            num_mods,
+                            seq_len,
                             first_mod,
                             stim,
                             num_connections,
                             bridge_weight,
+                            num_inhibitory,
+                            rep,
                         ]
                     ],
                     columns=columns,
