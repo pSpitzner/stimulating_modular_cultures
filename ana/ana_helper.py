@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-04-28 17:31:48
+# @Last Modified: 2021-05-03 12:59:30
 # ------------------------------------------------------------------------------ #
 
 
@@ -171,7 +171,7 @@ def prepare_file(h5f, mod_colors="auto", hot=True):
     # Guess the repetition from filename, convention: `foo/bar_parameters_rep=09.hdf5`
     try:
         fname = str(h5f.uname.original_file_path.decode("UTF-8"))
-        rep = re.search('(?<=rep=)(\d+)', fname)[0] # we only use the first match
+        rep = re.search("(?<=rep=)(\d+)", fname)[0]  # we only use the first match
         h5f.ana.repetition = int(rep)
     except Exception as e:
         log.debug(e)
@@ -379,6 +379,7 @@ def batch_pd_sequence_length_probabilities(list_of_filenames):
 
     return df
 
+
 def batch_pd_bursts(load_from_disk=True, list_of_filenames=None, df_path=None):
     """
         Create a pandas data frame (long form, every row corresponds to one burst.
@@ -422,7 +423,6 @@ def batch_pd_bursts(load_from_disk=True, list_of_filenames=None, df_path=None):
         "Bridge weight",
         "Number of inhibitory neurons",
         "Repetition",
-
     ]
     df = pd.DataFrame(columns=columns)
 
@@ -482,13 +482,13 @@ def batch_pd_bursts(load_from_disk=True, list_of_filenames=None, df_path=None):
                 ignore_index=True,
             )
 
-
     try:
         df.to_hdf(df_path, "/data/df")
     except Exception as e:
         log.debug(e)
 
     return df
+
 
 def batch_candidates_burst_times_and_isi(input_path, hot=False):
     """
@@ -1108,19 +1108,21 @@ def get_threshold_via_signal_to_noise_ratio(time_series, snr=5, iterations=1):
 
     idx = None
     for i in range(0, iterations):
-        idx = np.where(time_series <= mean + snr*std)[0]
+        idx = np.where(time_series <= mean + snr * std)[0]
         mean = np.nanmean(time_series[idx])
         std = np.nanstd(time_series[idx])
 
-    return mean + snr*std
+    return mean + snr * std
 
-def get_threshold_from_logisi_distribution(list_of_isi, area_fraction = 0.3):
+
+def get_threshold_from_logisi_distribution(list_of_isi, area_fraction=0.3):
     bins = np.linspace(-3, 3, num=200)
     hist, edges = np.histogram(np.log10(list_of_isi), bins=bins)
     hist = hist / np.sum(hist)
 
     log.info(np.sum(hist))
     import matplotlib.pyplot as plt
+
     fig, ax = plt.subplots()
     ax.plot(edges[0:-1], hist)
     area = 0
@@ -1128,8 +1130,9 @@ def get_threshold_from_logisi_distribution(list_of_isi, area_fraction = 0.3):
         area += hist[idx]
         edge = edges[idx]
         if area > area_fraction:
-            ax.axvline(edge,0,1, color="gray")
-            return 1/pow(10, edge)
+            ax.axvline(edge, 0, 1, color="gray")
+            return 1 / pow(10, edge)
+
 
 # ------------------------------------------------------------------------------ #
 # sequences
@@ -1257,3 +1260,103 @@ def sequence_length_histogram_from_list(list_of_sequences, mods=[0, 1, 2, 3]):
     total = np.sum(len_hist)
 
     return catalog, len_hist / total, total
+
+
+def sequence_length_histogram_from_pd_df(df, keepcols=[]):
+    """
+        Provide a data frame where each row is a burst, and that has a column
+        named `Sequence length` and `Repetition`.
+        All remaining columns are not considered, make sure to `query` correctly!
+
+        # Retruns
+        A pandas data frame (long form) where every row corresponds to one sequence-
+        length that occured, ~4 rows per realization.
+    """
+    assert isinstance(keepcols, list)
+
+    # sanity check
+    for col in df.columns:
+        if col not in ["Duration", "Sequence length", "First module", "Repetition"]:
+            num_vals = len(df[col].unique())
+            if num_vals != 1:
+                log.warning(f"Column '{col}' has {num_vals} different values.")
+            else:
+                log.debug(f"Column '{col}' has {num_vals} different values.")
+
+    all_seqs = df["Sequence length"].to_numpy()
+    all_reps = df["Repetition"].to_numpy()
+
+    unique_reps = np.sort(np.unique(all_reps))
+    unique_seqs = np.sort(np.unique(all_seqs))
+
+    default_seqs = np.array([1, 2, 3, 4])
+    if len(unique_seqs) != len(default_seqs) or np.any(unique_seqs != default_seqs):
+        log.warning("unexpected sequence length encountered.")
+
+    bins = (unique_seqs - 0.5).tolist()
+    bins = bins + [bins[-1] + 1]
+
+    columns = [
+        "Sequence length",
+        "Probability",
+        "Occurences",
+        "Total",  # Number of entries contributing to probability
+        *keepcols,
+        "Repetition",
+    ]
+    df_out = pd.DataFrame(columns=columns)
+
+    # iterate over every repetition
+    for rep_id in tqdm(unique_reps, desc="Repetitions", leave=False):
+        idx = np.where(all_reps == rep_id)[0]
+        hist, _ = np.histogram(all_seqs[idx], bins=bins)
+        total = np.sum(hist)
+        probs = hist / total
+
+        keepcol_entries = []
+        for col in keepcols:
+            if not _pd_are_row_entries_the_same(df[col].iloc[idx]):
+                log.warning(
+                    "Filter (query) before calling this! If entries missmatch for one repetition, this will give a nonsensical histogram."
+                )
+            val = df[col].iloc[idx[0]]
+            keepcol_entries.append(val)
+
+        # and add one row for every sequence length
+        for ldx, l in enumerate(unique_seqs):
+            df_out = df_out.append(
+                pd.DataFrame(
+                    data=[
+                        [
+                            unique_seqs[ldx],
+                            probs[ldx],
+                            hist[ldx],
+                            total,
+                            *keepcol_entries,
+                            rep_id,
+                        ]
+                    ],
+                    columns=columns,
+                ),
+                ignore_index=True,
+            )
+
+    return df_out
+
+
+# def pd_mean_across_repetitions(df, match=[]):
+#     """
+#         Keep everything as is but calulate the mean across repetitions
+#     """
+#     df_out = pd.DataFrame(columns=df.columns)
+
+
+
+
+def _pd_are_row_entries_the_same(df):
+    assert len(df.shape) == 1
+    arr = df.to_numpy()
+    if np.all(arr[0] == arr):
+        return True
+    else:
+        return False

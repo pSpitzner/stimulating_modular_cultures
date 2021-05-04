@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-04-30 13:59:23
+# @Last Modified: 2021-05-03 16:10:10
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -46,6 +46,7 @@ import numpy as np
 import seaborn as sns
 import pandas as pd
 import networkx as nx
+from tqdm import tqdm
 from brian2.units.allunits import *
 
 log = logging.getLogger(__name__)
@@ -104,11 +105,11 @@ def overview_dynamic(h5f, filenames=None):
     # fig, axes = plt.subplots(4, 1, sharex=True, figsize=(4, 7))
     fig = plt.figure(figsize=(4, 7))
     axes = []
-    gs = fig.add_gridspec(4, 2) # [row, column]
+    gs = fig.add_gridspec(4, 2)  # [row, column]
     axes.append(fig.add_subplot(gs[0, 1]))
     axes.append(fig.add_subplot(gs[1, :]))
-    axes.append(fig.add_subplot(gs[2, :], sharex = axes[1]))
-    axes.append(fig.add_subplot(gs[3, :], sharex = axes[1]))
+    axes.append(fig.add_subplot(gs[2, :], sharex=axes[1]))
+    axes.append(fig.add_subplot(gs[3, :], sharex=axes[1]))
     axes.append(fig.add_subplot(gs[0, 0]))
 
     if h5f.ana is None:
@@ -150,7 +151,6 @@ def overview_burst_duration_and_isi(h5f, filenames=None, which="all"):
         fig.tight_layout()
 
     return fig
-
 
 
 # ------------------------------------------------------------------------------ #
@@ -441,12 +441,12 @@ def plot_initiation_site(h5f, ax=None, apply_formatting=True):
         ah.find_bursts_from_rates(h5f)
 
     sequences = h5f.ana.bursts.system_level.module_sequences
-    first_mod = np.ones(len(sequences), dtype=int)-1
+    first_mod = np.ones(len(sequences), dtype=int) - 1
     for idx, seq in enumerate(sequences):
         first_mod[idx] = seq[0]
 
     # unique = np.sort(np.unique(first_mod))
-    unique = np.array([0,1,2,3])
+    unique = np.array([0, 1, 2, 3])
     bins = (unique - 0.5).tolist()
     bins = bins + [bins[-1] + 1]
 
@@ -467,45 +467,53 @@ def plot_initiation_site(h5f, ax=None, apply_formatting=True):
 # ------------------------------------------------------------------------------ #
 
 
-def pd_sequence_length(load_from_disk=True):
-    # hard coded for now
-    list_of_filenames = [
-        "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/inhibition/dyn/*rep=*.hdf5",
-        "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/bridge_weights/dyn/*rep=*.hdf5",
-        "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/dyn/2x2_fixed/*.hdf5",
-        "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/jitter_0/*.hdf5",
-        "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/jitter_02/*.hdf5",
-        "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/jitter_012/*.hdf5",
-        "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/jitter_0123/*.hdf5",
-    ]
-    df_path = "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/inhibition/pd/sequence_length.hdf5"
+def pd_sequence_length(df):
 
-    # load if already done the processing
-    try:
-        df = pd.read_hdf(df_path, "/data/df")
-        if not load_from_disk:
-            raise FileNotFoundError
-    except FileNotFoundError:
-        df = ah.batch_pd_sequence_length_probabilities(list_of_filenames)
-        df.to_hdf(df_path, "/data/df")
+    df_res = None
+    # prequery
+    for query in tqdm(
+        [
+            "`Bridge weight` == 1 & `Connections` == 1 & `Number of inhibitory neurons` == 0",
+            "`Bridge weight` == 1 & `Connections` == 2 & `Number of inhibitory neurons` == 0",
+            "`Bridge weight` == 1 & `Connections` == 3 & `Number of inhibitory neurons` == 0",
+            "`Bridge weight` == 1 & `Connections` == 5 & `Number of inhibitory neurons` == 0",
+        ],
+        desc="Queries",
+        leave=False,
+    ):
+        # as hue value, we want to compare stimulation scenarios, need concat
+        dfc = None
+        for sq in [
+            "`Stimulation` == 'Off'",
+            "`Stimulation` == 'On (0)'",
+            "`Stimulation` == 'On (0, 2)'",
+            "`Stimulation` == 'On (0, 1, 2)'",
+            "`Stimulation` == 'On (0, 1, 2, 3)'",
+        ]:
+            dfq = df.query(query + " & " + sq)
+            if dfq.shape[0] == 0:
+                log.debug(f"Skipping {sq}, no rows.")
+                continue
+            # calculate the probability of sequence length for every repetition
+            dfq = ah.sequence_length_histogram_from_pd_df(
+                dfq,
+                keepcols=[
+                    "Stimulation",
+                    "Bridge weight",
+                    "Connections",
+                    "Number of inhibitory neurons",
+                ],
+            )
+            dfc = pd.concat([dfc, dfq], ignore_index=True)
+        try:
+            plot_pd_boxplot(dfc, x="Sequence length", y="Probability")
+        except Exception as e:
+            log.error(e)
 
-    # plot_pd_boxplot(df.query("`Bridge weight` == 0.5 & `Connections` == 1"))
-    # plot_pd_boxplot(df.query("`Bridge weight` == 0.5 & `Connections` == 2"))
-    # plot_pd_boxplot(df.query("`Bridge weight` == 0.5 & `Connections` == 3"))
-    # plot_pd_boxplot(df.query("`Bridge weight` == 0.5 & `Connections` == 5"))
+        # for returning everything
+        df_res = pd.concat([df_res, dfc], ignore_index=True)
 
-    # plot_pd_boxplot(df.query("`Bridge weight` == 0.75 & `Connections` == 1"))
-    # plot_pd_boxplot(df.query("`Bridge weight` == 0.75 & `Connections` == 2"))
-    # plot_pd_boxplot(df.query("`Bridge weight` == 0.75 & `Connections` == 3"))
-    # plot_pd_boxplot(df.query("`Bridge weight` == 0.75 & `Connections` == 5"))
-
-    # plot_pd_boxplot(df.query("`Bridge weight` == 1 & `Connections` == 0"))
-    plot_pd_boxplot(df.query("`Bridge weight` == 1 & `Connections` == 1"))
-    plot_pd_boxplot(df.query("`Bridge weight` == 1 & `Connections` == 2"))
-    plot_pd_boxplot(df.query("`Bridge weight` == 1 & `Connections` == 3"))
-    plot_pd_boxplot(df.query("`Bridge weight` == 1 & `Connections` == 5"))
-
-    return df
+    return df_res
 
 
 def pd_burst_duration(df):
@@ -527,6 +535,7 @@ def pd_burst_duration(df):
     x = "Connections"
     # df2 = df.query("Stimulation == 'Off' | Stimulation == 'On (0, 2)'")
     df2 = df.query("Stimulation == 'Off' | Stimulation == 'On (0, 1, 2, 3)'")
+    df2 = df2.query("`Number of inhibitory neurons` > 0")
     ax = plot_pd_violin(
         df2.query("`Bridge weight` == 1 & `Sequence length` == 1"), x, y
     )
@@ -535,9 +544,7 @@ def pd_burst_duration(df):
         df2.query("`Bridge weight` == 1 & `Sequence length` == 2"), x, y
     )
     ax.set_title("L=2", loc="left")
-    ax = plot_pd_violin(
-        df2.query("`Bridge weight` == 1 & `Sequence length` > 1"), x, y
-    )
+    ax = plot_pd_violin(df2.query("`Bridge weight` == 1 & `Sequence length` > 1"), x, y)
     ax.set_title("L>1", loc="left")
     # plot_pd_violin(df2.query("`Bridge weight` == 0.75"), x, y)
     # plot_pd_violin(df2.query("`Bridge weight` == 0.5"), x, y)
@@ -549,6 +556,29 @@ def pd_burst_duration(df):
 
     return df
 
+
+def pd_burst_duration_change_under_stim(df):
+
+    # query so what remains is repetitions and the condition to compare
+    df1 = df.query("`Sequence length` > 1 & `Number of inhibitory neurons` > 0 & `Connections` == 3 & `Bridge weight` == 0.75 & (Stimulation == 'Off' | Stimulation == 'On (0, 2)')")
+    df2 = df1.groupby(["Stimulation", "Repetition"])["Duration"].mean().reset_index()
+
+    # ax = plot_pd_violin(df2, x="Stimulation", y="Duration", split=False)
+    # ax = plot_pd_boxplot(df2, x="Stimulation", y="Duration")
+    fig, ax  = plt.subplots()
+    palette = _stimulation_color_palette()
+    order = [s for s in palette.keys() if s in df2["Stimulation"].unique() ]
+    sns.pointplot(data=df2, x="Stimulation", y="Duration", order=order, ax=ax, hue="Repetition", scale=0.5, color=".4")
+    sns.violinplot(data=df2, x="Stimulation", y="Duration", hue="Stimulation", split=True, order=order, ax=ax, palette=palette)
+    # sns.boxplot(data=df2, x="Stimulation", y="Duration", order=order, ax=ax, fliersize=0, palette=palette)
+    # sns.swarmplot(data=df2, x="Stimulation", y="Duration", order=order, ax=ax, color=".4", size=4)
+    ax.get_legend().set_visible(False)
+
+    ax.set_ylim(0.0, 0.3)
+    ax.set_title("L=1, Exc, k=3, bw=0.75")
+    fig.tight_layout()
+
+    return df2
 
 def plot_pd_boxplot(
     df, x="Sequence length", y="Probability", ax=None, apply_formatting=True
@@ -566,24 +596,26 @@ def plot_pd_boxplot(
     else:
         fig = ax.get_figure()
 
-    # make a nice color map
-    c0 = "#1f77b4"  # matplotlib.cm.get_cmap("tab10").colors[0] # blue
-    c1 = "#ff7f0e"  # matplotlib.cm.get_cmap("tab10").colors[1] # orange
+    palette = _stimulation_color_palette()
 
-    palette = {
-        "Off": c0,
-        "On (0)": cc.alpha_to_solid_on_bg(base=c1, alpha=0.25, bg="white"),
-        "On (0, 2)": cc.alpha_to_solid_on_bg(base=c1, alpha=0.50, bg="white"),
-        "On (0, 1, 2)": cc.alpha_to_solid_on_bg(base=c1, alpha=0.75, bg="white"),
-        "On (0, 1, 2, 3)": cc.alpha_to_solid_on_bg(base=c1, alpha=1.00, bg="white"),
-    }
+    order = None
+    hue_order = None
+    if x == "Stimulation":
+        order = palette.keys()
+    if x == "Connections":
+        hue_order = []
+        stim_of_df = df["Stimulation"].unique()
+        for stim in palette.keys():
+            if stim in stim_of_df:
+                hue_order.append(stim)
 
     sns.boxplot(
         data=df,
         x=x,
         y=y,
         hue="Stimulation",
-        hue_order=palette.keys(),
+        order=order,
+        hue_order=hue_order,
         fliersize=0.5,
         linewidth=0.5,
         ax=ax,
@@ -623,7 +655,7 @@ def plot_pd_boxplot(
     return ax
 
 
-def plot_pd_violin(df, x, y, ax=None, apply_formatting=True):
+def plot_pd_violin(df, x, y, ax=None, apply_formatting=True, split=True):
     """
         Violinplot across stimulation conditions.
         `df` needs to be filtered already:
@@ -660,33 +692,32 @@ def plot_pd_violin(df, x, y, ax=None, apply_formatting=True):
             if stim in stim_of_df:
                 hue_order.append(stim)
 
-
-    # sns.stripplot(
-    #     data=df,
-    #     x=x,
-    #     y=y,
-    #     hue="Stimulation",
-    #     hue_order = hue_order,
-    #     order = order,
-    #     size=0.3,
-    #     edgecolor=(0,0,0,0),
-    #     linewidth=0.5,
-    #     dodge=True,
-    #     ax=ax,
-    #     palette=palette,
-    # )
+    sns.stripplot(
+        data=df,
+        x=x,
+        y=y,
+        hue="Stimulation",
+        hue_order = hue_order,
+        order = order,
+        size=0.3,
+        edgecolor=(0,0,0,0),
+        linewidth=0.5,
+        dodge=True,
+        ax=ax,
+        palette=palette,
+    )
 
     sns.violinplot(
         data=df,
         x=x,
         y=y,
         hue="Stimulation",
-        # order = order,
+        order = order,
         hue_order=hue_order,
         scale_hue=False,
         scale="area",
-        # split=True,
-        inner=None,
+        split=split,
+        inner='quartile',
         linewidth=0.5,
         ax=ax,
         palette=palette,
@@ -732,11 +763,7 @@ def plot_pd_seqlen_vs_burst_duration(df, ax=None, apply_formatting=True):
         fig = ax.get_figure()
 
     sns.scatterplot(
-        x="Sequence length",
-        y="Duration",
-        hue = "Sequence length",
-        data=df,
-        ax=ax,
+        x="Sequence length", y="Duration", hue="Sequence length", data=df, ax=ax,
     )
 
     if apply_formatting:
@@ -746,6 +773,20 @@ def plot_pd_seqlen_vs_burst_duration(df, ax=None, apply_formatting=True):
 
     return ax
 
+def _stimulation_color_palette():
+
+    c0 = "#1f77b4"  # matplotlib.cm.get_cmap("tab10").colors[0] # blue
+    c1 = "#ff7f0e"  # matplotlib.cm.get_cmap("tab10").colors[1] # orange
+
+    palette = {
+        "Off": c0,
+        "On (0)": cc.alpha_to_solid_on_bg(base=c1, alpha=0.25, bg="white"),
+        "On (0, 2)": cc.alpha_to_solid_on_bg(base=c1, alpha=0.50, bg="white"),
+        "On (0, 1, 2)": cc.alpha_to_solid_on_bg(base=c1, alpha=0.75, bg="white"),
+        "On (0, 1, 2, 3)": cc.alpha_to_solid_on_bg(base=c1, alpha=1.00, bg="white"),
+    }
+
+    return palette
 
 # ------------------------------------------------------------------------------ #
 # distributions
