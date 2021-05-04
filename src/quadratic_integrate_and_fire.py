@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2021-04-27 14:40:04
+# @Last Modified: 2021-05-04 08:06:34
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 and runs the simulations in brian.
@@ -36,7 +36,7 @@ prefs.codegen.runtime.cython.multiprocess_safe = False
 prefs.logging.console_log_level = "INFO"
 
 # we want enforce simulation with c
-prefs.codegen.target = "cython"
+prefs.codegen.target = "numpy"
 
 # ------------------------------------------------------------------------------ #
 # model parameters
@@ -200,7 +200,7 @@ S = Synapses(
     source=G,
     target=G,
     on_pre="""
-        I_post += D_pre * g    # [10]
+        I_post += D_pre * g_pre    # [10]
     """,
 )
 
