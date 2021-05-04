@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2021-05-04 08:06:34
+# @Last Modified: 2021-05-04 19:15:28
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 and runs the simulations in brian.
@@ -34,9 +34,13 @@ prefs.codegen.runtime.cython.multiprocess_safe = False
 
 # Log level needs to be set in ~/.brian/user_preferences to work for all steps
 prefs.logging.console_log_level = "INFO"
+# prefs.logging.std_redirection = False
+# import distutils.log
+# distutils.log.set_verbosity(2)
+
 
 # we want enforce simulation with c
-prefs.codegen.target = "numpy"
+prefs.codegen.target = "cython"
 
 # ------------------------------------------------------------------------------ #
 # model parameters
@@ -63,6 +67,8 @@ tA =  10 * ms      # decay time of post-synaptic current (AMPA current decay tim
 gA =  35 * mV      # AMPA current strength, between 10 - 50 mV
                    # 170.612 value in javiers neurondyn
                    # this needs to scale with tc/tA
+tG = 20 * ms       # decay time of post-syanptic GABA current
+gG = 70 * mV       # GABA current strength
 
 # noise
 beta = 0.8         # D = beta*D after spike, to reduce efficacy, beta < 1
@@ -86,7 +92,7 @@ defaultclock.dt = 0.05 * ms
 # whether to record state variables
 record_state = False
 # which variables
-record_state_vars = ["v", "I", "u", "D"]
+record_state_vars = ["v", "IG", "u", "D"]
 # for which neurons
 record_state_idxs = [0,1,2,3]
 
@@ -104,6 +110,7 @@ parser = argparse.ArgumentParser(description="Brian")
 parser.add_argument("-i",  dest="input_path",  help="input path",  metavar="FILE",  required=True)
 parser.add_argument("-o",  dest="output_path", help="output path", metavar="FILE")
 parser.add_argument("-gA", dest="gA",          help="in mV",       default=gA / mV,     type=float)
+parser.add_argument("-gG", dest="gG",          help="in mV",       default=gG / mV,     type=float)
 parser.add_argument("-gm", dest="gm",          help="in mV",       default=gm / mV,     type=float)
 parser.add_argument("-r",  dest="r",           help="in Hz",       default=rate / Hz,   type=float)
 parser.add_argument("-tD", dest="tD",          help="in seconds",  default=tD / second, type=float)
@@ -140,6 +147,7 @@ numpy.random.seed(args.seed)
 # correct units
 gA = args.gA * mV
 gm = args.gm * mV
+gG = args.gG * mV
 tD = args.tD * second
 rate = args.r * Hz
 args.equil_duration *= second
@@ -152,6 +160,7 @@ log.info("output path:      %s", args.output_path)
 log.info("seed:             %s", args.seed)
 log.info("gA:               %s", gA)
 log.info("gm:               %s", gm)
+log.info("gG:               %s", gG)
 log.info("tD:               %s", tD)
 log.info("noise rate:       %s", rate)
 log.info("duration:         %s", args.sim_duration)
@@ -173,18 +182,19 @@ assert os.path.isfile(args.input_path), "Specify the right input path"
 num_n, a_ij_sparse, mod_ids = topo.load_topology(args.input_path)
 
 # ------------------------------------------------------------------------------ #
-# model
+# model, neurons
 # ------------------------------------------------------------------------------ #
 
 G = NeuronGroup(
     N=num_n,
     model="""
-        dv/dt = ( k*(v-vr)*(v-vt) -u +I                     # [6] soma potential
+        dv/dt = ( k*(v-vr)*(v-vt) -u +IA -IG                # [6] soma potential
                   +xi*(gs/tc)**0.5      )/tc   : volt       # white noise term
-        dI/dt = -I/tA                          : volt       # [9, 10]
+        dIA/dt = -IA/tA                        : volt       # [9, 10]
+        dIG/dt = -IG/tG                        : volt       # [9, 10]
         du/dt = ( b*(v-vr) -u )/ta             : volt       # [7] inhibitory current
         dD/dt = ( 1-D)/tD                      : 1          # [11] recovery to one
-        g     : volt  (constant)                   # neuron specific synaptic weight
+        g     : volt  (constant)                 # neuron specific synaptic weight
     """,
     threshold="v > vp",
     reset="""
@@ -194,14 +204,6 @@ G = NeuronGroup(
     """,
     method="euler",
     dt=defaultclock.dt,
-)
-
-S = Synapses(
-    source=G,
-    target=G,
-    on_pre="""
-        I_post += D_pre * g_pre    # [10]
-    """,
 )
 
 # shot-noise:
@@ -214,29 +216,73 @@ S = Synapses(
 # treat minis as spikes, add directly to current
 # for homogeneous rates, this is faster. here, N=1 is the input per neuron
 # maybe exclude the bridging neurons, when looking at `1x1_projected` topology
-mini_g = PoissonInput(target=G, target_var="I", N=1, rate=rate, weight=gm)
-
-# connect synapses
-log.info("Applying connectivity from sparse matrix")
-S.connect(i=a_ij_sparse[:, 0], j=a_ij_sparse[:, 1])
-
-# initalize to a somewhat sensible state. we could have different neuron types
-G.v = "vc + 5*mV*rand()"
-G.g = gA
+mini_g = PoissonInput(target=G, target_var="IA", N=1, rate=rate, weight=gm)
 
 # optionally, make a fraction of neurons inhibitiory. For now, only change `g`.
 num_inhib = int(num_n * args.inhibition_fraction)
-inhibition_ids = np.sort(np.random.choice(num_n, size=num_inhib, replace=False))
-for n_id in inhibition_ids:
-    G.g[n_id] = -gA / args.inhibition_fraction
-
-if len(inhibition_ids > 0):
-    log.info(f"inhibitory neurons: {inhibition_ids}")
+num_excit = int(num_n - num_inhib)
 
 # optionally, give bridging neurons different weights
 bridge_ids = topo.load_bridging_neurons(args.input_path)
-for n_id in bridge_ids:
-    G.g[n_id] *= args.bridge_weight
+
+# in brian, we can only create a subgroup from consecutive indices.
+# thus, to separate GABA and AMPA (and bridge neuron) groups, we need to reorder
+# indices. have two sets indices -> the ones in brian and the ones in the topology
+t2b, b2t, inhib_ids, excit_ids, bridge_ids = topo.index_alignment(
+    num_n, num_inhib, bridge_ids
+)
+
+
+G_inh = G[t2b[inhib_ids]]
+G_exc = G[t2b[excit_ids]]
+G_bridge = G[t2b[bridge_ids]]
+
+# initalize according to neuron type
+G.v = "vc + 5*mV*rand()"
+G.g = 0  # the lines below should overwrite this, sanity check
+G_inh.g = gG
+G_exc.g = gA
+G_bridge.g *= args.bridge_weight
+
+assert np.all(G.g != 0)
+
+
+# ------------------------------------------------------------------------------ #
+# model, synapses
+# ------------------------------------------------------------------------------ #
+
+S_exc = Synapses(
+    source=G_exc,
+    target=G,
+    on_pre="""
+        IA_post += D_pre * g_pre    # [10]
+    """,
+)
+S_inh = Synapses(
+    source=G_inh,
+    target=G,
+    on_pre="""
+        IG_post += D_pre * g_pre    # [10]
+    """,
+)
+
+# connect synapses
+log.info("Applying connectivity from sparse matrix")
+# S.connect(i=a_ij_sparse[:, 0], j=a_ij_sparse[:, 1])
+
+for n_id in inhib_ids:
+    i = np.where(inhib_ids == n_id)[0][0]
+    idx = np.where(a_ij_sparse[:, 0] == n_id)[0]
+    ii = i * np.ones(len(idx), dtype="int64")
+    jj = t2b[a_ij_sparse[idx, 1]]
+    S_inh.connect(i=ii, j=jj)
+
+for n_id in excit_ids:
+    i = np.where(excit_ids == n_id)[0][0]
+    idx = np.where(a_ij_sparse[:, 0] == n_id)[0]
+    ii = i * np.ones(len(idx), dtype="int64")
+    jj = t2b[a_ij_sparse[idx, 1]]
+    S_exc.connect(i=ii, j=jj)
 
 # ------------------------------------------------------------------------------ #
 # Stimulation if requested
@@ -291,7 +337,7 @@ run(args.equil_duration, report="stdout", report_period=60 * 60 * second)
 spks_m = SpikeMonitor(G)
 
 if record_state:
-    stat_m = StateMonitor(G, record_state_vars, record=record_state_idxs)
+    stat_m = StateMonitor(G, record_state_vars, record=t2b[record_state_idxs])
 
 if record_rates:
     rate_m = PopulationRateMonitor(G)
@@ -300,7 +346,7 @@ if args.stimulation_type != "off":
     stim_m = SpikeMonitor(stim_g)
 
 log.info("Recording data")
-run(args.sim_duration, report="stdout", report_period=60 * 60 * second)
+run(args.sim_duration, report="stdout", report_period=60 * second)
 
 
 # ------------------------------------------------------------------------------ #
@@ -334,7 +380,8 @@ else:
             spiketimes_as_list = np.zeros(shape=(2, spks_m.num_spikes))
             last_idx = 0
             for n in range(0, num_n):
-                t = trains[n]
+                # t = trains[n]
+                t = trains[t2b[n]]  # convert back from brian to topology indices
                 spiketimes[n, 0 : len(t)] = (t - args.equil_duration) / second
                 spiketimes_as_list[0, last_idx : last_idx + len(t)] = [n] * len(t)
                 spiketimes_as_list[1, last_idx : last_idx + len(t)] = (
@@ -378,6 +425,8 @@ else:
             dset.attrs["description"] = "time axis of all state variables, in seconds"
 
             for idx, var in enumerate(record_state_vars):
+                # no need to back-convert indices here, we specified which neurons
+                # to record
                 data = stat_m.variables[var].get_value()
                 dset = f.create_dataset(
                     f"/data/state_vars_{var}", compression="gzip", data=data.T
@@ -425,6 +474,9 @@ else:
         dset = f.create_dataset("/meta/dynamics_gA", data=gA / mV)
         dset.attrs["description"] = "AMPA current strength, in mV"
 
+        dset = f.create_dataset("/meta/dynamics_gG", data=gA / mV)
+        dset.attrs["description"] = "GABA current strength, in mV"
+
         dset = f.create_dataset("/meta/dynamics_gm", data=gm / mV)
         dset.attrs["description"] = "shot noise (minis) strength, in mV"
 
@@ -451,15 +503,13 @@ else:
             "description"
         ] = "synaptic weight of bridging neurons. get applied as a factor to outgoing synaptic currents."
 
-        dset = f.create_dataset("/data/neuron_g", data=G.g)
+        dset = f.create_dataset("/data/neuron_gA", data=G.g[t2b])
         dset.attrs[
             "description"
         ] = "synaptic weight that was ultimately used for each neuron in the dynamic simulation"
 
-        dset = f.create_dataset("/data/neuron_inhibitory_ids", data=inhibition_ids)
-        dset.attrs[
-            "description"
-        ] = "List of neuron ids that were set to be inhibitory"
+        dset = f.create_dataset("/data/neuron_inhibitory_ids", data=inhib_ids)
+        dset.attrs["description"] = "List of neuron ids that were set to be inhibitory"
 
         f.close()
 
@@ -473,3 +523,9 @@ try:
     shutil.rmtree(cache_dir, ignore_errors=True)
 except Exception as e:
     log.exception("Unable to remove cached files")
+
+
+import plot_helper as ph
+
+h5f = ph.ah.prepare_file(args.output_path)
+ph.overview_dynamic(h5f)

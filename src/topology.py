@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-05 10:37:47
-# @Last Modified: 2021-03-23 20:28:49
+# @Last Modified: 2021-05-04 17:59:36
 # ------------------------------------------------------------------------------ #
 # Helper to load the topology from hdf5
 # ------------------------------------------------------------------------------ #
@@ -12,6 +12,7 @@ import os
 import sys
 import h5py
 import logging
+import numpy as np
 import hi5 as h5
 from hi5 import BetterDict
 
@@ -75,3 +76,62 @@ def connect_synapses_from(S, a_ij):
         log.error(e)
         log.info(f"Creating Synapses randomly.")
         S.connect(condition="i != j", p=0.01)
+
+
+
+def index_alignment(num_n, num_inhib, bridge_ids):
+    """
+        resort indices so that they are contiguous:
+
+        * inhibitory, no bridge
+        * inhibitory, and bridge neurons
+        * excitatiory, and bridge
+        * excitatiory, no bridge
+
+
+    """
+    inhib_ids_old = np.sort(np.random.choice(num_n, size=num_inhib, replace=False))
+    bridge_ids_old = bridge_ids
+
+    inhib_no_bridge = []
+    inhib_bridge = []
+    excit_bridge = []
+    excit_no_bridge = []
+
+    for n_id in range(0, num_n):
+        if n_id in inhib_ids_old:
+            if n_id in bridge_ids_old:
+                inhib_bridge.append(n_id)
+            else:
+                inhib_no_bridge.append(n_id)
+        else:
+            if n_id in bridge_ids_old:
+                excit_bridge.append(n_id)
+            else:
+                excit_no_bridge.append(n_id)
+    brian_indices = np.concatenate(
+        [
+            np.sort(inhib_no_bridge),
+            np.sort(inhib_bridge),
+            np.sort(excit_bridge),
+            np.sort(excit_no_bridge),
+        ],
+        dtype="int64",
+    )
+    assert len(brian_indices) == num_n
+
+    # inverse mapping and resorted inputs
+    topo_indices = np.zeros(num_n, dtype="int64")
+    bridge_ids_new = []
+
+    for n_id in brian_indices:
+        topo_indices[n_id] = np.where(brian_indices == n_id)[0][0]
+        if n_id in bridge_ids_old:
+            bridge_ids_new.append(n_id)
+
+    inhib_ids_new = brian_indices[0:num_inhib]
+    excit_ids_new = brian_indices[num_inhib:]
+    bridge_ids_new = np.array(bridge_ids_new, dtype="int64")
+
+
+    return topo_indices, brian_indices, inhib_ids_new, excit_ids_new, bridge_ids_new
