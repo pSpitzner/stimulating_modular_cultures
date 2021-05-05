@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-05 10:37:47
-# @Last Modified: 2021-05-04 17:59:36
+# @Last Modified: 2021-05-05 09:59:26
 # ------------------------------------------------------------------------------ #
 # Helper to load the topology from hdf5
 # ------------------------------------------------------------------------------ #
@@ -17,7 +17,6 @@ import hi5 as h5
 from hi5 import BetterDict
 
 log = logging.getLogger(__name__)
-
 
 
 def load_topology(input_path):
@@ -53,9 +52,12 @@ def load_topology(input_path):
 
     return num_n, a_ij_sparse, mod_ids
 
+
 def load_bridging_neurons(input_path):
     try:
-        return h5.load(input_path, "/data/neuron_bridge_ids").astype(int, copy=False)  # brian doesnt like uints
+        return h5.load(input_path, "/data/neuron_bridge_ids").astype(
+            int, copy=False
+        )  # brian doesnt like uints
     except Exception as e:
         log.debug(e)
         return []
@@ -76,7 +78,6 @@ def connect_synapses_from(S, a_ij):
         log.error(e)
         log.info(f"Creating Synapses randomly.")
         S.connect(condition="i != j", p=0.01)
-
 
 
 def index_alignment(num_n, num_inhib, bridge_ids):
@@ -115,9 +116,8 @@ def index_alignment(num_n, num_inhib, bridge_ids):
             np.sort(inhib_bridge),
             np.sort(excit_bridge),
             np.sort(excit_no_bridge),
-        ],
-        dtype="int64",
-    )
+        ]
+    ).astype("int64")
     assert len(brian_indices) == num_n
 
     # inverse mapping and resorted inputs
@@ -132,6 +132,5 @@ def index_alignment(num_n, num_inhib, bridge_ids):
     inhib_ids_new = brian_indices[0:num_inhib]
     excit_ids_new = brian_indices[num_inhib:]
     bridge_ids_new = np.array(bridge_ids_new, dtype="int64")
-
 
     return topo_indices, brian_indices, inhib_ids_new, excit_ids_new, bridge_ids_new
