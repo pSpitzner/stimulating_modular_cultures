@@ -273,6 +273,8 @@ log.info("Applying connectivity from sparse matrix")
 for n_id in inhib_ids:
     i = np.where(inhib_ids == n_id)[0][0]
     idx = np.where(a_ij_sparse[:, 0] == n_id)[0]
+    if len(idx) == 0:
+        continue
     ii = i * np.ones(len(idx), dtype="int64")
     jj = t2b[a_ij_sparse[idx, 1]]
     S_inh.connect(i=ii, j=jj)
@@ -280,6 +282,8 @@ for n_id in inhib_ids:
 for n_id in excit_ids:
     i = np.where(excit_ids == n_id)[0][0]
     idx = np.where(a_ij_sparse[:, 0] == n_id)[0]
+    if len(idx) == 0:
+        continue
     ii = i * np.ones(len(idx), dtype="int64")
     jj = t2b[a_ij_sparse[idx, 1]]
     S_exc.connect(i=ii, j=jj)
