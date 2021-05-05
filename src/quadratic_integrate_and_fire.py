@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2021-05-04 19:15:28
+# @Last Modified: 2021-05-05 09:51:59
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 and runs the simulations in brian.
@@ -297,10 +297,11 @@ if args.stimulation_type == "hideaki":
         mod_ids=mod_ids,
         min_dt=defaultclock.dt * 1.001,
     )
+    stim_ids = np.sort(np.unique(stimulus_indices))
 
     stim_g = SpikeGeneratorGroup(
         N=num_n,
-        indices=stimulus_indices,
+        indices=t2b[stimulus_indices],
         times=stimulus_times,
         name="create_stimulation",
     )
@@ -320,11 +321,11 @@ elif args.stimulation_type == "poisson":
         poisson_rate[stim_idx] = 0.4 * (5 / 25) * 1 / (400 * ms)
 
     print(poisson_rate)
+    stim_ids = np.arange(num_n, dtype="int64")
 
     stim_g = PoissonGroup(num_n, poisson_rate, name="create_stimulation")
     stim_s = Synapses(stim_g, G, on_pre="v_post = 2*vp", name="apply_stimulation")
     stim_s.connect("i == j")
-
 
 # ------------------------------------------------------------------------------ #
 # Running
@@ -346,7 +347,7 @@ if args.stimulation_type != "off":
     stim_m = SpikeMonitor(stim_g)
 
 log.info("Recording data")
-run(args.sim_duration, report="stdout", report_period=60 * second)
+run(args.sim_duration, report="stdout", report_period=60 * 60 * second)
 
 
 # ------------------------------------------------------------------------------ #
@@ -415,6 +416,19 @@ else:
             dset.attrs[
                 "description"
             ] = "two-column list of stimulation times. first col is target-neuron id, second col the stimulation time. Beware: we have approximateley one timestep delay between stimulation and spike."
+
+            dset = f.create_dataset("/data/neuron_stimulation_ids", data=stim_ids)
+            dset.attrs[
+                "description"
+            ] = "List of neuron ids that were stimulation targets"
+
+            dset = f.create_dataset(
+                "/meta/dynamics_stimulated_modules",
+                data=np.array(args.stimulation_module),
+            )
+            dset.attrs[
+                "description"
+            ] = "List of module ids that were stimulation targets"
 
         if record_state:
             # write the time axis once for all variables and neurons (should be shared!)
@@ -503,13 +517,16 @@ else:
             "description"
         ] = "synaptic weight of bridging neurons. get applied as a factor to outgoing synaptic currents."
 
-        dset = f.create_dataset("/data/neuron_gA", data=G.g[t2b])
+        dset = f.create_dataset("/data/neuron_g", data=G.g[t2b])
         dset.attrs[
             "description"
         ] = "synaptic weight that was ultimately used for each neuron in the dynamic simulation"
 
         dset = f.create_dataset("/data/neuron_inhibitory_ids", data=inhib_ids)
         dset.attrs["description"] = "List of neuron ids that were set to be inhibitory"
+
+        dset = f.create_dataset("/data/neuron_excitatiory_ids", data=excit_ids)
+        dset.attrs["description"] = "List of neuron ids that were set to be excitatory"
 
         f.close()
 
@@ -525,7 +542,7 @@ except Exception as e:
     log.exception("Unable to remove cached files")
 
 
-import plot_helper as ph
+# import plot_helper as ph
 
-h5f = ph.ah.prepare_file(args.output_path)
-ph.overview_dynamic(h5f)
+# h5f = ph.ah.prepare_file(args.output_path)
+# ph.overview_dynamic(h5f)
