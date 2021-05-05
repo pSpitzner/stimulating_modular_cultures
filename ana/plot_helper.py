@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-05-03 16:10:10
+# @Last Modified: 2021-05-05 13:46:35
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -236,7 +236,7 @@ def plot_module_rates(h5f, ax=None, apply_formatting=True, mark_bursts=True):
         ax.plot(
             np.arange(0, len(pop_rate)) * dt,
             pop_rate,
-            label=f"{m_id:d}: ({mean_rate:.2f} Hz)",
+            label=f"{m_id:d}: {mean_rate:.2f} Hz",
             color=h5f.ana.mod_colors[m_id],
         )
 
@@ -285,7 +285,7 @@ def plot_system_rate(h5f, ax=None, apply_formatting=True):
     ax.plot(
         np.arange(0, len(pop_rate)) * dt,
         pop_rate,
-        label=f"system rate: ({mean_rate:.2f} Hz)",
+        label=f"system: {mean_rate:.2f} Hz",
         color="black",
     )
 
@@ -378,9 +378,20 @@ def plot_parameter_info(h5f, ax=None, apply_formatting=True, add=[]):
     dat.append(["Connections k", h5f.meta.topology_k_inter])
     dat.append(["Stimulation", h5f.ana.stimulation_description])
 
-    # dat.append(["", ""])
-    # dat.append(["Noise Rate [Hz]", h5f.meta.dynamics_rate])
-    # dat.append(["gA [mV]", h5f.meta.dynamics_gA])
+    try:
+        dat.append(["", ""])
+        # dat.append(["Noise Rate [Hz]", h5f.meta.dynamics_rate])
+        dat.append(["AMPA [mV]", h5f.meta.dynamics_gA])
+        dat.append(["GABA [mV]", h5f.meta.dynamics_gG])
+        dat.append(
+            [
+                "E/I",
+                len(h5f.data.neuron_excitatiory_ids)
+                / len(h5f.data.neuron_inhibitory_ids),
+            ]
+        )
+    except:
+        pass
 
     if len(add) > 0:
         dat.append(["", ""])
@@ -560,16 +571,36 @@ def pd_burst_duration(df):
 def pd_burst_duration_change_under_stim(df):
 
     # query so what remains is repetitions and the condition to compare
-    df1 = df.query("`Sequence length` > 1 & `Number of inhibitory neurons` > 0 & `Connections` == 3 & `Bridge weight` == 0.75 & (Stimulation == 'Off' | Stimulation == 'On (0, 2)')")
+    df1 = df.query(
+        "`Sequence length` > 1 & `Number of inhibitory neurons` > 0 & `Connections` == 3 & `Bridge weight` == 0.75 & (Stimulation == 'Off' | Stimulation == 'On (0, 2)')"
+    )
     df2 = df1.groupby(["Stimulation", "Repetition"])["Duration"].mean().reset_index()
 
     # ax = plot_pd_violin(df2, x="Stimulation", y="Duration", split=False)
     # ax = plot_pd_boxplot(df2, x="Stimulation", y="Duration")
-    fig, ax  = plt.subplots()
+    fig, ax = plt.subplots()
     palette = _stimulation_color_palette()
-    order = [s for s in palette.keys() if s in df2["Stimulation"].unique() ]
-    sns.pointplot(data=df2, x="Stimulation", y="Duration", order=order, ax=ax, hue="Repetition", scale=0.5, color=".4")
-    sns.violinplot(data=df2, x="Stimulation", y="Duration", hue="Stimulation", split=True, order=order, ax=ax, palette=palette)
+    order = [s for s in palette.keys() if s in df2["Stimulation"].unique()]
+    sns.pointplot(
+        data=df2,
+        x="Stimulation",
+        y="Duration",
+        order=order,
+        ax=ax,
+        hue="Repetition",
+        scale=0.5,
+        color=".4",
+    )
+    sns.violinplot(
+        data=df2,
+        x="Stimulation",
+        y="Duration",
+        hue="Stimulation",
+        split=True,
+        order=order,
+        ax=ax,
+        palette=palette,
+    )
     # sns.boxplot(data=df2, x="Stimulation", y="Duration", order=order, ax=ax, fliersize=0, palette=palette)
     # sns.swarmplot(data=df2, x="Stimulation", y="Duration", order=order, ax=ax, color=".4", size=4)
     ax.get_legend().set_visible(False)
@@ -579,6 +610,7 @@ def pd_burst_duration_change_under_stim(df):
     fig.tight_layout()
 
     return df2
+
 
 def plot_pd_boxplot(
     df, x="Sequence length", y="Probability", ax=None, apply_formatting=True
@@ -697,10 +729,10 @@ def plot_pd_violin(df, x, y, ax=None, apply_formatting=True, split=True):
         x=x,
         y=y,
         hue="Stimulation",
-        hue_order = hue_order,
-        order = order,
+        hue_order=hue_order,
+        order=order,
         size=0.3,
-        edgecolor=(0,0,0,0),
+        edgecolor=(0, 0, 0, 0),
         linewidth=0.5,
         dodge=True,
         ax=ax,
@@ -712,12 +744,12 @@ def plot_pd_violin(df, x, y, ax=None, apply_formatting=True, split=True):
         x=x,
         y=y,
         hue="Stimulation",
-        order = order,
+        order=order,
         hue_order=hue_order,
         scale_hue=False,
         scale="area",
         split=split,
-        inner='quartile',
+        inner="quartile",
         linewidth=0.5,
         ax=ax,
         palette=palette,
@@ -773,6 +805,7 @@ def plot_pd_seqlen_vs_burst_duration(df, ax=None, apply_formatting=True):
 
     return ax
 
+
 def _stimulation_color_palette():
 
     c0 = "#1f77b4"  # matplotlib.cm.get_cmap("tab10").colors[0] # blue
@@ -787,6 +820,7 @@ def _stimulation_color_palette():
     }
 
     return palette
+
 
 # ------------------------------------------------------------------------------ #
 # distributions

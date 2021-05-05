@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2021-05-05 09:51:59
+# @Last Modified: 2021-05-05 13:47:29
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 and runs the simulations in brian.
@@ -40,7 +40,7 @@ prefs.logging.console_log_level = "INFO"
 
 
 # we want enforce simulation with c
-prefs.codegen.target = "cython"
+prefs.codegen.target = "numpy"
 
 # ------------------------------------------------------------------------------ #
 # model parameters
@@ -492,7 +492,7 @@ else:
         dset = f.create_dataset("/meta/dynamics_gA", data=gA / mV)
         dset.attrs["description"] = "AMPA current strength, in mV"
 
-        dset = f.create_dataset("/meta/dynamics_gG", data=gA / mV)
+        dset = f.create_dataset("/meta/dynamics_gG", data=gG / mV)
         dset.attrs["description"] = "GABA current strength, in mV"
 
         dset = f.create_dataset("/meta/dynamics_gm", data=gm / mV)
@@ -529,7 +529,7 @@ else:
         dset = f.create_dataset("/data/neuron_inhibitory_ids", data=inhib_ids)
         dset.attrs["description"] = "List of neuron ids that were set to be inhibitory"
 
-        dset = f.create_dataset("/data/neuron_excitatiory_ids", data=excit_ids)
+        dset = f.create_dataset("/data/neuron_excitatory_ids", data=excit_ids)
         dset.attrs["description"] = "List of neuron ids that were set to be excitatory"
 
         f.close()
