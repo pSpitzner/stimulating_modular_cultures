@@ -2,10 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-03-16 19:08:57
-#
-# Needs updating!
-# relies on now depricated `utility.py` in `/ana/legacy`
+# @Last Modified: 2021-05-06 11:27:14
 #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into an ndim array
@@ -30,9 +27,9 @@ from tqdm import tqdm
 
 log = logging.getLogger(__name__)
 warnings.filterwarnings("ignore")  # suppress numpy warnings
-sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/../ana/"))
-import utility as ut
-import logisi as logisi
+
+import ana_helper as ah
+import hi5 as h5
 
 dbg_var = None
 
@@ -42,108 +39,40 @@ dbg_var = None
 
 # variables to span axes and how to get them from the hdf5 files
 d_obs = dict()
-d_obs["ga"] = "/meta/dynamics_gA"
-d_obs["rate"] = "/meta/dynamics_rate"
-d_obs["tD"] = "/meta/dynamics_tD"
-d_obs["alpha"] = "/meta/topology_alpha"
+d_obs["gA"] = "/meta/dynamics_gA"
+# d_obs["gG"] = "/meta/dynamics_gG"
+# d_obs["stim"] = "/meta/dynamics_gB"
+# d_obs["rate"] = "/meta/dynamics_rate"
+# d_obs["tD"] = "/meta/dynamics_tD"
+# d_obs["alpha"] = "/meta/topology_alpha"
 d_obs["k_inter"] = "/meta/topology_k_inter"
 
 # functions for analysis. candidate is the hdf5 file
 # need to return a dict where the key becomes the hdf5 data set name
 # and a scalar entry as the value
 # todo: add description
-def scalar_mean_ibi(candidate=None):
+def all_in_one(candidate=None):
     if candidate is None:
-        return ["ibi_mean", "ibi_var", "ibi_cv"]
-    # load spiketimes and calculate ibi
-    spiketimes = ut.h5_load(candidate, "/data/spiketimes", silent=True)
-    bursttimes = ut.burst_times(spiketimes, bin_size=0.5, threshold=0.75)
-    ibis = ut.inter_burst_intervals(bursttimes=bursttimes)
+        return ["num_bursts", "sys_rate_cv", "mean_rate"]
+
+    # load and process
+    h5f = ah.prepare_file(candidate)
+    ah.find_bursts_from_rates(h5f)
 
     res = dict()
-    res["ibi_mean"] = np.mean(ibis) if len(ibis) > 0 else np.inf
-    res["ibi_var"] = np.var(ibis) if len(ibis) > 0 else np.inf
-    res["ibi_cv"] = np.sqrt(res["ibi_var"]) / res["ibi_mean"]
-    return res
+    res["num_bursts"] = len(h5f.ana.bursts.system_level.beg_times)
+    res["sys_rate_cv"] = h5f.ana.rates.cv.system_level
+    res["mean_rate"] = np.nanmean(h5f.ana.rates.system_level)
 
+    h5.close_hot(h5f)
+    h5f.clear()
 
-def scalar_logisi_pasquale(candidate=None):
-    """
-        logisi methoed enables some cool properties, like sequences, burst duration
-        etc.
-    """
-    if candidate is None:
-        return [
-            "psq_ibi_mean",
-            "psq_ibi_var",
-            "psq_ibi_cv",
-            "psq_nb_duration_mean",
-            "psq_nb_duration_var",
-        ]
-
-    # load spiketimes and calculate ibi
-    spiketimes = ut.h5_load(candidate, "/data/spiketimes", silent=True)
-    network_bursts, details = logisi.network_burst_detection(
-        spiketimes, network_fraction=0.75, sort_by="i_beg"
-    )
-    # if network_bursts is None:
-    # ibis = []
-    # burst_durations = []
-    # else:
-
-    ibis = network_bursts["IBI"]
-
-    global dbg_var
-    dbg_var = details
-
-    # network_bursts ["durn"] does not give the right duration because i reused
-    # the burst detection function on the network level.
-    # patching this inplace, here
-    durn = (
-        details["t_end"][network_bursts["i_end"]]
-        - details["t_beg"][network_bursts["i_beg"]]
-    )
-
-    res = dict()
-    res["psq_ibi_mean"] = np.nanmean(ibis) if len(ibis) > 0 else np.inf
-    res["psq_ibi_var"] = np.nanvar(ibis) if len(ibis) > 0 else np.inf
-    res["psq_ibi_cv"] = np.sqrt(res["psq_ibi_var"]) / res["psq_ibi_mean"]
-    res["psq_nb_duration_mean"] = np.nanmean(durn) if len(durn) > 0 else np.inf
-    res["psq_nb_duration_mean"] = np.nanvar(durn) if len(durn) > 0 else np.inf
-
-    # print(f"\n{res['psq_ibi_mean']}")
-    return res
-
-
-def scalar_asdr(candidate=None):
-    if candidate is None:
-        return ["asdr_mean"]
-
-    spiketimes = ut.h5_load(candidate, "/data/spiketimes", silent=True)
-    asdr = ut.population_activity(spiketimes, bin_size=1.0)
-
-    res = dict()
-    res["asdr_mean"] = np.mean(asdr)
-    return res
-
-
-def scalar_k_out(candidate=None):
-    if candidate is None:
-        return ["k_out_median"]
-
-    kout = ut.h5_load(candidate, "/data/neuron_k_out", silent=True)
-
-    res = dict()
-    res["k_out_median"] = np.median(kout)
     return res
 
 
 # a list of analysis functions to call on the candidate
 l_ana_functions = list()
-l_ana_functions.append(scalar_mean_ibi)
-l_ana_functions.append(scalar_asdr)
-l_ana_functions.append(scalar_k_out)
-l_ana_functions.append(scalar_logisi_pasquale)
+l_ana_functions.append(all_in_one)
 
 # all the keys that will be returned from above
 l_ana_keys = []
@@ -162,7 +91,9 @@ parser.add_argument(
     help="input path with *.hdf5 files",
     metavar="FILE",
 )
-parser.add_argument("-o", dest="output_path", help="output path", metavar="FILE")
+parser.add_argument(
+    "-o", dest="output_path", help="output path", metavar="FILE", required=True
+)
 args = parser.parse_args()
 
 # ------------------------------------------------------------------------------ #
@@ -203,7 +134,7 @@ l_valid = []
 for candidate in tqdm(candidates):
     try:
         for obs in d_obs:
-            temp = ut.h5_load(candidate, d_obs[obs], silent=True)
+            temp = h5.load(candidate, d_obs[obs], silent=True)
             try:
                 # sometimes we find nested arrays
                 if len(temp == 1):
@@ -233,7 +164,7 @@ for candidate in tqdm(candidates):
     index = ()
     for obs in d_axes.keys():
         # get value
-        temp = ut.h5_load(candidate, d_obs[obs], silent=True)
+        temp = h5.load(candidate, d_obs[obs], silent=True)
         temp = np.where(d_axes[obs] == temp)[0][0]
         index += (temp,)
 
@@ -259,13 +190,11 @@ for candidate in tqdm(l_valid, desc="Files"):
     index = ()
     for obs in d_axes.keys():
         # get value
-        temp = ut.h5_load(candidate, d_obs[obs], silent=True)
+        temp = h5.load(candidate, d_obs[obs], silent=True)
         # transform to index
         temp = np.where(d_axes[obs] == temp)[0][0]
         # print(f"{obs} {temp}")
         index += (temp,)
-
-    sim_duration = ut.h5_load(candidate, "/meta/dynamics_simulation_duration")
 
     # consider repetitions for each data point and stack values
     rep = sampled[index]

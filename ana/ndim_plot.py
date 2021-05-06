@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-03-16 19:05:08
+# @Last Modified: 2021-05-06 11:40:27
 #
 # plot a merged down, multidimensional hdf5 file (from individual simulations)
 # and select which dims to show where
@@ -94,6 +94,7 @@ while True:
 data_nd = h5.load(input_path, f"/data/{obs_to_plot}", silent=True)
 
 l_axis_candidates = h5.load(input_path, "/meta/axis_overview", silent=True)
+l_axis_candidates = l_axis_candidates.astype("str")
 d_axes = dict()
 for obs in l_axis_candidates:
     d_axes[obs] = h5.load(input_path, "/data/axis_" + obs, silent=True)
@@ -166,8 +167,8 @@ x_obs = l_axis_selected[1]
 data_mean = pd.DataFrame(
     # average across repetitions, which are last axis
     np.nanmean(data_3d, axis=2),
-    index=d_axes[y_obs],
-    columns=d_axes[x_obs],
+    index=d_axes[y_obs] if isinstance(d_axes[y_obs], np.ndarray) else [d_axes[y_obs]],
+    columns=d_axes[x_obs] if isinstance(d_axes[x_obs], np.ndarray) else [d_axes[x_obs]],
 )
 
 plt.ion()
@@ -175,10 +176,10 @@ fig, ax = plt.subplots(figsize=(10, 4))
 
 if args.center_cmap_around is None:
     kwargs = {
-        # vmin=np.nanmin(data_mean[np.isfinite(data_mean)]),
-        # vmax=np.nanmax(data_mean[np.isfinite(data_mean)]),
-        'vmin': 0,
-        'vmax': 150,
+        'vmin' : np.nanmin(data_mean[np.isfinite(data_mean)]),
+        'vmax' : np.nanmax(data_mean[np.isfinite(data_mean)]),
+        # 'vmin': 0,
+        # 'vmax': 150,
         'cmap': "Blues",
     }
 else:
