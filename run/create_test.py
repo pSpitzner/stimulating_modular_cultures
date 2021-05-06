@@ -10,16 +10,23 @@ seed = 3_000
 
 # parameters to scan, noise rate, ampa strength, and a few repetitons for statistics
 l_topo = ["2x2_fixed"]
-l_k_inter = np.array([3])
-l_mod = np.array(["off", "0", "02", "012", "0123"])
-l_rep = range(0, 1)
-l_gA = np.array([30, 35, 37, 40, 45])
-l_gG = np.array([40, 60, 70, 80, 100])
+l_k_inter = np.array([5])
+l_mod = np.array(["off"])
+l_rep = np.arange(0, 3)
+l_gA = np.arange(30, 46, 2.5)
+l_gG = np.arange(40, 101, 10)
+l_gm = np.arange(20, 41, 2.5)
+l_rate = np.arange(30, 41, 2)
+
+print("l_gA  ", l_gA)
+print("l_gG  ", l_gG)
+print("l_gm  ", l_gm)
+print("l_rate", l_rate)
 
 bridge_weight = 1.0
 inh_frac = 0.20
 
-arg_list = product(l_gA, l_gG)
+arg_list = product(l_topo, l_k_inter, l_gA, l_gG, l_gm, l_rate, l_rep)
 
 count_dynamic = 0
 count_topo = 0
@@ -30,14 +37,18 @@ with open("./parameters_topo.tsv", "w") as f_topo:
         f_topo.write("# commands to create topology\n")
         f_dyn.write("# commands to run dynamics on existing topology\n")
 
-        for i in arg_list:
-            topo = "2x2_fixed"
-            k_inter = 3
-            rep = 0
-            gA = i[0]
-            gG = i[1]
+        for args in arg_list:
+            topo = args[0]
+            k_inter = args[1]
+            gA = args[2]
+            gG = args[3]
+            gm = args[4]
+            rate = args[5]
+            rep = args[6]
 
-            topo_path = f"./dat/inhibition_test/topo/k={k_inter:d}_bw={bridge_weight:03.2f}_inh={inh_frac:03.2f}_gA={gA:.1f}_gG={gG:.1f}_rep={rep:02d}.hdf5"
+            f_base = f"k={k_inter:d}_gA={gA:.1f}_gG={gG:.1f}_gm={gm:.1f}_rate={rate:.1f}_rep={rep:02d}.hdf5"
+
+            topo_path = f"./dat/inhibition_test/topo/{f_base}"
             f_topo.write(
                 # topology command
                 f"/data.nst/share/projects/paul_brian_modular_cultures/topology_orlandi_standalone/exe/orlandi_standalone "
@@ -47,7 +58,7 @@ with open("./parameters_topo.tsv", "w") as f_topo:
             count_topo += 1
 
             for mod in l_mod:
-                dyn_path = f"./dat/inhibition_test/dyn/k={k_inter:d}_stim={mod}_bw={bridge_weight:03.2f}_inh={inh_frac:03.2f}_gA={gA:.1f}_gG={gG:.1f}_rep={rep:02d}.hdf5"
+                dyn_path = f"./dat/inhibition_test/dyn/stim={mod}_{f_base}"
 
                 if mod == "off":
                     stim_arg = ""
@@ -60,7 +71,8 @@ with open("./parameters_topo.tsv", "w") as f_topo:
                     + f"-o {dyn_path} "
                     + f"-d 3600 -equil 300 -s {seed:d} "
                     + f"--bridge_weight {bridge_weight} "
-                    + f"--inhibition {inh_frac} -gA {gA} -gG {gG} "
+                    + f"--inhibition {inh_frac} "
+                    + f"-gA {gA} -gG {gG} -gm {gm} -r {rate} "
                     + f"{stim_arg}\n"
                 )
 
