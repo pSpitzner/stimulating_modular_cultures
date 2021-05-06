@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-05-03 12:59:30
+# @Last Modified: 2021-05-06 10:45:58
 # ------------------------------------------------------------------------------ #
 
 
@@ -184,7 +184,7 @@ def find_bursts_from_rates(
     h5f,
     bs_large=0.02,  # seconds, time bin size to smooth over (gaussian kernel)
     bs_small=0.0005,  # seconds, small bin size
-    rate_threshold=15,  # Hz
+    rate_threshold=7.5,  # Hz
     merge_threshold=0.1,  # seconds, merge bursts if separated by less than this
     write_to_h5f=True,
 ):
@@ -209,6 +209,10 @@ def find_bursts_from_rates(
     rates = BetterDict()
     rates.dt = bs_small
     rates.module_level = BetterDict()
+    rates.system_level = None # just create the dict entry at the nice position
+    rates.cv = BetterDict()
+    rates.cv.module_level = BetterDict()
+    rates.cv.system_level = None
 
     beg_times = []  # lists of length num_modules
     end_times = []
@@ -242,6 +246,7 @@ def find_bursts_from_rates(
         end_times.append(end_time)
 
         rates.module_level[m_id] = pop_rate
+        rates.cv.module_level[m_id] = np.nanstd(pop_rate) / np.nanmean(pop_rate)
         bursts.module_level[m_id] = BetterDict()
         bursts.module_level[m_id].beg_times = beg_time.copy()
         bursts.module_level[m_id].end_times = end_time.copy()
@@ -254,6 +259,7 @@ def find_bursts_from_rates(
         length=h5f.meta.dynamics_simulation_duration,
     )
     rates.system_level = pop_rate
+    rates.cv.system_level = np.nanstd(pop_rate) / np.nanmean(pop_rate)
 
     all_begs, all_ends, all_seqs = system_burst_from_module_burst(
         beg_times, end_times, threshold=merge_threshold,

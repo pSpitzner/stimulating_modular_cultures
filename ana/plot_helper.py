@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-05-05 13:46:35
+# @Last Modified: 2021-05-06 10:53:30
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -145,7 +145,7 @@ def overview_burst_duration_and_isi(h5f, filenames=None, which="all"):
     plot_parameter_info(h5f, ax=axes[0], add=comments)
 
     axes[1].set_xlim(0, 0.4)
-    axes[2].set_xlim(-3, 2)
+    axes[2].set_xlim(-3, 3)
 
     for i in range(4):
         fig.tight_layout()
@@ -229,9 +229,8 @@ def plot_module_rates(h5f, ax=None, apply_formatting=True, mark_bursts=True):
 
     for m_id in h5f.ana.mods:
         pop_rate = h5f.ana.rates.module_level[m_id]
-        log.info(
-            f"Threshold from SNR: {ah.get_threshold_via_signal_to_noise_ratio(pop_rate)}"
-        )
+        # log.info(f"Threshold from SNR: {ah.get_threshold_via_signal_to_noise_ratio(pop_rate)}")
+        log.info(f"CV {m_id}: {h5f.ana.rates.cv.module_level[m_id]:.3f}")
         mean_rate = np.nanmean(pop_rate)
         ax.plot(
             np.arange(0, len(pop_rate)) * dt,
@@ -288,6 +287,7 @@ def plot_system_rate(h5f, ax=None, apply_formatting=True):
         label=f"system: {mean_rate:.2f} Hz",
         color="black",
     )
+    log.info(f"CV  : {h5f.ana.rates.cv.system_level:.3f}")
 
     leg = ax.legend(loc=1)
 
@@ -333,6 +333,8 @@ def plot_bursts_into_timeseries(h5f, ax=None, apply_formatting=True):
 
     beg_times = h5f.ana.bursts.system_level.beg_times
     end_times = h5f.ana.bursts.system_level.end_times
+
+    log.info(f"Found {len(beg_times)} system-wide bursts")
 
     ax.plot(beg_times, np.ones(len(beg_times)) * (pad), marker="4", color="black", lw=0)
     ax.plot(end_times, np.ones(len(end_times)) * (pad), marker="3", color="black", lw=0)
@@ -1005,7 +1007,7 @@ def plot_distribution_isi(
         ax.xaxis.set_minor_locator(_ticklocator_lin_to_log_minor())
         # maybe skip the relabeling and just set xlabel to "log10 ISI (log10 seconds)"
         ax.set_xlabel(r"Inter-spike Interval (seconds)")
-        ax.set_ylabel(r"Probability Density (log ISI)")
+        ax.set_ylabel(r"Prob. Density (log ISI)")
         ax.legend()
         fig.tight_layout()
 
