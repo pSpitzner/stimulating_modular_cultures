@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-05-06 10:45:58
+# @Last Modified: 2021-05-07 14:04:55
 # ------------------------------------------------------------------------------ #
 
 
@@ -28,7 +28,12 @@ log = logging.getLogger(__name__)
 
 try:
     from numba import jit, prange
-    from numba.typed import List
+    try:
+        from numba.typed import List
+    except:
+        # older numba versions dont have this
+        def List(*args):
+            return list(*args)
 
     # raise ImportError
     log.info("Using numba for parallelizable functions")
