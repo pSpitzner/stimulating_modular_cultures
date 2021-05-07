@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-05-07 14:04:55
+# @Last Modified: 2021-05-07 14:09:57
 # ------------------------------------------------------------------------------ #
 
 
@@ -28,6 +28,9 @@ log = logging.getLogger(__name__)
 
 try:
     from numba import jit, prange
+    # raise ImportError
+    log.info("Using numba for parallelizable functions")
+
     try:
         from numba.typed import List
     except:
@@ -35,17 +38,17 @@ try:
         def List(*args):
             return list(*args)
 
-    # raise ImportError
-    log.info("Using numba for parallelizable functions")
-
     # silence deprications
-    from numba.core.errors import (
-        NumbaDeprecationWarning,
-        NumbaPendingDeprecationWarning,
-    )
+    try:
+        from numba.core.errors import (
+            NumbaDeprecationWarning,
+            NumbaPendingDeprecationWarning,
+        )
+        warnings.simplefilter("ignore", category=NumbaDeprecationWarning)
+        warnings.simplefilter("ignore", category=NumbaPendingDeprecationWarning)
+    except:
+        pass
 
-    warnings.simplefilter("ignore", category=NumbaDeprecationWarning)
-    warnings.simplefilter("ignore", category=NumbaPendingDeprecationWarning)
 except ImportError:
     log.info("Numba not available, skipping parallelization")
     # replace numba functions if numba not available:
