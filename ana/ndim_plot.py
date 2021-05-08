@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-05-06 11:40:27
+# @Last Modified: 2021-05-08 10:49:20
 #
 # plot a merged down, multidimensional hdf5 file (from individual simulations)
 # and select which dims to show where
@@ -13,6 +13,7 @@ import sys
 import glob
 import h5py
 import argparse
+import numbers
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -98,6 +99,8 @@ l_axis_candidates = l_axis_candidates.astype("str")
 d_axes = dict()
 for obs in l_axis_candidates:
     d_axes[obs] = h5.load(input_path, "/data/axis_" + obs, silent=True)
+    if not isinstance(d_axes[obs], np.ndarray):
+        d_axes[obs] = np.array([d_axes[obs]])
 
 # select which two axis to show
 options = f""

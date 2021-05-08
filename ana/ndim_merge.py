@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-05-07 14:15:37
+# @Last Modified: 2021-05-08 10:56:34
 #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into an ndim array
@@ -45,15 +45,15 @@ d_obs["gm"] = "/meta/dynamics_gm"
 d_obs["rate"] = "/meta/dynamics_rate"
 # d_obs["tD"] = "/meta/dynamics_tD"
 # d_obs["alpha"] = "/meta/topology_alpha"
-d_obs["k_inter"] = "/meta/topology_k_inter"
+# d_obs["k_inter"] = "/meta/topology_k_inter"
 
-# functions for analysis. candidate is the hdf5 file
+# functions for analysis. candidate is the file path (e.g. to a hdf5 file)
 # need to return a dict where the key becomes the hdf5 data set name
 # and a scalar entry as the value
 # todo: add description
 def all_in_one(candidate=None):
     if candidate is None:
-        return ["num_bursts", "sys_rate_cv", "mean_rate"]
+        return ["num_bursts", "num_b_geq_2", "sys_rate_cv", "mean_rate"]
 
     # load and process
     h5f = ah.prepare_file(candidate)
@@ -61,6 +61,8 @@ def all_in_one(candidate=None):
 
     res = dict()
     res["num_bursts"] = len(h5f.ana.bursts.system_level.beg_times)
+    idx = np.where(h5f.ana.bursts.module_sequences)
+    res["num_b_geq_2"] = len([x for x in h5f.ana.bursts.system_level.module_sequences if len(x) >= 2])
     res["sys_rate_cv"] = h5f.ana.rates.cv.system_level
     res["mean_rate"] = np.nanmean(h5f.ana.rates.system_level)
 
