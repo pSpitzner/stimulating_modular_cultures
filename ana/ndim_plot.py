@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-05-08 10:49:20
+# @Last Modified: 2021-05-10 16:22:14
 #
 # plot a merged down, multidimensional hdf5 file (from individual simulations)
 # and select which dims to show where
@@ -37,7 +37,7 @@ def full_path(path):
 # load and merge, if needed
 # ------------------------------------------------------------------------------ #
 
-parser = argparse.ArgumentParser(description="Plot Ibi Sweep")
+parser = argparse.ArgumentParser(description="ndim_plot")
 parser.add_argument(
     "-i",
     dest="input_path",
