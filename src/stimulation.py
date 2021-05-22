@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-05 10:30:17
-# @Last Modified: 2021-03-24 17:10:35
+# @Last Modified: 2021-05-22 19:41:22
 # ------------------------------------------------------------------------------ #
 # Create additional spikes that model stimulation
 #
@@ -18,7 +18,7 @@ import os
 import sys
 import h5py
 import numpy as np
-from brian2.units.allunits import *
+from brian2.units import *
 import logging
 
 log = logging.getLogger(__name__)
@@ -194,6 +194,47 @@ def _time_random(t_start, t_end, num_n):
 
     return np.random.uniform(low=t_start, high=t_end, size=num_n)  # [low, high)
 
+
+def stimulation_at_rate_with_cv(rate, cv, t_end, min_dt=0*second, t_start=0*second,):
+    """
+        For a single neuron, generate spike times that have a desired cv.
+
+        Returns a 1d array with spike times in brian unit seconds.
+    """
+    tries = 0
+    while True:
+        tries += 1
+
+        mean_isi = 1 / rate
+        size = int(1.05*(t_end - t_start) / mean_isi)
+        var = cv * (mean_isi / second)
+
+        # we want lognormal, so isis do not get negative
+        mx = mean_isi/second
+        vx = var
+
+        # ml = None
+
+        lm = np.log(mean_isi/second) - var/2
+        # ls = None
+        isis = np.random.lognormal(loc=mean_isi/second, scale=std, size=size) * second
+        spike_times = np.cumsum(isis)
+        isis = isis[spike_times <= t_end]
+        spike_times = np.sort(spike_times[spike_times <= t_end])
+        # isis = np.diff(spike_times)
+
+        print(mean_isi, isis)
+
+        if np.nanmin(isis) >= min_dt:
+            mean = np.mean(isis)
+            cv = np.var(isis) / mean
+            log.info(f"{len(spike_times)} spike times with rate {1 / mean} and cv {cv}")
+            return spike_times
+
+        # if we exceed tries, throw an exception
+        assert (
+            tries < 2
+        ), f"could not generate times that are separated by {min_dt} in 1000 attempts"
 
 # ------------------------------------------------------------------------------ #
 # explorative helpers
