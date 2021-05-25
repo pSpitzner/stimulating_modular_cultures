@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-05-10 16:19:18
-# @Last Modified: 2021-05-10 17:45:07
+# @Last Modified: 2021-05-22 20:14:42
 # ------------------------------------------------------------------------------ #
 # Use this in conjunction with a file resulting form `ndim_merge` to find
 # parameter regions that match desired criteria.
@@ -29,7 +29,9 @@ def num_bursts(h5f, coords):
     nb = np.mean(h5f.data.num_bursts[coords])
     return nb > 50
 
+# number of bursts with sequence length longer at least 2
 def nb2(h5f, coords):
+    # IBI wanted ~ 40s, 3600s sim duration, hence ~ 90 bursts
     nb = np.mean(h5f.data.num_b_geq_2[coords])
     return nb > 50 and nb < 150
 
@@ -40,12 +42,12 @@ def firing_rate(h5f, coords):
 
 
 d_crit = dict()
-d_crit["nb"] = num_bursts
+# d_crit["nb"] = num_bursts
 d_crit["nb2"] = nb2
 d_crit["rate"] = firing_rate
 
-match_criteria = np.any
-# match_criteria = np.all
+# match_criteria = np.any
+match_criteria = np.all
 
 
 # ------------------------------------------------------------------------------ #
