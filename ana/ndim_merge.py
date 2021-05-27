@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-05-08 10:56:34
+# @Last Modified: 2021-05-27 15:56:45
 #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into an ndim array
@@ -63,6 +63,7 @@ def all_in_one(candidate=None):
     res["num_bursts"] = len(h5f.ana.bursts.system_level.beg_times)
     idx = np.where(h5f.ana.bursts.module_sequences)
     res["num_b_geq_2"] = len([x for x in h5f.ana.bursts.system_level.module_sequences if len(x) >= 2])
+    res["num_b_geq_4"] = len([x for x in h5f.ana.bursts.system_level.module_sequences if len(x) >= 4])
     res["sys_rate_cv"] = h5f.ana.rates.cv.system_level
     res["mean_rate"] = np.nanmean(h5f.ana.rates.system_level)
 
