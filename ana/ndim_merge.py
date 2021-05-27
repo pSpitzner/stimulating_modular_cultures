@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-05-27 15:56:45
+# @Last Modified: 2021-05-27 15:59:06
 #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into an ndim array
@@ -53,7 +53,7 @@ d_obs["rate"] = "/meta/dynamics_rate"
 # todo: add description
 def all_in_one(candidate=None):
     if candidate is None:
-        return ["num_bursts", "num_b_geq_2", "sys_rate_cv", "mean_rate"]
+        return ["num_bursts", "num_b_geq_2", "num_b_geq_4", "sys_rate_cv", "mean_rate"]
 
     # load and process
     h5f = ah.prepare_file(candidate)
