@@ -12,11 +12,11 @@ seed = 3_000
 l_topo = ["2x2_fixed"]
 l_k_inter = np.array([5])
 l_mod = np.array(["off"])
-l_rep = np.arange(0, 3)
-l_gA = np.arange(30, 46, 2.5)
-l_gG = np.arange(40, 101, 10)
-l_gm = np.arange(20, 41, 2.5)
-l_rate = np.arange(30, 41, 2)
+l_rep = np.arange(0, 25)
+l_gA = np.arange(40, 46, 2.5)
+l_gG = np.arange(40, 101, 2.5)
+l_gm = [25.0]
+l_rate = [38.0]
 
 print("l_gA  ", l_gA)
 print("l_gG  ", l_gG)
@@ -48,7 +48,7 @@ with open("./parameters_topo.tsv", "w") as f_topo:
 
             f_base = f"k={k_inter:d}_gA={gA:.1f}_gG={gG:.1f}_gm={gm:.1f}_rate={rate:.1f}_rep={rep:02d}.hdf5"
 
-            topo_path = f"./dat/inhibition_test/topo/{f_base}"
+            topo_path = f"./dat/inhibition_test2/topo/{f_base}"
             f_topo.write(
                 # topology command
                 f"/data.nst/share/projects/paul_brian_modular_cultures/topology_orlandi_standalone/exe/orlandi_standalone "
@@ -58,7 +58,7 @@ with open("./parameters_topo.tsv", "w") as f_topo:
             count_topo += 1
 
             for mod in l_mod:
-                dyn_path = f"./dat/inhibition_test/dyn/stim={mod}_{f_base}"
+                dyn_path = f"./dat/inhibition_test2/dyn/stim={mod}_{f_base}"
 
                 if mod == "off":
                     stim_arg = ""
