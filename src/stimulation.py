@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-05 10:30:17
-# @Last Modified: 2021-05-22 19:41:22
+# @Last Modified: 2021-06-07 17:15:55
 # ------------------------------------------------------------------------------ #
 # Create additional spikes that model stimulation
 #
@@ -207,33 +207,27 @@ def stimulation_at_rate_with_cv(rate, cv, t_end, min_dt=0*second, t_start=0*seco
 
         mean_isi = 1 / rate
         size = int(1.05*(t_end - t_start) / mean_isi)
-        var = cv * (mean_isi / second)
+        mu = mean_isi / second
+        std = cv * (mu)
 
         # we want lognormal, so isis do not get negative
-        mx = mean_isi/second
-        vx = var
+        mu_log = np.log(mu*mu/np.sqrt(mu*mu + std*std))
+        std_log = np.sqrt(np.log(1+std*std/(mu*mu)))
 
-        # ml = None
-
-        lm = np.log(mean_isi/second) - var/2
-        # ls = None
-        isis = np.random.lognormal(loc=mean_isi/second, scale=std, size=size) * second
+        isis = np.random.lognormal(mean=mu_log, sigma=std_log, size=size) * second
         spike_times = np.cumsum(isis)
         isis = isis[spike_times <= t_end]
         spike_times = np.sort(spike_times[spike_times <= t_end])
-        # isis = np.diff(spike_times)
-
-        print(mean_isi, isis)
 
         if np.nanmin(isis) >= min_dt:
             mean = np.mean(isis)
-            cv = np.var(isis) / mean
-            log.info(f"{len(spike_times)} spike times with rate {1 / mean} and cv {cv}")
+            cv = np.std(isis) / mean
+            log.debug(f"{len(spike_times)} spike times with rate {1 / mean:.3f} Hz and cv {cv:.3f}")
             return spike_times
 
         # if we exceed tries, throw an exception
         assert (
-            tries < 2
+            tries < 1000
         ), f"could not generate times that are separated by {min_dt} in 1000 attempts"
 
 # ------------------------------------------------------------------------------ #

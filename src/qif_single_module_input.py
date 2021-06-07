@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-05-06 09:35:48
-# @Last Modified: 2021-06-07 12:33:14
+# @Last Modified: 2021-06-07 17:11:56
 # ------------------------------------------------------------------------------ #
 # Here we try to find out what the impact of input from single bridges is.
 # Todo:
@@ -130,9 +130,9 @@ parser.add_argument("-equil", "--equilibrate",
 parser.add_argument("-d",
     dest="wait_duration",   help="in seconds",  default=120, type=float)
 
-# we only target the bridge neurons, with poisson
+# match the ~8-10 ms we find as isi within bursts ~> 125 Hz
 parser.add_argument("-stim", dest="r_stim", help="spike rate of the bridge neurons, in Hz",
-    default = 0)
+    default = 125, type=float)
 
 # we may want to give neurons that bridge two modules a smaller synaptic weight [0, 1]
 parser.add_argument("--bridge_weight",
@@ -157,7 +157,7 @@ tD = args.tD * second
 rate = args.r * Hz
 args.equil_duration *= second
 args.wait_duration *= second
-args.r_stim *= second
+args.r_stim *= Hz
 
 print(f'#{"":#^75}#\n#{"running dynamics in brian":^75}#\n#{"":#^75}#')
 log.info("input topology:   %s", args.input_path)
@@ -308,7 +308,7 @@ for n in bridge_ids:
     # use rate and cv that we typically see in bursts inputs
     temp = stim.stimulation_at_rate_with_cv(
         rate=args.r_stim,
-        cv=0,
+        cv=0.4, # cv~=0.4 measured for the excitation-only system, for isis within bursts
         t_end=args.wait_duration + args.equil_duration,
         t_start=args.equil_duration,
         min_dt=defaultclock.dt * 1.001,
