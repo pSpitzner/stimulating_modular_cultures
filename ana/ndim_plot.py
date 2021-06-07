@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-05-27 11:58:53
+# @Last Modified: 2021-05-28 08:58:23
 #
 # plot a merged down, multidimensional hdf5 file (from individual simulations)
 # and select which dims to show where
@@ -76,12 +76,13 @@ l_obs_candidates = h5.ls(input_path, "/data/")
 l_obs_candidates = [obs for obs in l_obs_candidates if obs.find("axis_") != 0]
 assert len(l_obs_candidates) > 0
 
+
 def isint(value):
-  try:
-    int(value)
-    return True
-  except ValueError:
-    return False
+    try:
+        int(value)
+        return True
+    except ValueError:
+        return False
 
 
 options = f""
@@ -169,6 +170,7 @@ for k in sorted(ax_idx, reverse=True):
     i = np.where(ax_idx == k)[0][0]
     data_3d = np.take(data_3d, val_idx[i], axis=ax_idx[i])
 
+
 # swap axis if user gave selection in other order than in loaded data
 if l_axis_selected != [i for i in l_axis_candidates if i in l_axis_selected]:
     data_3d = np.swapaxes(data_3d, 0, 1)
@@ -194,10 +196,10 @@ if args.enable_lineplot:
             # color="C0",
             # ecolor="C0",
             # alpha=.75,
-            elinewidth=.5,
+            elinewidth=0.5,
             capsize=3,
             zorder=0,
-            label=f"{y_obs} = {y:g}"
+            label=f"{y_obs} = {y:g}",
         )
     ax.set_xlabel(x_obs)
     ax.set_ylabel(obs_to_plot)
@@ -210,13 +212,9 @@ fig, ax = plt.subplots(figsize=(10, 4))
 # plot using seaborn and pandas DataFrame (its just more convenient than manually)
 data_mean = pd.DataFrame(
     # average across repetitions, which are last axis
-    np.nanmean(data_3d, axis=2),
-    index=d_axes[y_obs]
-    if isinstance(d_axes[y_obs], np.ndarray)
-    else [d_axes[y_obs]],
-    columns=d_axes[x_obs]
-    if isinstance(d_axes[x_obs], np.ndarray)
-    else [d_axes[x_obs]],
+    np.nanmean(data_3d, axis=2).T,
+    index=d_axes[y_obs] if isinstance(d_axes[y_obs], np.ndarray) else [d_axes[y_obs]],
+    columns=d_axes[x_obs] if isinstance(d_axes[x_obs], np.ndarray) else [d_axes[x_obs]],
 )
 
 if args.center_cmap_around is None:

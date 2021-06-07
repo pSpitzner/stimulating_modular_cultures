@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-05-27 15:59:06
+# @Last Modified: 2021-05-27 16:00:38
 #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into an ndim array
@@ -56,7 +56,7 @@ def all_in_one(candidate=None):
         return ["num_bursts", "num_b_geq_2", "num_b_geq_4", "sys_rate_cv", "mean_rate"]
 
     # load and process
-    h5f = ah.prepare_file(candidate)
+    h5f = ah.prepare_file(candidate, hot=False)
     ah.find_bursts_from_rates(h5f)
 
     res = dict()
