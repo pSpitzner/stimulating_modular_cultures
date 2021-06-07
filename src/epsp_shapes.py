@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-18 13:06:40
-# @Last Modified: 2021-06-07 12:24:54
+# @Last Modified: 2021-06-07 12:32:38
 # ------------------------------------------------------------------------------ #
 # Small script to investigate dynamic parameters and their impact on the
 # single neuron level
@@ -62,17 +62,17 @@ prefs.codegen.target = "cython"
 # fmt: off
 # membrane potentials
 vReset = -60 * mV  # resting potential, neuron relaxes towards this without stimulation
-vThr = -45 * mV  # threshold potential
-vPeak =  35 * mV  # peak potential, after vThr is passed, rapid growth towards this
-vRest = -35 * mV  # reset potential
+vThr   = -45 * mV  # threshold potential
+vPeak  =  35 * mV  # peak potential, after vThr is passed, rapid growth towards this
+vRest  = -35 * mV  # reset potential
 
 # soma
 tV = 50 * ms  # time scale of membrane potential
 tU = 50 * ms  # time scale of recovery variable u
 
-k = 0.5 / mV  # resistance over capacity(?), rescaled
-b = 0.5       # sensitivity to sub-threshold fluctuations
-d =  50 * mV  # after-spike reset of inhibitory current u
+k = 0.5 / mV       # resistance over capacity(?), rescaled
+b = 0.5            # sensitivity to sub-threshold fluctuations
+uIncr =  50 * mV   # after-spike increment of recovery variable u
 
 # synapse
 tD =   2 * second  # characteristic recovery time, between 0.5 and 20 seconds
@@ -149,8 +149,8 @@ G2 = NeuronGroup(
     threshold="v > vPeak",
     reset="""
         v = vRest           # [8]
-        u = u + d        # [8]
-        D = D * beta     # [11] delta-function term on spike
+        u = u + uIncre      # [8]
+        D = D * beta        # [11] delta-function term on spike
     """,
     method="euler",
     dt=defaultclock.dt,

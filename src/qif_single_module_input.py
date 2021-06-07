@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-05-06 09:35:48
-# @Last Modified: 2021-06-07 12:24:55
+# @Last Modified: 2021-06-07 12:33:14
 # ------------------------------------------------------------------------------ #
 # Here we try to find out what the impact of input from single bridges is.
 # Todo:
@@ -55,17 +55,17 @@ prefs.codegen.target = "numpy"
 # fmt: off
 # membrane potentials
 vReset = -60 * mV  # resting potential, neuron relaxes towards this without stimulation
-vThr = -45 * mV  # threshold potential
-vPeak =  35 * mV  # peak potential, after vThr is passed, rapid growth towards this
-vRest = -50 * mV  # reset potential
+vThr   = -45 * mV  # threshold potential
+vPeak  =  35 * mV  # peak potential, after vThr is passed, rapid growth towards this
+vRest  = -50 * mV  # reset potential
 
 # soma
 tV = 50 * ms  # time scale of membrane potential
 tU = 50 * ms  # time scale of recovery variable u
 
-k = 0.5 / mV  # resistance over capacity(?), rescaled
-b = 0.5       # sensitivity to sub-threshold fluctuations
-d =  50 * mV  # after-spike reset of inhibitory current u
+k = 0.5 / mV       # resistance over capacity(?), rescaled
+b = 0.5            # sensitivity to sub-threshold fluctuations
+uIncr =  50 * mV   # after-spike increment of recovery variable u
 
 # synapse
 tD =   2 * second  # characteristic recovery time, between 0.5 and 20 seconds
@@ -191,19 +191,19 @@ num_n, a_ij_sparse, mod_ids = topo.load_topology(args.input_path)
 G = NeuronGroup(
     N=num_n,
     model="""
-        dv/dt = ( k*(v-vReset)*(v-vThr) -u +IA -IG                # [6] soma potential
+        dv/dt = ( k*(v-vReset)*(v-vThr) -u +IA -IG          # [6] soma potential
                   +xi*(jS/tV)**0.5      )/tV   : volt       # white noise term
         dIA/dt = -IA/tA                        : volt       # [9, 10]
         dIG/dt = -IG/tG                        : volt       # [9, 10]
-        du/dt = ( b*(v-vReset) -u )/tU             : volt       # [7] inhibitory current
+        du/dt = ( b*(v-vReset) -u )/tU         : volt       # [7] inhibitory current
         dD/dt = ( 1-D)/tD                      : 1          # [11] recovery to one
         g     : volt  (constant)                 # neuron specific synaptic weight
     """,
     threshold="v > vPeak",
     reset="""
         v = vRest           # [8]
-        u = u + d        # [8]
-        D = D * beta     # [11] delta-function term on spike
+        u = u + uIncr       # [8]
+        D = D * beta        # [11] delta-function term on spike
     """,
     method="euler",
     dt=defaultclock.dt,

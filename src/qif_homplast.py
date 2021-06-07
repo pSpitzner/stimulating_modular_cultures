@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2021-06-07 12:24:53
+# @Last Modified: 2021-06-07 12:31:51
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # with homeostatic plasticity
@@ -48,17 +48,17 @@ prefs.codegen.target = "cython"
 # fmt: off
 # membrane potentials
 vReset = -60 * mV  # resting potential, neuron relaxes towards this without stimulation
-vThr = -45 * mV  # threshold potential
-vPeak =  35 * mV  # peak potential, after vThr is passed, rapid growth towards this
-vRest = -50 * mV  # reset potential
+vThr   = -45 * mV  # threshold potential
+vPeak  =  35 * mV  # peak potential, after vThr is passed, rapid growth towards this
+vRest  = -50 * mV  # reset potential
 
 # soma
 tV = 50 * ms  # time scale of membrane potential
-tU = 50 * ms  # time scale of inhibitory current u
+tU = 50 * ms  # time scale of recovery variable u
 
-k = 0.5 / mV  # resistance over capacity(?), rescaled
-b = 0.5       # sensitivity to sub-threshold fluctuations
-d =  50 * mV  # after-spike reset of inhibitory current u
+k = 0.5 / mV       # resistance over capacity(?), rescaled
+b = 0.5            # sensitivity to sub-threshold fluctuations
+uIncr =  50 * mV   # after-spike increment of recovery variable u
 
 # synapse
 tD =   2 * second  # characteristic recovery time, between 0.5 and 20 seconds
@@ -75,7 +75,7 @@ jM =  25 * mV      # shot noise (minis) strength, between 10 - 50 mV
 jS = 300 * mV * mV * ms * ms  # white noise strength, via xi = dt**.5 * randn()
 
 # homeostatic plasticity
-gH = 1.0 * second       # amplitude, keep it at one, only here to match units
+jH = 1.0 * second       # amplitude, keep it at one, only here to match units
 rH = 0.2 * Hz           # target firing rate
 tH = 1.0 * 60 * second  # time scale of hom plast
 
@@ -169,19 +169,19 @@ num_n, a_ij_sparse, mod_ids = topo.load_topology(args.input_path)
 G = NeuronGroup(
     N=num_n,
     model="""
-        dv/dt = ( k*(v-vReset)*(v-vThr) -u +I                     # [6] soma potential
+        dv/dt = ( k*(v-vReset)*(v-vThr) -u +I               # [6] soma potential
                   +xi*(jS/tV)**0.5      )/tV   : volt       # white noise term
         dI/dt = -I/tA                          : volt       # [9, 10]
-        du/dt = ( b*(v-vReset) -u )/tU             : volt       # [7] inhibitory current
+        du/dt = ( b*(v-vReset) -u )/tU         : volt       # [7] inhibitory current
         dD/dt = ( 1-D)/tD                      : 1          # [11] recovery to one
-        dH/dt = gH * rH / tH                   : 1          # Hom plast, steady increase
+        dH/dt = jH * rH / tH                   : 1          # Hom plast, steady increase
     """,
     threshold="v > vPeak",
     reset="""
-        v = vRest                           # [8]
-        u = u + d                        # [8]
+        v = vRest                        # [8]
+        u = u + uIncre                   # [8]
         D = D * beta                     # [11] delta-function term on spike
-        H = clip( H - gH/tH, 0, inf )    # after spike, reduce H
+        H = clip( H - jH/tH, 0, inf )    # after spike, reduce H
     """,
     method="euler",
     dt=defaultclock.dt,
