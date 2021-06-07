@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-05-27 16:00:38
+# @Last Modified: 2021-06-07 11:34:25
 #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into an ndim array
@@ -53,7 +53,7 @@ d_obs["rate"] = "/meta/dynamics_rate"
 # todo: add description
 def all_in_one(candidate=None):
     if candidate is None:
-        return ["num_bursts", "num_b_geq_2", "num_b_geq_4", "sys_rate_cv", "mean_rate"]
+        return ["num_bursts", "num_b_1", "num_b_geq_2", "num_b_geq_4", "sys_rate_cv", "mean_rate"]
 
     # load and process
     h5f = ah.prepare_file(candidate, hot=False)
@@ -62,6 +62,7 @@ def all_in_one(candidate=None):
     res = dict()
     res["num_bursts"] = len(h5f.ana.bursts.system_level.beg_times)
     idx = np.where(h5f.ana.bursts.module_sequences)
+    res["num_b_1"] = len([x for x in h5f.ana.bursts.system_level.module_sequences if len(x) == 1])
     res["num_b_geq_2"] = len([x for x in h5f.ana.bursts.system_level.module_sequences if len(x) >= 2])
     res["num_b_geq_4"] = len([x for x in h5f.ana.bursts.system_level.module_sequences if len(x) >= 4])
     res["sys_rate_cv"] = h5f.ana.rates.cv.system_level
