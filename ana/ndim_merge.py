@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-06-07 11:34:25
+# @Last Modified: 2021-06-07 12:24:55
 #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into an ndim array
@@ -39,9 +39,9 @@ dbg_var = None
 
 # variables to span axes and how to get them from the hdf5 files
 d_obs = dict()
-d_obs["gA"] = "/meta/dynamics_gA"
-d_obs["gG"] = "/meta/dynamics_gG"
-d_obs["gm"] = "/meta/dynamics_gm"
+d_obs["jA"] = "/meta/dynamics_jA"
+d_obs["jG"] = "/meta/dynamics_jG"
+d_obs["jM"] = "/meta/dynamics_jM"
 d_obs["rate"] = "/meta/dynamics_rate"
 # d_obs["tD"] = "/meta/dynamics_tD"
 # d_obs["alpha"] = "/meta/topology_alpha"

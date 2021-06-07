@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-18 13:06:40
-# @Last Modified: 2021-03-19 14:18:45
+# @Last Modified: 2021-06-07 12:24:54
 # ------------------------------------------------------------------------------ #
 # Small script to investigate dynamic parameters and their impact on the
 # single neuron level
@@ -61,14 +61,14 @@ prefs.codegen.target = "cython"
 
 # fmt: off
 # membrane potentials
-vr = -60 * mV  # resting potential, neuron relaxes towards this without stimulation
-vt = -45 * mV  # threshold potential
-vp =  35 * mV  # peak potential, after vt is passed, rapid growth towards this
-vc = -35 * mV  # reset potential
+vReset = -60 * mV  # resting potential, neuron relaxes towards this without stimulation
+vThr = -45 * mV  # threshold potential
+vPeak =  35 * mV  # peak potential, after vThr is passed, rapid growth towards this
+vRest = -35 * mV  # reset potential
 
 # soma
-tc = 50 * ms  # time scale of membrane potential
-ta = 50 * ms  # time scale of recovery variable u
+tV = 50 * ms  # time scale of membrane potential
+tU = 50 * ms  # time scale of recovery variable u
 
 k = 0.5 / mV  # resistance over capacity(?), rescaled
 b = 0.5       # sensitivity to sub-threshold fluctuations
@@ -77,16 +77,16 @@ d =  50 * mV  # after-spike reset of inhibitory current u
 # synapse
 tD =   2 * second  # characteristic recovery time, between 0.5 and 20 seconds
 tA =  10 * ms      # decay time of post-synaptic current (AMPA current decay time)
-gA =  35 * mV      # AMPA current strength, between 10 - 50 mV
+jA =  35 * mV      # AMPA current strength, between 10 - 50 mV
                    # 170.612 value in javiers neurondyn
-                   # this needs to scale with tc/tA
+                   # this needs to scale with tV/tA
 
 # noise
 beta = 0.8         # D = beta*D after spike, to reduce efficacy, beta < 1
 rate = 37 * Hz     # rate for the poisson input (shot-noise), between 10 - 50 Hz
-gm =  25 * mV      # shot noise (minis) strength, between 10 - 50 mV
+jM =  25 * mV      # shot noise (minis) strength, between 10 - 50 mV
                    # (sum of minis arriving at target neuron)
-gs = 300 * mV * mV * ms * ms  # white noise strength, via xi = dt**.5 * randn()
+jS = 300 * mV * mV * ms * ms  # white noise strength, via xi = dt**.5 * randn()
 
 
 # ------------------------------------------------------------------------------ #
@@ -120,16 +120,16 @@ numpy.random.seed(6626)
 G = NeuronGroup(
     N=1,
     model="""
-        dv/dt = ( k*(v-vr)*(v-vt) -u +I                     # [6] soma potential
-                  +xi*(gs/tc)**0.5      )/tc   : volt       # white noise term
+        dv/dt = ( k*(v-vReset)*(v-vThr) -u +I                     # [6] soma potential
+                  +xi*(jS/tV)**0.5      )/tV   : volt       # white noise term
         I : volt
         # dI/dt = -I/tA                          : volt       # [9, 10]
-        du/dt = ( b*(v-vr) -u )/ta             : volt       # [7] membrane recovery
+        du/dt = ( b*(v-vReset) -u )/tU             : volt       # [7] membrane recovery
         dD/dt = ( 1-D)/tD                      : 1          # [11] recovery to one
     """,
-    threshold="v > vp",
+    threshold="v > vPeak",
     reset="""
-        v = vc           # [8]
+        v = vRest           # [8]
         u = u + d        # [8]
         D = D * beta     # [11] delta-function term on spike
     """,
@@ -140,15 +140,15 @@ G = NeuronGroup(
 G2 = NeuronGroup(
     N=1,
     model="""
-        dv/dt = ( k*(v-vr)*(v-vt) -u +I                     # [6] soma potential
-                  +xi*(gs/tc)**0.5      )/tc   : volt       # white noise term
+        dv/dt = ( k*(v-vReset)*(v-vThr) -u +I                     # [6] soma potential
+                  +xi*(jS/tV)**0.5      )/tV   : volt       # white noise term
         dI/dt = -I/tA                          : volt       # [9, 10]
-        du/dt = ( b*(v-vr) -u )/ta             : volt       # [7] membrane recovery
+        du/dt = ( b*(v-vReset) -u )/tU             : volt       # [7] membrane recovery
         dD/dt = ( 1-D)/tD                      : 1          # [11] recovery to one
     """,
-    threshold="v > vp",
+    threshold="v > vPeak",
     reset="""
-        v = vc           # [8]
+        v = vRest           # [8]
         u = u + d        # [8]
         D = D * beta     # [11] delta-function term on spike
     """,
@@ -160,7 +160,7 @@ S = Synapses(
     source=G,
     target=G2,
     on_pre="""
-        I_post += D_pre * gA    # [10]
+        I_post += D_pre * jA    # [10]
     """,
 )
 
@@ -168,22 +168,22 @@ S = Synapses(
 # by targeting I with poisson, we should get pretty close to javiers version.
 # rates = 0.01 / ms + (0.04 / ms)* rand(num_n) # we could have differen rates
 # mini_g = PoissonGroup(num_n, rate)
-# mini_s = Synapses(mini_g, G, on_pre="I_post+=gm", order=-1, name="Minis")
+# mini_s = Synapses(mini_g, G, on_pre="I_post+=jM", order=-1, name="Minis")
 # mini_s.connect(j="i")
 
 # treat minis as spikes, add directly to current
 # for homogeneous rates, this is faster. here, N=1 is the input per neuron
-# mini_g = PoissonInput(target=G2, target_var="I", N=1, rate=rate, weight=gm)
-# mini_g2 = PoissonInput(target=G2, target_var="I", N=1, rate=75*Hz, weight=gm)
+# mini_g = PoissonInput(target=G2, target_var="I", N=1, rate=rate, weight=jM)
+# mini_g2 = PoissonInput(target=G2, target_var="I", N=1, rate=75*Hz, weight=jM)
 
 # connect synapses
 S.connect('i==j')
 
 # initalize to a somewhat sensible state. we could have different neuron types
-G.v = "vr"
+G.v = "vReset"
 G.D = "1"
 G.I = 0
-G2.v = "vr"
+G2.v = "vReset"
 G2.D = "1"
 G2.I = 0
 
@@ -212,7 +212,7 @@ if record_rates:
 #     times=drive_times,
 #     name="extra_drive",
 # )
-# stim_s = Synapses(stim_g, G, on_pre="I_post += gm", name="apply_stimulation",)
+# stim_s = Synapses(stim_g, G, on_pre="I_post += jM", name="apply_stimulation",)
 # stim_s.connect(condition="i == j")
 
 
@@ -246,10 +246,10 @@ def plot_panels(monitor, ax=None, palette='blues'):
         ax[vdx].spines["left"].set_position(("outward", 5))
 
     ax[1].set_ylim(-65, 40)
-    ax[1].axhline(vr/mV, ls=':', color='gray', zorder=0)
-    ax[1].axhline(vt/mV, ls=':', color='gray', zorder=0)
-    ax[1].axhline(vp/mV, ls=':', color='gray', zorder=0)
-    ax[1].axhline(vc/mV, ls=':', color='gray', zorder=0)
+    ax[1].axhline(vReset/mV, ls=':', color='gray', zorder=0)
+    ax[1].axhline(vThr/mV, ls=':', color='gray', zorder=0)
+    ax[1].axhline(vPeak/mV, ls=':', color='gray', zorder=0)
+    ax[1].axhline(vRest/mV, ls=':', color='gray', zorder=0)
 
     ax[0].set_ylim(0,60.0)
     ax[2].set_ylim(0,200.0)

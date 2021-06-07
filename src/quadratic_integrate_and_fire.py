@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2021-05-06 18:38:08
+# @Last Modified: 2021-06-07 12:24:57
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 and runs the simulations in brian.
@@ -50,14 +50,14 @@ if prefs.codegen.target != "cython":
 
 # fmt: off
 # membrane potentials
-vr = -60 * mV  # resting potential, neuron relaxes towards this without stimulation
-vt = -45 * mV  # threshold potential
-vp =  35 * mV  # peak potential, after vt is passed, rapid growth towards this
-vc = -50 * mV  # reset potential
+vReset = -60 * mV  # resting potential, neuron relaxes towards this without stimulation
+vThr = -45 * mV  # threshold potential
+vPeak =  35 * mV  # peak potential, after vThr is passed, rapid growth towards this
+vRest = -50 * mV  # reset potential
 
 # soma
-tc = 50 * ms  # time scale of membrane potential
-ta = 50 * ms  # time scale of recovery variable u
+tV = 50 * ms  # time scale of membrane potential
+tU = 50 * ms  # time scale of recovery variable u
 
 k = 0.5 / mV  # resistance over capacity(?), rescaled
 b = 0.5       # sensitivity to sub-threshold fluctuations
@@ -66,18 +66,18 @@ d =  50 * mV  # after-spike reset of inhibitory current u
 # synapse
 tD =   2 * second  # characteristic recovery time, between 0.5 and 20 seconds
 tA =  10 * ms      # decay time of post-synaptic current (AMPA current decay time)
-gA =  35 * mV      # AMPA current strength, between 10 - 50 mV
+jA =  35 * mV      # AMPA current strength, between 10 - 50 mV
                    # 170.612 value in javiers neurondyn
-                   # this needs to scale with tc/tA
+                   # this needs to scale with tV/tA
 tG = 20 * ms       # decay time of post-syanptic GABA current
-gG = 70 * mV       # GABA current strength
+jG = 70 * mV       # GABA current strength
 
 # noise
 beta = 0.8         # D = beta*D after spike, to reduce efficacy, beta < 1
 rate = 37 * Hz     # rate for the poisson input (shot-noise), between 10 - 50 Hz
-gm =  25 * mV      # shot noise (minis) strength, between 10 - 50 mV
+jM =  25 * mV      # shot noise (minis) strength, between 10 - 50 mV
                    # (sum of minis arriving at target neuron)
-gs = 300 * mV * mV * ms * ms  # white noise strength, via xi = dt**.5 * randn()
+jS = 300 * mV * mV * ms * ms  # white noise strength, via xi = dt**.5 * randn()
 
 
 # ------------------------------------------------------------------------------ #
@@ -111,9 +111,9 @@ parser = argparse.ArgumentParser(description="Brian")
 
 parser.add_argument("-i",  dest="input_path",  help="input path",  metavar="FILE",  required=True)
 parser.add_argument("-o",  dest="output_path", help="output path", metavar="FILE")
-parser.add_argument("-gA", dest="gA",          help="in mV",       default=gA / mV,     type=float)
-parser.add_argument("-gG", dest="gG",          help="in mV",       default=gG / mV,     type=float)
-parser.add_argument("-gm", dest="gm",          help="in mV",       default=gm / mV,     type=float)
+parser.add_argument("-jA", dest="jA",          help="in mV",       default=jA / mV,     type=float)
+parser.add_argument("-jG", dest="jG",          help="in mV",       default=jG / mV,     type=float)
+parser.add_argument("-jM", dest="jM",          help="in mV",       default=jM / mV,     type=float)
 parser.add_argument("-r",  dest="r",           help="in Hz",       default=rate / Hz,   type=float)
 parser.add_argument("-tD", dest="tD",          help="in seconds",  default=tD / second, type=float)
 parser.add_argument("-s",  dest="seed",        help="rng",         default=117,         type=int)
@@ -147,9 +147,9 @@ args = parser.parse_args()
 numpy.random.seed(args.seed)
 
 # correct units
-gA = args.gA * mV
-gm = args.gm * mV
-gG = args.gG * mV
+jA = args.jA * mV
+jM = args.jM * mV
+jG = args.jG * mV
 tD = args.tD * second
 rate = args.r * Hz
 args.equil_duration *= second
@@ -160,9 +160,9 @@ print(f'#{"":#^75}#\n#{"running dynamics in brian":^75}#\n#{"":#^75}#')
 log.info("input topology:   %s", args.input_path)
 log.info("output path:      %s", args.output_path)
 log.info("seed:             %s", args.seed)
-log.info("gA:               %s", gA)
-log.info("gm:               %s", gm)
-log.info("gG:               %s", gG)
+log.info("jA:               %s", jA)
+log.info("jM:               %s", jM)
+log.info("jG:               %s", jG)
 log.info("tD:               %s", tD)
 log.info("noise rate:       %s", rate)
 log.info("duration:         %s", args.sim_duration)
@@ -190,17 +190,17 @@ num_n, a_ij_sparse, mod_ids = topo.load_topology(args.input_path)
 G = NeuronGroup(
     N=num_n,
     model="""
-        dv/dt = ( k*(v-vr)*(v-vt) -u +IA -IG                # [6] soma potential
-                  +xi*(gs/tc)**0.5      )/tc   : volt       # white noise term
+        dv/dt = ( k*(v-vReset)*(v-vThr) -u +IA -IG                # [6] soma potential
+                  +xi*(jS/tV)**0.5      )/tV   : volt       # white noise term
         dIA/dt = -IA/tA                        : volt       # [9, 10]
         dIG/dt = -IG/tG                        : volt       # [9, 10]
-        du/dt = ( b*(v-vr) -u )/ta             : volt       # [7] inhibitory current
+        du/dt = ( b*(v-vReset) -u )/tU             : volt       # [7] inhibitory current
         dD/dt = ( 1-D)/tD                      : 1          # [11] recovery to one
         g     : volt  (constant)                 # neuron specific synaptic weight
     """,
-    threshold="v > vp",
+    threshold="v > vPeak",
     reset="""
-        v = vc           # [8]
+        v = vRest           # [8]
         u = u + d        # [8]
         D = D * beta     # [11] delta-function term on spike
     """,
@@ -212,13 +212,13 @@ G = NeuronGroup(
 # by targeting I with poisson, we should get pretty close to javiers version.
 # rates = 0.01 / ms + (0.04 / ms)* rand(num_n) # we could have differen rates
 # mini_g = PoissonGroup(num_n, rate)
-# mini_s = Synapses(mini_g, G, on_pre="I_post+=gm", order=-1, name="Minis")
+# mini_s = Synapses(mini_g, G, on_pre="I_post+=jM", order=-1, name="Minis")
 # mini_s.connect(j="i")
 
 # treat minis as spikes, add directly to current
 # for homogeneous rates, this is faster. here, N=1 is the input per neuron
 # maybe exclude the bridging neurons, when looking at `1x1_projected` topology
-mini_g = PoissonInput(target=G, target_var="IA", N=1, rate=rate, weight=gm)
+mini_g = PoissonInput(target=G, target_var="IA", N=1, rate=rate, weight=jM)
 
 # optionally, make a fraction of neurons inhibitiory. For now, only change `g`.
 num_inhib = int(num_n * args.inhibition_fraction)
@@ -240,10 +240,10 @@ G_exc = G[t2b[excit_ids]]
 G_bridge = G[t2b[bridge_ids]]
 
 # initalize according to neuron type
-G.v = "vc + 5*mV*rand()"
+G.v = "vRest + 5*mV*rand()"
 G.g = 0  # the lines below should overwrite this, sanity check
-G_inh.g = gG
-G_exc.g = gA
+G_inh.g = jG
+G_exc.g = jA
 G_bridge.g *= args.bridge_weight
 
 assert np.all(G.g != 0)
@@ -313,13 +313,13 @@ if args.stimulation_type == "hideaki":
     )
     # because we project via artificial synapses, we get a delay of
     # approx (!) one timestep between the stimulation and the spike
-    stim_s = Synapses(stim_g, G, on_pre="v_post = 2*vp", name="apply_stimulation",)
+    stim_s = Synapses(stim_g, G, on_pre="v_post = 2*vPeak", name="apply_stimulation",)
     stim_s.connect(condition="i == j")
 
 elif args.stimulation_type == "poisson":
     # to target birde neurons only, assume bridge_ids are consecutive
     # stim_g = G[bridge_ids]
-    # PoissonInput(target=stim_g, target_var="v", N=1, rate=rate, weight=vp)
+    # PoissonInput(target=stim_g, target_var="v", N=1, rate=rate, weight=vPeak)
 
     poisson_rate = np.zeros(num_n)
     for mod in args.stimulation_module:
@@ -330,7 +330,7 @@ elif args.stimulation_type == "poisson":
     stim_ids = np.arange(num_n, dtype="int64")
 
     stim_g = PoissonGroup(num_n, poisson_rate, name="create_stimulation")
-    stim_s = Synapses(stim_g, G, on_pre="v_post = 2*vp", name="apply_stimulation")
+    stim_s = Synapses(stim_g, G, on_pre="v_post = 2*vPeak", name="apply_stimulation")
     stim_s.connect("i == j")
 
 # ------------------------------------------------------------------------------ #
@@ -491,13 +491,13 @@ else:
             #     )
 
         # meta data of this simulation
-        dset = f.create_dataset("/meta/dynamics_gA", data=gA / mV)
+        dset = f.create_dataset("/meta/dynamics_jA", data=jA / mV)
         dset.attrs["description"] = "AMPA current strength, in mV"
 
-        dset = f.create_dataset("/meta/dynamics_gG", data=gG / mV)
+        dset = f.create_dataset("/meta/dynamics_jG", data=jG / mV)
         dset.attrs["description"] = "GABA current strength, in mV"
 
-        dset = f.create_dataset("/meta/dynamics_gm", data=gm / mV)
+        dset = f.create_dataset("/meta/dynamics_jM", data=jM / mV)
         dset.attrs["description"] = "shot noise (minis) strength, in mV"
 
         dset = f.create_dataset("/meta/dynamics_tD", data=tD / second)

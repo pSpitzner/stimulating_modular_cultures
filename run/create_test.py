@@ -13,21 +13,21 @@ l_topo = ["2x2_fixed"]
 l_k_inter = np.array([5])
 l_mod = np.array(["off"])
 l_rep = np.arange(25, 200)
-l_gA = np.arange(40, 46, 2.5).tolist()
-l_gA.reverse()
-l_gG = np.arange(40, 101, 2.5)
-l_gm = [25.0]
+l_jA = np.arange(40, 46, 2.5).tolist()
+l_jA.reverse()
+l_jG = np.arange(40, 101, 2.5)
+l_jM = [25.0]
 l_rate = [38.0]
 
-print("l_gA  ", l_gA)
-print("l_gG  ", l_gG)
-print("l_gm  ", l_gm)
+print("l_jA  ", l_jA)
+print("l_jG  ", l_jG)
+print("l_jM  ", l_jM)
 print("l_rate", l_rate)
 
 bridge_weight = 1.0
 inh_frac = 0.20
 
-arg_list = product(l_topo, l_k_inter, l_gA, l_gG, l_gm, l_rate, l_rep)
+arg_list = product(l_topo, l_k_inter, l_jA, l_jG, l_jM, l_rate, l_rep)
 
 count_dynamic = 0
 count_topo = 0
@@ -41,13 +41,13 @@ with open("./parameters_topo.tsv", "w") as f_topo:
         for args in arg_list:
             topo = args[0]
             k_inter = args[1]
-            gA = args[2]
-            gG = args[3]
-            gm = args[4]
+            jA = args[2]
+            jG = args[3]
+            jM = args[4]
             rate = args[5]
             rep = args[6]
 
-            f_base = f"k={k_inter:d}_gA={gA:.1f}_gG={gG:.1f}_gm={gm:.1f}_rate={rate:.1f}_rep={rep:02d}.hdf5"
+            f_base = f"k={k_inter:d}_jA={jA:.1f}_jG={jG:.1f}_jM={jM:.1f}_rate={rate:.1f}_rep={rep:02d}.hdf5"
 
             topo_path = f"./dat/inhibition_test2/topo/{f_base}"
             f_topo.write(
@@ -73,7 +73,7 @@ with open("./parameters_topo.tsv", "w") as f_topo:
                     + f"-d 3600 -equil 300 -s {seed:d} "
                     + f"--bridge_weight {bridge_weight} "
                     + f"--inhibition {inh_frac} "
-                    + f"-gA {gA} -gG {gG} -gm {gm} -r {rate} "
+                    + f"-jA {jA} -jG {jG} -jM {jM} -r {rate} "
                     + f"{stim_arg}\n"
                 )
 
