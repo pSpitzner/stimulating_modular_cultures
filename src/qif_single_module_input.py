@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-05-06 09:35:48
-# @Last Modified: 2021-06-07 17:11:56
+# @Last Modified: 2021-06-07 17:18:47
 # ------------------------------------------------------------------------------ #
 # Here we try to find out what the impact of input from single bridges is.
 # Todo:
@@ -197,7 +197,7 @@ G = NeuronGroup(
         dIG/dt = -IG/tG                        : volt       # [9, 10]
         du/dt = ( b*(v-vReset) -u )/tU         : volt       # [7] inhibitory current
         dD/dt = ( 1-D)/tD                      : 1          # [11] recovery to one
-        g     : volt  (constant)                 # neuron specific synaptic weight
+        j     : volt  (constant)                 # neuron specific synaptic weight
     """,
     threshold="v > vPeak",
     reset="""
@@ -244,15 +244,15 @@ if len(inhib_ids) > 0:
 
 # initalize according to neuron type
 G.v = "vRest + 5*mV*rand()"
-G.g = 0  # the lines below should overwrite this, sanity check
+G.j = 0  # the lines below should overwrite this, sanity check
 if len(inhib_ids) > 0:
-    G_inh.g = jG
-G_exc.g = jA
+    G_inh.j = jG
+G_exc.j = jA
 
-G_bridge.g = jA
-G_bridge.g *= args.bridge_weight
+G_bridge.j = jA
+G_bridge.j *= args.bridge_weight
 
-assert np.all(G.g != 0)
+assert np.all(G.j != 0)
 
 
 # ------------------------------------------------------------------------------ #
@@ -528,7 +528,7 @@ else:
             "description"
         ] = "synaptic weight of bridging neurons. get applied as a factor to outgoing synaptic currents."
 
-        dset = f.create_dataset("/data/neuron_g", data=G.g[t2b])
+        dset = f.create_dataset("/data/neuron_g", data=G.j[t2b])
         dset.attrs[
             "description"
         ] = "synaptic weight that was ultimately used for each neuron in the dynamic simulation"
