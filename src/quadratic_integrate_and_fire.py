@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2021-06-07 17:18:17
+# @Last Modified: 2021-06-08 15:23:56
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 and runs the simulations in brian.
@@ -257,14 +257,14 @@ S_exc = Synapses(
     source=G_exc,
     target=G,
     on_pre="""
-        IA_post += D_pre * g_pre    # [10]
+        IA_post += D_pre * j_pre    # [10]
     """,
 )
 S_inh = Synapses(
     source=G_inh,
     target=G,
     on_pre="""
-        IG_post += D_pre * g_pre    # [10]
+        IG_post += D_pre * j_pre    # [10]
     """,
 )
 
