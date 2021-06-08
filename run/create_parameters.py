@@ -39,7 +39,7 @@ with open("./parameters_topo.tsv", "w") as f_topo:
             k_inter = i[1]
             rep = i[2]
 
-            topo_path = f"./dat/inhibition/topo/k={k_inter:d}_bw={bridge_weight:03.2f}_inh={inh_frac:03.2f}_jA={jA:.1f}_jG={jG:.1f}_rep={rep:02d}.hdf5"
+            topo_path = f"./dat/inhibition/topo/k={k_inter:d}_bw={bridge_weight:03.2f}_inh={inh_frac:03.2f}_jA={jA:.1f}_jG={jG:.1f}_rep={rep:03d}.hdf5"
             f_topo.write(
                 # topology command
                 f"/data.nst/share/projects/paul_brian_modular_cultures/topology_orlandi_standalone/exe/orlandi_standalone "
@@ -49,7 +49,7 @@ with open("./parameters_topo.tsv", "w") as f_topo:
             count_topo += 1
 
             for mod in l_mod:
-                dyn_path = f"./dat/inhibition/dyn/k={k_inter:d}_stim={mod}_bw={bridge_weight:03.2f}_inh={inh_frac:03.2f}_jA={jA:.1f}_jG={jG:.1f}_rep={rep:02d}.hdf5"
+                dyn_path = f"./dat/inhibition/dyn/k={k_inter:d}_stim={mod}_bw={bridge_weight:03.2f}_inh={inh_frac:03.2f}_jA={jA:.1f}_jG={jG:.1f}_rep={rep:03d}.hdf5"
 
                 if mod == "off":
                     stim_arg = ""

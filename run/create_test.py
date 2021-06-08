@@ -47,7 +47,7 @@ with open("./parameters_topo.tsv", "w") as f_topo:
             rate = args[5]
             rep = args[6]
 
-            f_base = f"k={k_inter:d}_jA={jA:.1f}_jG={jG:.1f}_jM={jM:.1f}_rate={rate:.1f}_rep={rep:02d}.hdf5"
+            f_base = f"k={k_inter:d}_jA={jA:.1f}_jG={jG:.1f}_jM={jM:.1f}_rate={rate:.1f}_rep={rep:03d}.hdf5"
 
             topo_path = f"./dat/inhibition_test2/topo/{f_base}"
             f_topo.write(
