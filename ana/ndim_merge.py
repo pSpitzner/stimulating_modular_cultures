@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-06-07 12:24:55
+# @Last Modified: 2021-06-09 14:25:49
 #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into an ndim array
@@ -39,10 +39,10 @@ dbg_var = None
 
 # variables to span axes and how to get them from the hdf5 files
 d_obs = dict()
-d_obs["jA"] = "/meta/dynamics_jA"
-d_obs["jG"] = "/meta/dynamics_jG"
-d_obs["jM"] = "/meta/dynamics_jM"
-d_obs["rate"] = "/meta/dynamics_rate"
+d_obs["jA"] = "/meta/dynamics_gA"
+d_obs["jG"] = "/meta/dynamics_gG"
+# d_obs["jM"] = "/meta/dynamics_jM"
+# d_obs["rate"] = "/meta/dynamics_rate"
 # d_obs["tD"] = "/meta/dynamics_tD"
 # d_obs["alpha"] = "/meta/topology_alpha"
 # d_obs["k_inter"] = "/meta/topology_k_inter"
@@ -53,7 +53,7 @@ d_obs["rate"] = "/meta/dynamics_rate"
 # todo: add description
 def all_in_one(candidate=None):
     if candidate is None:
-        return ["num_bursts", "num_b_1", "num_b_geq_2", "num_b_geq_4", "sys_rate_cv", "mean_rate"]
+        return ["num_bursts", "num_b_1", "num_b_geq_2", "num_b_geq_4", "sys_rate_cv", "mean_rate", "blen_all", "blen_1", "blen_4"]
 
     # load and process
     h5f = ah.prepare_file(candidate, hot=False)
@@ -61,12 +61,19 @@ def all_in_one(candidate=None):
 
     res = dict()
     res["num_bursts"] = len(h5f.ana.bursts.system_level.beg_times)
-    idx = np.where(h5f.ana.bursts.module_sequences)
     res["num_b_1"] = len([x for x in h5f.ana.bursts.system_level.module_sequences if len(x) == 1])
     res["num_b_geq_2"] = len([x for x in h5f.ana.bursts.system_level.module_sequences if len(x) >= 2])
     res["num_b_geq_4"] = len([x for x in h5f.ana.bursts.system_level.module_sequences if len(x) >= 4])
     res["sys_rate_cv"] = h5f.ana.rates.cv.system_level
     res["mean_rate"] = np.nanmean(h5f.ana.rates.system_level)
+
+    blen = h5f.ana.bursts.system_level.end_times - h5f.ana.bursts.system_level.beg_times
+    res["blen_all"] = np.nanmean(blen)
+    idx = np.where(h5f.ana.bursts.module_sequences == 1)[0]
+    res["blen_1"] = np.nanmean(blen[idx])
+    idx = np.where(h5f.ana.bursts.module_sequences == 4)[0]
+    res["blen_4"] = np.nanmean(blen[idx])
+
 
     h5.close_hot(h5f)
     h5f.clear()
