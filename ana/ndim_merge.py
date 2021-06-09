@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-06-09 14:25:49
+# @Last Modified: 2021-06-09 17:52:25
 #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into an ndim array
@@ -53,7 +53,7 @@ d_obs["jG"] = "/meta/dynamics_gG"
 # todo: add description
 def all_in_one(candidate=None):
     if candidate is None:
-        return ["num_bursts", "num_b_1", "num_b_geq_2", "num_b_geq_4", "sys_rate_cv", "mean_rate", "blen_all", "blen_1", "blen_4"]
+        return ["num_bursts", "num_b_1", "num_b_geq_2", "num_b_geq_4", "sys_rate_cv", "mean_rate", "blen_all", "blen_1", "blen_4", "blen_geq_2"]
 
     # load and process
     h5f = ah.prepare_file(candidate, hot=False)
@@ -67,12 +67,12 @@ def all_in_one(candidate=None):
     res["sys_rate_cv"] = h5f.ana.rates.cv.system_level
     res["mean_rate"] = np.nanmean(h5f.ana.rates.system_level)
 
-    blen = h5f.ana.bursts.system_level.end_times - h5f.ana.bursts.system_level.beg_times
+    blen = np.array(h5f.ana.bursts.system_level.end_times) - np.array(h5f.ana.bursts.system_level.beg_times)
+    slen = np.array([len(x) for x in h5f.ana.bursts.system_level.module_sequences])
     res["blen_all"] = np.nanmean(blen)
-    idx = np.where(h5f.ana.bursts.module_sequences == 1)[0]
-    res["blen_1"] = np.nanmean(blen[idx])
-    idx = np.where(h5f.ana.bursts.module_sequences == 4)[0]
-    res["blen_4"] = np.nanmean(blen[idx])
+    res["blen_1"] = np.nanmean(blen[np.where(slen == 1)[0]])
+    res["blen_4"] = np.nanmean(blen[np.where(slen == 4)[0]])
+    res["blen_geq_2"] = np.nanmean(blen[np.where(slen >= 2)[0]])
 
 
     h5.close_hot(h5f)
