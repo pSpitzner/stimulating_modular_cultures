@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-05-07 14:09:57
+# @Last Modified: 2021-06-13 16:04:57
 # ------------------------------------------------------------------------------ #
 
 
@@ -394,7 +394,7 @@ def batch_pd_sequence_length_probabilities(list_of_filenames):
     return df
 
 
-def batch_pd_bursts(load_from_disk=True, list_of_filenames=None, df_path=None):
+def batch_pd_bursts(load_from_disk=False, list_of_filenames=None, df_path=None, client=None):
     """
         Create a pandas data frame (long form, every row corresponds to one burst.
         Remaining columns include meta data, conditions etc.
@@ -428,25 +428,31 @@ def batch_pd_bursts(load_from_disk=True, list_of_filenames=None, df_path=None):
             log.info("Could not load from disk, (re-)processing data")
             log.debug(e)
 
-    columns = [
-        "Duration",
-        "Sequence length",
-        "First module",
-        "Stimulation",
-        "Connections",
-        "Bridge weight",
-        "Number of inhibitory neurons",
-        "Repetition",
-    ]
-    df = pd.DataFrame(columns=columns)
-
     candidates = [glob.glob(f) for f in list_of_filenames]
     candidates = [item for sublist in candidates for item in sublist]  # flatten
 
     assert len(candidates) > 0, f"Are the filenames correct?"
 
-    for candidate in tqdm(candidates, desc="Burst duration for files"):
-        h5f = prepare_file(candidate, hot=False)
+    # for candidate in tqdm(candidates, desc="Burst duration for files"):
+    def process_candidate(candidate):
+        columns = [
+            "Duration",
+            "Sequence length",
+            "First module",
+            "Stimulation",
+            "Connections",
+            "Bridge weight",
+            "Number of inhibitory neurons",
+            "Repetition",
+        ]
+        df = pd.DataFrame(columns=columns)
+        try:
+            h5f = prepare_file(candidate, hot=False)
+        except Exception as e:
+            log.error(e)
+            log.error(f"Skipping candidate {candidate}")
+            # continue
+            return df
 
         # fetch meta data for every repetition (applied to multiple rows)
         stim = h5f.ana.stimulation_description
@@ -496,12 +502,24 @@ def batch_pd_bursts(load_from_disk=True, list_of_filenames=None, df_path=None):
                 ignore_index=True,
             )
 
+        return df
+
+    from dask.distributed import Client, LocalCluster, wait, as_completed
+
+    futures = client.map(process_candidate, candidates)
+    for future in tqdm(as_completed(futures), total=len(futures)):
+        pass
+
+
+    res = client.gather(futures)
+    res = pd.concat(res, ignore_index=True)
+
     try:
-        df.to_hdf(df_path, "/data/df")
+        res.to_hdf(df_path, "/data/df")
     except Exception as e:
         log.debug(e)
 
-    return df
+    return res
 
 
 def batch_candidates_burst_times_and_isi(input_path, hot=False):
@@ -961,7 +979,9 @@ def arg_merge_if_below_separation_threshold(beg_time, end_time, threshold):
 
 def system_burst_from_module_burst(beg_times, end_times, threshold, modules=None):
     """
-        Description
+        From the burst times (begin, end) of the modules, calculate
+        the system-wide bursts.
+
 
         Parameters
         ----------
