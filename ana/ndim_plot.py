@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-05-28 08:58:23
+# @Last Modified: 2021-06-08 16:51:39
 #
 # plot a merged down, multidimensional hdf5 file (from individual simulations)
 # and select which dims to show where
@@ -14,6 +14,10 @@ import glob
 import h5py
 import argparse
 import numbers
+
+import matplotlib
+matplotlib.rcParams["figure.figsize"] = [3.4, 2.7]  # APS single column
+matplotlib.rcParams['figure.dpi'] = 150
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -182,15 +186,17 @@ plt.ion()
 
 # if enable errorbars, we plot lines
 if args.enable_lineplot:
+    num_reps = data_3d.shape[-1]
     fig, ax = plt.subplots(figsize=(10, 4))
     data_mean_1d = np.nanmean(data_3d, axis=2)
     data_std_1d = np.nanstd(data_3d, axis=2)
     # draw every `y axis` (what would be heatmap y axis) as a new line
     for ydx, y in enumerate(d_axes[y_obs]):
+        # ax.plot(d_axes[x_obs], data_mean_1d[:, ydx], label=f"{y_obs} = {y:g}",)
         ax.errorbar(
             x=d_axes[x_obs],
             y=data_mean_1d[:, ydx],
-            yerr=data_std_1d[:, ydx],
+            yerr=data_std_1d[:, ydx] / np.sqrt(num_reps),
             fmt="-",
             markersize=1,
             # color="C0",
