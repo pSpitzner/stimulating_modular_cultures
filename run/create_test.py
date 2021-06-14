@@ -6,18 +6,19 @@ from itertools import product
 os.chdir(os.path.dirname(__file__))
 
 # seed for rank 0, will increase per thread
-seed = 7_000
+seed = 27_000
 
 # parameters to scan, noise rate, ampa strength, and a few repetitons for statistics
 l_topo = ["2x2_fixed"]
 l_k_inter = np.array([5])
 l_mod = np.array(["off"])
-l_rep = np.arange(25, 200)
+l_rep = np.arange(0, 200)
 l_jA = np.arange(40, 46, 2.5).tolist()
 l_jA.reverse()
-l_jG = np.arange(40, 101, 2.5)
+# l_jG = np.arange(40, 101, 2.5)
+l_jG = [67.5]
 l_jM = [25.0]
-l_rate = [38.0]
+l_rate = np.arange(24.0, 67.0, 2.0)
 
 print("l_jA  ", l_jA)
 print("l_jG  ", l_jG)
@@ -49,7 +50,7 @@ with open("./parameters_topo.tsv", "w") as f_topo:
 
             f_base = f"k={k_inter:d}_jA={jA:.1f}_jG={jG:.1f}_jM={jM:.1f}_rate={rate:.1f}_rep={rep:03d}.hdf5"
 
-            topo_path = f"./dat/inhibition_test2/topo/{f_base}"
+            topo_path = f"./dat/inhibition_rate_sweep/topo/{f_base}"
             f_topo.write(
                 # topology command
                 f"/data.nst/share/projects/paul_brian_modular_cultures/topology_orlandi_standalone/exe/orlandi_standalone "
@@ -59,7 +60,7 @@ with open("./parameters_topo.tsv", "w") as f_topo:
             count_topo += 1
 
             for mod in l_mod:
-                dyn_path = f"./dat/inhibition_test2/dyn/stim={mod}_{f_base}"
+                dyn_path = f"./dat/inhibition_rate_sweep/dyn/stim={mod}_{f_base}"
 
                 if mod == "off":
                     stim_arg = ""
