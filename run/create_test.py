@@ -50,7 +50,7 @@ with open("./parameters_topo.tsv", "w") as f_topo:
 
             f_base = f"k={k_inter:d}_jA={jA:.1f}_jG={jG:.1f}_jM={jM:.1f}_rate={rate:.1f}_rep={rep:03d}.hdf5"
 
-            topo_path = f"./dat/inhibition_rate_sweep/topo/{f_base}"
+            topo_path = f"./dat/inhibition_sweep_1/topo/{f_base}"
             f_topo.write(
                 # topology command
                 f"/data.nst/share/projects/paul_brian_modular_cultures/topology_orlandi_standalone/exe/orlandi_standalone "
@@ -60,7 +60,7 @@ with open("./parameters_topo.tsv", "w") as f_topo:
             count_topo += 1
 
             for mod in l_mod:
-                dyn_path = f"./dat/inhibition_rate_sweep/dyn/stim={mod}_{f_base}"
+                dyn_path = f"./dat/inhibition_sweep_1/dyn/stim={mod}_{f_base}"
 
                 if mod == "off":
                     stim_arg = ""
