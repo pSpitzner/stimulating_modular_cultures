@@ -3,6 +3,7 @@ mov/*
 exe/*
 log/*
 run/*.tsv
+dask-worker-space
 __pycache__
 .DS_Store
 *.zip

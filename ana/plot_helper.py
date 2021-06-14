@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-05-06 10:53:30
+# @Last Modified: 2021-06-14 11:33:10
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -383,8 +383,8 @@ def plot_parameter_info(h5f, ax=None, apply_formatting=True, add=[]):
     try:
         dat.append(["", ""])
         # dat.append(["Noise Rate [Hz]", h5f.meta.dynamics_rate])
-        dat.append(["AMPA [mV]", h5f.meta.dynamics_gA])
-        dat.append(["GABA [mV]", h5f.meta.dynamics_gG])
+        dat.append(["AMPA [mV]", h5f.meta.dynamics_jA])
+        dat.append(["GABA [mV]", h5f.meta.dynamics_jG])
         dat.append(
             [
                 "E/I",
@@ -571,16 +571,24 @@ def pd_burst_duration(df):
 
 
 def pd_burst_duration_change_under_stim(df):
+    """
+    df from `ah.batch_pd_bursts`
+    """
+
+    fig, ax = plt.subplots()
+    ax.set_title("L=4, Inh, k=1, bw=1")
 
     # query so what remains is repetitions and the condition to compare
     df1 = df.query(
-        "`Sequence length` > 1 & `Number of inhibitory neurons` > 0 & `Connections` == 3 & `Bridge weight` == 0.75 & (Stimulation == 'Off' | Stimulation == 'On (0, 2)')"
+        "`Sequence length` == 4 & `Number of inhibitory neurons` > 0 & `Connections` == 1 & `Bridge weight` == 1.0 & (Stimulation == 'Off' | Stimulation == 'On (0, 2)')"
     )
+    # use the mean duration as the observable, to which contributions are exactly
+    # one data point from one realization, and
+    # compare between different `stimulation` conditions
     df2 = df1.groupby(["Stimulation", "Repetition"])["Duration"].mean().reset_index()
 
     # ax = plot_pd_violin(df2, x="Stimulation", y="Duration", split=False)
     # ax = plot_pd_boxplot(df2, x="Stimulation", y="Duration")
-    fig, ax = plt.subplots()
     palette = _stimulation_color_palette()
     order = [s for s in palette.keys() if s in df2["Stimulation"].unique()]
     sns.pointplot(
@@ -608,7 +616,6 @@ def pd_burst_duration_change_under_stim(df):
     ax.get_legend().set_visible(False)
 
     ax.set_ylim(0.0, 0.3)
-    ax.set_title("L=1, Exc, k=3, bw=0.75")
     fig.tight_layout()
 
     return df2
