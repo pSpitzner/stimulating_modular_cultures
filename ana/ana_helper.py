@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-06-14 11:01:32
+# @Last Modified: 2021-06-14 12:08:44
 # ------------------------------------------------------------------------------ #
 
 
@@ -11,6 +11,7 @@ import sys
 import glob
 import h5py
 import re
+import tempfile
 import numbers
 import numpy as np
 import pandas as pd
@@ -417,8 +418,9 @@ def batch_pd_bursts(load_from_disk=False, list_of_filenames=None, df_path=None, 
     elif isinstance(list_of_filenames, str):
         list_of_filenames = [list_of_filenames]
 
-    if df_path is None:
-        df_path = "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/inhibition/pd/bursts.hdf5"
+    if df_path is None and not load_from_disk:
+        df_path = f"{tempfile.gettempdir()}/ana_helper/bursts_dataframe.hdf5"
+        log.warning(f"No `df_path` set, writing to {df_path}")
 
     if load_from_disk:
         try:
@@ -449,6 +451,7 @@ def batch_pd_bursts(load_from_disk=False, list_of_filenames=None, df_path=None, 
     res = pd.concat(res, ignore_index=True)
 
     try:
+        os.makedirs(df_path, exist_ok=True)
         res.to_hdf(df_path, "/data/df")
     except Exception as e:
         log.debug(e)
