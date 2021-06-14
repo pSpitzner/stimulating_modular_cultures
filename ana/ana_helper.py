@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-06-13 16:04:57
+# @Last Modified: 2021-06-14 11:01:32
 # ------------------------------------------------------------------------------ #
 
 
@@ -433,85 +433,19 @@ def batch_pd_bursts(load_from_disk=False, list_of_filenames=None, df_path=None, 
 
     assert len(candidates) > 0, f"Are the filenames correct?"
 
-    # for candidate in tqdm(candidates, desc="Burst duration for files"):
-    def process_candidate(candidate):
-        columns = [
-            "Duration",
-            "Sequence length",
-            "First module",
-            "Stimulation",
-            "Connections",
-            "Bridge weight",
-            "Number of inhibitory neurons",
-            "Repetition",
-        ]
-        df = pd.DataFrame(columns=columns)
-        try:
-            h5f = prepare_file(candidate, hot=False)
-        except Exception as e:
-            log.error(e)
-            log.error(f"Skipping candidate {candidate}")
-            # continue
-            return df
 
-        # fetch meta data for every repetition (applied to multiple rows)
-        stim = h5f.ana.stimulation_description
-        rep = h5f.ana.repetition
-        bridge_weight = h5f.meta.dynamics_bridge_weight
-        if bridge_weight is None:
-            bridge_weight = 1.0
-        num_connections = h5f.meta.topology_k_inter
-        try:
-            num_inhibitory = len(h5f.data.neuron_inhibitory_ids[:])
-        except Exception as e:
-            log.debug(e)
-            # maybe its a single number, instead of a list
-            if isinstance(h5f.data.neuron_inhibitory_ids, numbers.Number):
-                num_inhibitory = 1
-            else:
-                num_inhibitory = 0
+    if client is None:
+        res = []
+        for candidate in tqdm(candidates, desc="Burst duration for files"):
+            res.append(_dfs_from_realization(candidate))
+    else:
+        # use dask to do this in parallel
+        from dask.distributed import as_completed
+        futures = client.map(_dfs_from_realization, candidates)
+        for future in tqdm(as_completed(futures), total=len(futures), desc="Burst duration for files (using dask)"):
+            pass
+        res = client.gather(futures)
 
-        # do the analysis, entries are directly added to the h5f
-        # for the system with inhibition, we might need a lower threshold (Hz)
-        if num_inhibitory > 0:
-            find_bursts_from_rates(h5f, rate_threshold=7.5)
-        else:
-            find_bursts_from_rates(h5f, rate_threshold=7.5)
-
-        data = h5f.ana.bursts.system_level
-        for idx in range(0, len(data.beg_times)):
-            duration = data.end_times[idx] - data.beg_times[idx]
-            seq_len = len(data.module_sequences[idx])
-            first_mod = data.module_sequences[idx][0]
-            df = df.append(
-                pd.DataFrame(
-                    data=[
-                        [
-                            duration,
-                            seq_len,
-                            first_mod,
-                            stim,
-                            num_connections,
-                            bridge_weight,
-                            num_inhibitory,
-                            rep,
-                        ]
-                    ],
-                    columns=columns,
-                ),
-                ignore_index=True,
-            )
-
-        return df
-
-    from dask.distributed import Client, LocalCluster, wait, as_completed
-
-    futures = client.map(process_candidate, candidates)
-    for future in tqdm(as_completed(futures), total=len(futures)):
-        pass
-
-
-    res = client.gather(futures)
     res = pd.concat(res, ignore_index=True)
 
     try:
@@ -520,6 +454,76 @@ def batch_pd_bursts(load_from_disk=False, list_of_filenames=None, df_path=None, 
         log.debug(e)
 
     return res
+
+def _dfs_from_realization(candidate):
+    columns = [
+        "Duration",
+        "Sequence length",
+        "First module",
+        "Stimulation",
+        "Connections",
+        "Bridge weight",
+        "Number of inhibitory neurons",
+        "Repetition",
+    ]
+    df = pd.DataFrame(columns=columns)
+    try:
+        h5f = prepare_file(candidate, hot=False)
+    except Exception as e:
+        log.error(e)
+        log.error(f"Skipping candidate {candidate}")
+        # continue
+        return df
+
+    # fetch meta data for every repetition (applied to multiple rows)
+    stim = h5f.ana.stimulation_description
+    rep = h5f.ana.repetition
+    bridge_weight = h5f.meta.dynamics_bridge_weight
+    if bridge_weight is None:
+        bridge_weight = 1.0
+    num_connections = h5f.meta.topology_k_inter
+    try:
+        num_inhibitory = len(h5f.data.neuron_inhibitory_ids[:])
+    except Exception as e:
+        log.debug(e)
+        # maybe its a single number, instead of a list
+        if isinstance(h5f.data.neuron_inhibitory_ids, numbers.Number):
+            num_inhibitory = 1
+        else:
+            num_inhibitory = 0
+
+    # do the analysis, entries are directly added to the h5f
+    # for the system with inhibition, we might need a lower threshold (Hz)
+    if num_inhibitory > 0:
+        find_bursts_from_rates(h5f, rate_threshold=7.5)
+    else:
+        find_bursts_from_rates(h5f, rate_threshold=7.5)
+
+    data = h5f.ana.bursts.system_level
+    for idx in range(0, len(data.beg_times)):
+        duration = data.end_times[idx] - data.beg_times[idx]
+        seq_len = len(data.module_sequences[idx])
+        first_mod = data.module_sequences[idx][0]
+        df = df.append(
+            pd.DataFrame(
+                data=[
+                    [
+                        duration,
+                        seq_len,
+                        first_mod,
+                        stim,
+                        num_connections,
+                        bridge_weight,
+                        num_inhibitory,
+                        rep,
+                    ]
+                ],
+                columns=columns,
+            ),
+            ignore_index=True,
+        )
+
+    return df
 
 
 def batch_candidates_burst_times_and_isi(input_path, hot=False):
