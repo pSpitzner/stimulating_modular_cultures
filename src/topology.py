@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-05 10:37:47
-# @Last Modified: 2021-05-05 09:59:26
+# @Last Modified: 2021-06-09 10:17:37
 # ------------------------------------------------------------------------------ #
 # Helper to load the topology from hdf5
 # ------------------------------------------------------------------------------ #
@@ -55,7 +55,7 @@ def load_topology(input_path):
 
 def load_bridging_neurons(input_path):
     try:
-        return h5.load(input_path, "/data/neuron_bridge_ids").astype(
+        return h5.load(input_path, "/data/neuron_bridge_ids", keepdim=True).astype(
             int, copy=False
         )  # brian doesnt like uints
     except Exception as e:
