@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-06-15 16:04:44
+# @Last Modified: 2021-06-15 16:59:40
 # ------------------------------------------------------------------------------ #
 
 
@@ -74,6 +74,37 @@ except ImportError:
     def List(*args):
         return list(*args)
 
+# ------------------------------------------------------------------------------ #
+# Parallelize with dask
+# ------------------------------------------------------------------------------ #
+
+from dask_jobqueue import SGECluster
+from dask.distributed import Client, SSHCluster, LocalCluster, as_completed
+
+client = None
+cluster = None
+
+def init_dask():
+    global cluster
+    global client
+
+    if "sohrab" in os.uname().nodename:
+        cluster = SGECluster(
+            cores=1,
+            memory="12GB",
+            queue="rostam.q",
+            death_timeout=120,
+            log_directory="./log/dask/",
+            local_directory="/scratch01.local/pspitzner/dask/",
+            interface="ib0",
+            n_workers=256,
+            extra=[
+                '--preload \'import sys; sys.path.append("./ana/"); sys.path.append("/home/pspitzner/code/pyhelpers/");\''
+            ],
+        )
+    else:
+        cluster = LocalCluster(local_directory=f"{tempfile.gettempdir()}/dask/")
+        client = Client(cluster)
 
 # ------------------------------------------------------------------------------ #
 # high level functions
@@ -453,7 +484,7 @@ def batch_pd_sequence_length_probabilities(list_of_filenames):
     return df
 
 
-def batch_pd_bursts(load_from_disk=False, list_of_filenames=None, df_path=None, client=None):
+def batch_pd_bursts(load_from_disk=False, list_of_filenames=None, df_path=None, client=client):
     """
         Create a pandas data frame (long form, every row corresponds to one burst.
         Remaining columns include meta data, conditions etc.
@@ -1474,3 +1505,5 @@ def _pd_are_row_entries_the_same(df):
         return True
     else:
         return False
+
+
