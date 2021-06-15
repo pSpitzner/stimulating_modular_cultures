@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-06-09 17:52:25
+# @Last Modified: 2021-06-15 16:19:18
 #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into an ndim array
@@ -21,6 +21,7 @@ import warnings
 # import matplotlib as mpl
 # import matplotlib.pyplot as plt
 import numpy as np
+
 # import seaborn as sns
 # import pandas as pd
 from tqdm import tqdm
@@ -39,10 +40,10 @@ dbg_var = None
 
 # variables to span axes and how to get them from the hdf5 files
 d_obs = dict()
-d_obs["jA"] = "/meta/dynamics_gA"
-d_obs["jG"] = "/meta/dynamics_gG"
+d_obs["jA"] = "/meta/dynamics_jA"
+# d_obs["jG"] = "/meta/dynamics_jG"
 # d_obs["jM"] = "/meta/dynamics_jM"
-# d_obs["rate"] = "/meta/dynamics_rate"
+d_obs["rate"] = "/meta/dynamics_rate"
 # d_obs["tD"] = "/meta/dynamics_tD"
 # d_obs["alpha"] = "/meta/topology_alpha"
 # d_obs["k_inter"] = "/meta/topology_k_inter"
@@ -53,27 +54,59 @@ d_obs["jG"] = "/meta/dynamics_gG"
 # todo: add description
 def all_in_one(candidate=None):
     if candidate is None:
-        return ["num_bursts", "num_b_1", "num_b_geq_2", "num_b_geq_4", "sys_rate_cv", "mean_rate", "blen_all", "blen_1", "blen_4", "blen_geq_2"]
+        return [
+            "num_bursts",
+            "num_b_1",
+            "num_b_geq_2",
+            "num_b_geq_4",
+            "sys_rate_cv",
+            "mean_rate",
+            "blen_all",
+            "blen_1",
+            "blen_4",
+            "blen_geq_2",
+            "ibis_system",
+            "ibis_module",
+            "ibis_cv_system",
+            "ibis_cv_module",
+        ]
 
     # load and process
     h5f = ah.prepare_file(candidate, hot=False)
     ah.find_bursts_from_rates(h5f)
+    ah.find_ibis(h5f)
 
     res = dict()
     res["num_bursts"] = len(h5f.ana.bursts.system_level.beg_times)
-    res["num_b_1"] = len([x for x in h5f.ana.bursts.system_level.module_sequences if len(x) == 1])
-    res["num_b_geq_2"] = len([x for x in h5f.ana.bursts.system_level.module_sequences if len(x) >= 2])
-    res["num_b_geq_4"] = len([x for x in h5f.ana.bursts.system_level.module_sequences if len(x) >= 4])
+    res["num_b_1"] = len(
+        [x for x in h5f.ana.bursts.system_level.module_sequences if len(x) == 1]
+    )
+    res["num_b_geq_2"] = len(
+        [x for x in h5f.ana.bursts.system_level.module_sequences if len(x) >= 2]
+    )
+    res["num_b_geq_4"] = len(
+        [x for x in h5f.ana.bursts.system_level.module_sequences if len(x) >= 4]
+    )
     res["sys_rate_cv"] = h5f.ana.rates.cv.system_level
     res["mean_rate"] = np.nanmean(h5f.ana.rates.system_level)
 
-    blen = np.array(h5f.ana.bursts.system_level.end_times) - np.array(h5f.ana.bursts.system_level.beg_times)
+    blen = np.array(h5f.ana.bursts.system_level.end_times) - np.array(
+        h5f.ana.bursts.system_level.beg_times
+    )
     slen = np.array([len(x) for x in h5f.ana.bursts.system_level.module_sequences])
     res["blen_all"] = np.nanmean(blen)
     res["blen_1"] = np.nanmean(blen[np.where(slen == 1)[0]])
     res["blen_4"] = np.nanmean(blen[np.where(slen == 4)[0]])
     res["blen_geq_2"] = np.nanmean(blen[np.where(slen >= 2)[0]])
 
+    # ibis
+    ibis_module = []
+    for m_id in h5f.ana.ibi.module_level.keys():
+        ibis_module.extend(h5f.ana.ibi.module_level[m_id])
+    res["ibis_module"] = np.nanmean(ibis_module)
+    res["ibis_system"] = np.nanmean(h5f.ana.ibi.system_level)
+    res["ibis_cv_module"] = np.nanmean(h5f.ana.ibi.cv_across_modules)
+    res["ibis_cv_system"] = np.nanmean(h5f.ana.ibi.cv_system_level)
 
     h5.close_hot(h5f)
     h5f.clear()

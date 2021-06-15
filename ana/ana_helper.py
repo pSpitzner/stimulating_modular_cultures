@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-06-14 12:08:44
+# @Last Modified: 2021-06-15 16:04:44
 # ------------------------------------------------------------------------------ #
 
 
@@ -322,6 +322,64 @@ def find_isis(h5f, write_to_h5f=True):
 
     return isi
 
+def find_ibis(h5f, write_to_h5f=True):
+    """
+        What are the the inter-burst-intervals? End-of-burst to start-of-burst
+    """
+
+    ibi = BetterDict()
+    ibi["module_level"] = BetterDict()
+    ibi["system_level"] = BetterDict()
+
+    l_ibi_across_mods = []
+    for idx, m_id in enumerate(h5f.ana.mods):
+        try:
+            b = np.array(h5f.ana.bursts.module_level[m_id].beg_times)
+            e = np.array(h5f.ana.bursts.module_level[m_id].end_times)
+        except Exception as e:
+            log.error(
+                "Bursts were not detected before searching IBI. Try `find_bursts_from_rates()`"
+            )
+            raise e
+
+        if len(b) < 2:
+            l_ibi = np.array([])
+        else:
+            l_ibi = e[1:] - b[:-1]
+
+        l_ibi = l_ibi.tolist()
+        ibi["module_level"][m_id] = l_ibi
+        l_ibi_across_mods.extend(l_ibi)
+
+    ibi["cv_across_modules"] = np.nanstd(l_ibi_across_mods) / np.nanmean(l_ibi_across_mods)
+
+    # and again for system-wide
+    try:
+        b = np.array(h5f.ana.bursts.system_level.beg_times)
+        e = np.array(h5f.ana.bursts.system_level.end_times)
+    except Exception as e:
+        log.error(
+            "Bursts were not detected before searching IBI. Try `find_bursts_from_rates()`"
+        )
+        raise e
+
+    if len(b) < 2:
+        l_ibi = np.array([])
+    else:
+        l_ibi = e[1:] - b[:-1]
+
+    l_ibi = l_ibi.tolist()
+    ibi["system_level"] = l_ibi
+    ibi["cv_system_level"] = np.nanstd(l_ibi) / np.nanmean(l_ibi)
+
+    if write_to_h5f:
+        try:
+            h5f.ana.ibi.clear()
+        except:
+            pass
+        h5f.ana.ibi = ibi
+
+    return ibi
 
 # ------------------------------------------------------------------------------ #
 # batch processing across realization
@@ -549,13 +607,16 @@ def batch_candidates_burst_times_and_isi(input_path, hot=False):
         prepare_file(h5f)
         find_bursts_from_rates(h5f)
         find_isis(h5f)
+        find_ibis(h5f)
 
         this_burst = h5f.ana.bursts
         this_isi = h5f.ana.isi
+        this_ibi = h5f.ana.ibi
 
         if cdx == 0:
             res = h5f
             mods = h5f.ana.mods
+            continue
 
         # todo: consistency checks
         # lets at least check that the modules are consistent across candidates.
@@ -566,6 +627,10 @@ def batch_candidates_burst_times_and_isi(input_path, hot=False):
         b.beg_times.extend(this_burst.system_level.beg_times)
         b.end_times.extend(this_burst.system_level.end_times)
         b.module_sequences.extend(this_burst.system_level.module_sequences)
+
+        # copy over system-level ibi
+        res.ana.ibi.system_level.extend(this_ibi.system_level)
+
         for m_id in h5f.ana.mods:
             # copy over module level bursts
             b = res.ana.bursts.module_level[m_id]
@@ -576,6 +641,10 @@ def batch_candidates_burst_times_and_isi(input_path, hot=False):
             i = res.ana.isi[m_id]
             for var in ["all", "in_bursts", "out_bursts"]:
                 i[var].extend(this_isi[m_id][var])
+
+            # and ibis
+            res.ana.ibi["module_level"][m_id].extend(this_ibi["module_level"][m_id])
+
 
         if hot:
             # only close the last file (which we opened), and let's hope no other file
@@ -657,10 +726,14 @@ def batch_conditions():
 # turns out this is faster without numba
 def _inter_spike_intervals(spikes_2d, beg_times=None, end_times=None):
     """
-        Returns three list, thre first one contains all interspike intervals,
-        merged down for all neurons in `spikes_2d`.
-        If `beg_times` and `end_times` are passed, returns two more lists
-        with the isis inside and out of bursts. otherwise, they are empty.
+        Returns a dict with lists of initer spike intverals and the matching CVs.
+        Has the folliwing keys:
+            all,
+            in_bursts,
+            out_bursts,
+            cv_all,
+            cv_in_bursts,
+            cv_out_bursts,
     """
 
     isis_all = []
