@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-06-14 11:33:10
+# @Last Modified: 2021-06-22 18:20:01
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -67,7 +67,7 @@ import ana_helper as ah
 # ------------------------------------------------------------------------------ #
 
 
-def overview_topology(h5f, filenames=None):
+def overview_topology(h5f, filenames=None, skip_graph=False):
     """
         Plots an overview figure of the topology of `h5f`.
 
@@ -85,15 +85,17 @@ def overview_topology(h5f, filenames=None):
     plot_distribution_degree_k(h5f, axes[1, 1], filenames=filenames)
     plot_parameter_info(h5f, axes[0, 1])
 
-    plot_connectivity_layout(h5f, axes[0, 2])
-    plot_axon_layout(h5f, axes[1, 2])
-    axes[0, 2].set_title("Connectivity")
-    axes[1, 2].set_title("Axons")
-    # share zoom between connectivity and axons
-    axes[0, 2].get_shared_x_axes().join(axes[0, 2], axes[1, 2])
-    axes[0, 2].get_shared_y_axes().join(axes[0, 2], axes[1, 2])
-    axes[1, 2].set_aspect(1)
-    axes[1, 2].autoscale()
+    if not skip_graph:
+        plot_connectivity_layout(h5f, axes[0, 2])
+        plot_axon_layout(h5f, axes[1, 2])
+        axes[0, 2].set_title("Connectivity")
+        axes[1, 2].set_title("Axons")
+        # share zoom between connectivity and axons
+        axes[0, 2].get_shared_x_axes().join(axes[0, 2], axes[1, 2])
+        axes[0, 2].get_shared_y_axes().join(axes[0, 2], axes[1, 2])
+        axes[1, 2].set_aspect(1)
+        axes[1, 2].autoscale()
+
 
     fig.tight_layout()
 
@@ -449,11 +451,16 @@ def plot_initiation_site(h5f, ax=None, apply_formatting=True):
         fig, ax = plt.subplots()
     else:
         fig = ax.get_figure()
+    ax.set_ylabel("Histogram")
+    ax.set_xlabel("Initiation module")
 
     if h5f.ana.bursts is None:
         ah.find_bursts_from_rates(h5f)
 
     sequences = h5f.ana.bursts.system_level.module_sequences
+    if len(sequences) == 0:
+        return ax
+
     first_mod = np.ones(len(sequences), dtype=int) - 1
     for idx, seq in enumerate(sequences):
         first_mod[idx] = seq[0]
@@ -468,8 +475,6 @@ def plot_initiation_site(h5f, ax=None, apply_formatting=True):
     for idx, patch in enumerate(patches):
         patches[idx].set_facecolor(h5f.ana.mod_colors[idx])
 
-    ax.set_ylabel("Histogram")
-    ax.set_xlabel("Initiation module")
     fig.tight_layout()
 
     return ax
@@ -576,11 +581,11 @@ def pd_burst_duration_change_under_stim(df):
     """
 
     fig, ax = plt.subplots()
-    ax.set_title("L=4, Inh, k=1, bw=1")
+    ax.set_title("L=all, Inh, k=5, bw=1")
 
     # query so what remains is repetitions and the condition to compare
     df1 = df.query(
-        "`Sequence length` == 4 & `Number of inhibitory neurons` > 0 & `Connections` == 1 & `Bridge weight` == 1.0 & (Stimulation == 'Off' | Stimulation == 'On (0, 2)')"
+        "`Sequence length` >= 1 & `Number of inhibitory neurons` > 0 & `Connections` == 5 & `Bridge weight` == 1.0 & (Stimulation == 'Off' | Stimulation == 'On (0, 2)')"
     )
     # use the mean duration as the observable, to which contributions are exactly
     # one data point from one realization, and

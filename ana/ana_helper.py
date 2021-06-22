@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-06-15 16:59:40
+# @Last Modified: 2021-06-22 18:15:16
 # ------------------------------------------------------------------------------ #
 
 
@@ -119,7 +119,8 @@ def prepare_file(h5f, mod_colors="auto", hot=True):
         h5f.ana.mod_sort   : function that maps from neuron_id to sorted id, by module
         h5f.ana.mods       : list of unique module ids
         h5f.ana.mod_colors : list of colors associated with each module
-        h5f.ana.neuron_ids
+        h5f.ana.neuron_ids : array of neurons, if we speciefied a sensor, this will
+                             only contain the recorded ones.
     """
 
     log.debug("Preparing File")
@@ -129,6 +130,9 @@ def prepare_file(h5f, mod_colors="auto", hot=True):
 
     h5f.ana = BetterDict()
     num_n = h5f.meta.topology_num_neur
+    # if we had a sensor, many neurons were not recorded and cannot be analyzed.
+    if h5f.meta.topology_n_within_sensor is not None:
+        num_n = h5f.meta.topology_n_within_sensor
 
     # ------------------------------------------------------------------------------ #
     # mod sorting
@@ -168,7 +172,7 @@ def prepare_file(h5f, mod_colors="auto", hot=True):
 
     # maybe change this to exclude neurons that did not spike
     # neuron_ids = np.unique(spikes[:, 0]).astype(int, copy=False)
-    neuron_ids = np.arange(0, h5f.meta.topology_num_neur, dtype=int)
+    neuron_ids = np.arange(0, num_n, dtype=int)
     h5f.ana.neuron_ids = neuron_ids
 
     # make sure that the 2d_spikes representation is nan-padded, requires loading!
@@ -259,6 +263,8 @@ def find_bursts_from_rates(
 
     for m_id in h5f.ana.mods:
         selects = np.where(h5f.data.neuron_module_id[:] == m_id)[0]
+        # if sensor is specified, we might get more neuron_module_id than were recorded
+        selects = selects[np.isin(selects, h5f.ana.neuron_ids)]
         pop_rate = population_rate_exact_smoothing(
             spikes[selects],
             bin_size=bs_small,
