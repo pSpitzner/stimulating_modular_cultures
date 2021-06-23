@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-06-22 18:20:01
+# @Last Modified: 2021-06-23 10:45:56
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -472,8 +472,11 @@ def plot_initiation_site(h5f, ax=None, apply_formatting=True):
 
     N, bins, patches = ax.hist(first_mod, bins=bins)
     # assume they are ordered correctly
-    for idx, patch in enumerate(patches):
-        patches[idx].set_facecolor(h5f.ana.mod_colors[idx])
+    try:
+        for idx, patch in enumerate(patches):
+            patches[idx].set_facecolor(h5f.ana.mod_colors[idx])
+    except Exception as e:
+        log.debug(e)
 
     fig.tight_layout()
 

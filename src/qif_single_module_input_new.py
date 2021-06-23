@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-05-06 09:35:48
-# @Last Modified: 2021-06-09 17:35:22
+# @Last Modified: 2021-06-17 11:20:25
 # ------------------------------------------------------------------------------ #
 # Here we try to find out what the impact of input from single bridges is.
 # Todo:
@@ -23,6 +23,7 @@ import shutil
 import numpy as np
 import logging
 from brian2 import *
+from addict import Dict
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)-8s [%(name)s] %(message)s")
 log = logging.getLogger(__name__)
@@ -52,36 +53,41 @@ prefs.codegen.target = "numpy"
 # ------------------------------------------------------------------------------ #
 
 # fmt: off
+# avoid cluttering global space, group parameters into a dictionary that is passed
+# as the `namespace` argument to brians `run`
+pars = Dict(
+
 # membrane potentials
-vReset = -60 * mV  # resting potential, neuron relaxes towards this without stimulation
-vThr   = -45 * mV  # threshold potential
-vPeak  =  35 * mV  # peak potential, after vThr is passed, rapid growth towards this
-vRest  = -50 * mV  # reset potential
+vReset = -60 * mV,  # resting potential, neuron relaxes towards this without stimulation
+vThr   = -45 * mV,  # threshold potential
+vPeak  =  35 * mV,  # peak potential, after vThr is passed, rapid growth towards this
+vRest  = -50 * mV,  # reset potential
 
 # soma
-tV = 50 * ms  # time scale of membrane potential
-tU = 50 * ms  # time scale of recovery variable u
+tV = 50 * ms,  # time scale of membrane potential
+tU = 50 * ms,  # time scale of recovery variable u
 
-k = 0.5 / mV       # resistance over capacity(?), rescaled
-b = 0.5            # sensitivity to sub-threshold fluctuations
-uIncr =  50 * mV   # after-spike increment of recovery variable u
+k = 0.5 / mV,       # resistance over capacity(?), rescaled
+b = 0.5,            # sensitivity to sub-threshold fluctuations
+uIncr =  50 * mV,   # after-spike increment of recovery variable u
 
 # synapse
-tD =   2 * second  # characteristic recovery time, between 0.5 and 20 seconds
-tA =  10 * ms      # decay time of post-synaptic current (AMPA current decay time)
-jA =  45 * mV      # AMPA current strength, between 10 - 50 mV
-                   # 170.612 value in javiers neurondyn
-                   # this needs to scale with tV/tA
-tG = 20 * ms       # decay time of post-syanptic GABA current
-jG = 67.5 * mV     # GABA current strength
+tD =   2 * second,  # characteristic recovery time, between 0.5 and 20 seconds
+tA =  10 * ms,      # decay time of post-synaptic current (AMPA current decay time)
+jA =  45 * mV,      # AMPA current strength, between 10 - 50 mV
+                    # 170.612 value in javiers neurondyn
+                    # this needs to scale with tV/tA
+tG = 20 * ms,       # decay time of post-syanptic GABA current
+jG = 67.5 * mV,     # GABA current strength
 
 # noise
-beta = 0.8         # D = beta*D after spike, to reduce efficacy, beta < 1
-rate = 38 * Hz     # rate for the poisson input (shot-noise), between 10 - 50 Hz
-jM =  25 * mV      # shot noise (minis) strength, between 10 - 50 mV
-                   # (sum of minis arriving at target neuron)
-jS = 300 * mV * mV * ms * ms  # white noise strength, via xi = dt**.5 * randn()
+beta = 0.8,         # D = beta*D after spike, to reduce efficacy, beta < 1
+rate = 38 * Hz,     # rate for the poisson input (shot-noise), between 10 - 50 Hz
+jM =  25 * mV,      # shot noise (minis) strength, between 10 - 50 mV
+                    # (sum of minis arriving at target neuron)
+jS = 300 * mV * mV * ms * ms,  # white noise strength, via xi = dt**.5 * randn()
 
+)
 
 # ------------------------------------------------------------------------------ #
 # simulation parameters
@@ -102,11 +108,11 @@ defaultclock.dt = 0.05 * ms
 parser = argparse.ArgumentParser(description="Brian")
 
 parser.add_argument("-o",  dest="output_path", help="output path", metavar="FILE")
-parser.add_argument("-jA", dest="jA",          help="in mV",       default=jA / mV,     type=float)
-parser.add_argument("-jG", dest="jG",          help="in mV",       default=jG / mV,     type=float)
-parser.add_argument("-jM", dest="jM",          help="in mV",       default=jM / mV,     type=float)
-parser.add_argument("-r",  dest="r",           help="in Hz",       default=rate / Hz,   type=float)
-parser.add_argument("-tD", dest="tD",          help="in seconds",  default=tD / second, type=float)
+parser.add_argument("-jA", dest="jA",          help="in mV",       default=pars.jA / mV,     type=float)
+parser.add_argument("-jG", dest="jG",          help="in mV",       default=pars.jG / mV,     type=float)
+parser.add_argument("-jM", dest="jM",          help="in mV",       default=pars.jM / mV,     type=float)
+parser.add_argument("-r",  dest="r",           help="in Hz",       default=pars.rate / Hz,   type=float)
+parser.add_argument("-tD", dest="tD",          help="in seconds",  default=pars.tD / second, type=float)
 parser.add_argument("-s",  dest="seed",        help="rng",         default=117,         type=int)
 
 
@@ -137,11 +143,11 @@ args = parser.parse_args()
 numpy.random.seed(args.seed)
 
 # correct units
-jA = args.jA * mV
-jM = args.jM * mV
-jG = args.jG * mV
-tD = args.tD * second
-rate = args.r * Hz
+pars.jA = args.jA * mV
+pars.jM = args.jM * mV
+pars.jG = args.jG * mV
+pars.tD = args.tD * second
+pars.rate = args.r * Hz
 args.equil_duration *= second
 args.wait_duration *= second
 args.r_stim *= Hz
@@ -149,11 +155,11 @@ args.r_stim *= Hz
 print(f'#{"":#^75}#\n#{"running dynamics in brian":^75}#\n#{"":#^75}#')
 log.info("output path:      %s", args.output_path)
 log.info("seed:             %s", args.seed)
-log.info("jA:               %s", jA)
-log.info("jM:               %s", jM)
-log.info("jG:               %s", jG)
-log.info("tD:               %s", tD)
-log.info("noise rate:       %s", rate)
+log.info("jA:               %s", pars.jA)
+log.info("jM:               %s", pars.jM)
+log.info("jG:               %s", pars.jG)
+log.info("tD:               %s", pars.tD)
+log.info("noise rate:       %s", pars.rate)
 log.info("equilibration:    %s", args.equil_duration)
 log.info("wait duration:    %s", args.wait_duration)
 log.info("stimulation rate: %s", args.r_stim)
@@ -201,7 +207,7 @@ num_normal = 25
 rate_m = PopulationRateMonitor(G[0:num_normal])
 spks_m = SpikeMonitor(G[0:num_normal])
 spks_m_debug = SpikeMonitor(G[num_normal:])
-mini_g = PoissonInput(target=G, target_var="IA", N=1, rate=rate, weight=jM)
+mini_g = PoissonInput(target=G, target_var="IA", N=1, rate=pars.rate, weight=pars.jM)
 
 net = Network()
 net.add(G)

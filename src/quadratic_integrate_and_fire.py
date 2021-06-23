@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2021-06-08 15:23:56
+# @Last Modified: 2021-06-17 15:15:14
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 and runs the simulations in brian.
@@ -194,14 +194,14 @@ G = NeuronGroup(
                   +xi*(jS/tV)**0.5      )/tV   : volt       # white noise term
         dIA/dt = -IA/tA                        : volt       # [9, 10]
         dIG/dt = -IG/tG                        : volt       # [9, 10]
-        du/dt = ( b*(v-vReset) -u )/tU         : volt       # [7] inhibitory current
+        du/dt = ( b*(v-vReset) -u )/tU         : volt       # [7] recovery variable
         dD/dt = ( 1-D)/tD                      : 1          # [11] recovery to one
         j     : volt  (constant)                 # neuron specific synaptic weight
     """,
     threshold="v > vPeak",
     reset="""
         v = vRest        # [8]
-        u = u + uIncr   # [8]
+        u = u + uIncr    # [8]
         D = D * beta     # [11] delta-function term on spike
     """,
     method="euler",
