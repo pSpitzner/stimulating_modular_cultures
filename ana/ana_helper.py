@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-06-22 18:15:16
+# @Last Modified: 2021-06-23 16:59:04
 # ------------------------------------------------------------------------------ #
 
 
@@ -382,7 +382,7 @@ def find_ibis(h5f, write_to_h5f=True):
         if len(b) < 2:
             l_ibi = np.array([])
         else:
-            l_ibi = e[1:] - b[:-1]
+            l_ibi = b[1:] - e[:-1]
 
         l_ibi = l_ibi.tolist()
         ibi["module_level"][m_id] = l_ibi
