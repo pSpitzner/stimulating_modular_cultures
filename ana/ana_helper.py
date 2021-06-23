@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-06-23 19:26:36
+# @Last Modified: 2021-06-23 19:45:09
 # ------------------------------------------------------------------------------ #
 
 
@@ -18,7 +18,7 @@ import pandas as pd
 
 import hi5 as h5
 # from hi5 import BetterDict
-from addict import benedict
+from addict import Dict
 from benedict import benedict
 from tqdm import tqdm
 from itertools import permutations
@@ -133,7 +133,7 @@ def prepare_file(h5f, mod_colors="auto", hot=True):
     h5f["ana"] = benedict()
     num_n = h5f["meta.topology_num_neur"]
     # if we had a sensor, many neurons were not recorded and cannot be analyzed.
-    if "meta.topology_n_within_sensor" in h5f.keypath():
+    if "meta.topology_n_within_sensor" in h5f.keypaths():
         num_n = h5f["meta.topology_n_within_sensor"]
 
     # ------------------------------------------------------------------------------ #
@@ -201,7 +201,7 @@ def prepare_file(h5f, mod_colors="auto", hot=True):
 
     # Stimulation description
     stim_str = "Unknown"
-    if "data.stimulation_times_as_list" in h5f.keypath():
+    if not "data.stimulation_times_as_list" in h5f.keypaths():
         stim_str = "Off"
     else:
         try:
@@ -210,7 +210,8 @@ def prepare_file(h5f, mod_colors="auto", hot=True):
             )
             stim_mods = np.unique(h5f["data.neuron_module_id"][stim_neurons])
             stim_str = f"On {str(tuple(stim_mods)).replace(',)', ')')}"
-        except:
+        except Exception as e:
+            log.warning(e)
             stim_str = f"Error"
     h5f["ana.stimulation_description"] = stim_str
 
@@ -305,8 +306,8 @@ def find_bursts_from_rates(
         smooth_width=bs_large,
         length=h5f["meta.dynamics_simulation_duration"],
     )
-    rates.system_level = pop_rate
-    rates.cv.system_level = np.nanstd(pop_rate) / np.nanmean(pop_rate)
+    rates["system_level"] = pop_rate
+    rates["cv.system_level"] = np.nanstd(pop_rate) / np.nanmean(pop_rate)
 
     all_begs, all_ends, all_seqs = system_burst_from_module_burst(
         beg_times, end_times, threshold=merge_threshold,
@@ -317,10 +318,16 @@ def find_bursts_from_rates(
     bursts["system_level.module_sequences"] = all_seqs
 
     if write_to_h5f:
-        if isinstance(h5f["ana.bursts"], benedict):
+        # if isinstance(h5f["ana.bursts"], benedict):
+        # if isinstance(h5f["ana.rates"], benedict):
+        try:
             h5f["ana.bursts"].clear()
-        if isinstance(h5f["ana.rates"], benedict):
+        except Exception as e:
+            log.debug(e)
+        try:
             h5f["ana.rates"].clear()
+        except Exception as e:
+            log.debug(e)
         # so, overwriting keys with dicts (nesting) can cause memory leaks.
         # to avoid this, call .clear() before assigning the new dict
         # testwise I made this the default for setting keys of benedict
@@ -385,7 +392,7 @@ def find_ibis(h5f, write_to_h5f=True):
             l_ibi = b[1:] - e[:-1]
 
         l_ibi = l_ibi.tolist()
-        ibi["module_level"][m_id] = l_ibi
+        ibi[f"module_level.{m_id}"] = l_ibi
         l_ibi_across_mods.extend(l_ibi)
 
     ibi["cv_across_modules"] = np.nanstd(l_ibi_across_mods) / np.nanmean(l_ibi_across_mods)
@@ -581,7 +588,8 @@ def _dfs_from_realization(candidate):
         bridge_weight = 1.0
     num_connections = h5f["meta.topology_k_inter"]
     try:
-        num_inhibitory = len(h5f["data.neuron_inhibitory_ids"][:])
+        if "data.neuron_inhibitory_ids" in h5f.keypaths():
+            num_inhibitory = len(h5f["data.neuron_inhibitory_ids"][:])
     except Exception as e:
         log.debug(e)
         # maybe its a single number, instead of a list
