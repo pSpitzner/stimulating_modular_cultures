@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-06-23 16:59:04
+# @Last Modified: 2021-06-23 19:26:36
 # ------------------------------------------------------------------------------ #
 
 
@@ -17,7 +17,9 @@ import numpy as np
 import pandas as pd
 
 import hi5 as h5
-from hi5 import BetterDict
+# from hi5 import BetterDict
+from addict import benedict
+from benedict import benedict
 from tqdm import tqdm
 from itertools import permutations
 
@@ -116,23 +118,23 @@ def prepare_file(h5f, mod_colors="auto", hot=True):
         modifies h5f in place! (not on disk, only in RAM)
 
         # adds the following attributes:
-        h5f.ana.mod_sort   : function that maps from neuron_id to sorted id, by module
-        h5f.ana.mods       : list of unique module ids
-        h5f.ana.mod_colors : list of colors associated with each module
-        h5f.ana.neuron_ids : array of neurons, if we speciefied a sensor, this will
+        h5f["ana.mod_sort"]   : function that maps from neuron_id to sorted id, by module
+        h5f["ana.mods"]       : list of unique module ids
+        h5f["ana.mod_colors"] : list of colors associated with each module
+        h5f["ana.neuron_ids"] : array of neurons, if we speciefied a sensor, this will
                              only contain the recorded ones.
     """
 
     log.debug("Preparing File")
 
     if isinstance(h5f, str):
-        h5f = h5.recursive_load(h5f, hot=hot)
+        h5f = h5.recursive_load(h5f, hot=hot, dtype=benedict)
 
-    h5f.ana = BetterDict()
-    num_n = h5f.meta.topology_num_neur
+    h5f["ana"] = benedict()
+    num_n = h5f["meta.topology_num_neur"]
     # if we had a sensor, many neurons were not recorded and cannot be analyzed.
-    if h5f.meta.topology_n_within_sensor is not None:
-        num_n = h5f.meta.topology_n_within_sensor
+    if "meta.topology_n_within_sensor" in h5f.keypath():
+        num_n = h5f["meta.topology_n_within_sensor"]
 
     # ------------------------------------------------------------------------------ #
     # mod sorting
@@ -140,7 +142,7 @@ def prepare_file(h5f, mod_colors="auto", hot=True):
     try:
         # get the neurons sorted according to their modules
         mod_sorted = np.zeros(num_n, dtype=int)
-        mod_ids = h5f.data.neuron_module_id[:]
+        mod_ids = h5f["data.neuron_module_id"][:]
         mods = np.sort(np.unique(mod_ids))
         if len(mods) == 1:
             raise NotImplementedError  # avoid resorting.
@@ -148,23 +150,23 @@ def prepare_file(h5f, mod_colors="auto", hot=True):
         for n_id in range(0, num_n):
             mod_sorted[n_id] = np.argwhere(temp == n_id)
 
-        h5f.ana.mods = mods
-        h5f.ana.mod_sort = lambda x: mod_sorted[x]
+        h5f["ana.mods"] = mods
+        h5f["ana.mod_sort"] = lambda x: mod_sorted[x]
     except:
-        h5f.ana.mods = [0]
-        h5f.ana.mod_sort = lambda x: x
+        h5f["ana.mods"] = [0]
+        h5f["ana.mod_sort"] = lambda x: x
 
     # ------------------------------------------------------------------------------ #
     # assign colors to modules so we can use them in every plot consistently
     # ------------------------------------------------------------------------------ #
     if mod_colors is False:
-        h5f.ana.mod_colors = ["black"] * len(h5f.ana.mods)
+        h5f["ana.mod_colors"] = ["black"] * len(h5f["ana.mods"])
     elif mod_colors == "auto":
-        h5f.ana.mod_colors = [f"C{x}" for x in range(0, len(h5f.ana.mods))]
+        h5f["ana.mod_colors"] = [f"C{x}" for x in range(0, len(h5f["ana.mods"]))]
     else:
         assert isinstance(mod_colors, list)
-        assert len(mod_colors) == len(h5f.ana.mods)
-        h5f.ana.mod_colors = mod_colors
+        assert len(mod_colors) == len(h5f["ana.mods"])
+        h5f["ana.mod_colors"] = mod_colors
 
     # ------------------------------------------------------------------------------ #
     # spikes
@@ -173,53 +175,53 @@ def prepare_file(h5f, mod_colors="auto", hot=True):
     # maybe change this to exclude neurons that did not spike
     # neuron_ids = np.unique(spikes[:, 0]).astype(int, copy=False)
     neuron_ids = np.arange(0, num_n, dtype=int)
-    h5f.ana.neuron_ids = neuron_ids
+    h5f["ana.neuron_ids"] = neuron_ids
 
     # make sure that the 2d_spikes representation is nan-padded, requires loading!
     try:
-        spikes = h5f.data.spiketimes[:]
+        spikes = h5f["data.spiketimes"][:]
         if spikes is None:
             raise ValueError
         spikes[spikes == 0] = np.nan
-        h5f.data.spiketimes = spikes
+        h5f["data.spiketimes"] = spikes
     except:
         log.info("No spikes in file, plotting and analysing dynamics will not work.")
 
     # # now we need to load things. [:] loads to ram and makes everything else faster
     # # convert spikes in the convenient nested (2d) format, first dim neuron,
     # # then ndarrays of time stamps in seconds
-    # spikes = h5f.data.spiketimes_as_list[:]
+    # spikes = h5f["data.spiketimes_as_list"][:]
     # spikes_2d = []
     # for n_id in neuron_ids:
     #     idx = np.where(spikes[:, 0] == n_id)[0]
     #     spikes_2d.append(spikes[idx, 1])
     # # the outer array is essentially a list but with fancy indexing.
     # # this is a bit counter-intuitive
-    # h5f.ana.spikes_2d = np.array(spikes_2d, dtype=object)
+    # h5f["ana.spikes_2d"] = np.array(spikes_2d, dtype=object)
 
     # Stimulation description
     stim_str = "Unknown"
-    if h5f.data.stimulation_times_as_list is None:
+    if "data.stimulation_times_as_list" in h5f.keypath():
         stim_str = "Off"
     else:
         try:
-            stim_neurons = np.unique(h5f.data.stimulation_times_as_list[:, 0]).astype(
+            stim_neurons = np.unique(h5f["data.stimulation_times_as_list"][:, 0]).astype(
                 int
             )
-            stim_mods = np.unique(h5f.data.neuron_module_id[stim_neurons])
+            stim_mods = np.unique(h5f["data.neuron_module_id"][stim_neurons])
             stim_str = f"On {str(tuple(stim_mods)).replace(',)', ')')}"
         except:
             stim_str = f"Error"
-    h5f.ana.stimulation_description = stim_str
+    h5f["ana.stimulation_description"] = stim_str
 
     # Guess the repetition from filename, convention: `foo/bar_parameters_rep=09.hdf5`
     try:
-        fname = str(h5f.uname.original_file_path.decode("UTF-8"))
+        fname = str(h5f["uname.original_file_path"].decode("UTF-8"))
         rep = re.search("(?<=rep=)(\d+)", fname)[0]  # we only use the first match
-        h5f.ana.repetition = int(rep)
+        h5f["ana.repetition"] = int(rep)
     except Exception as e:
         log.debug(e)
-        h5f.ana.repetition = -1
+        h5f["ana.repetition"] = -1
 
     return h5f
 
@@ -235,7 +237,7 @@ def find_bursts_from_rates(
     """
         Based on module-level firing rates, find bursting events.
 
-        returns two BetterDicts, `bursts` and `rates`,
+        returns two benedicts, `bursts` and `rates`,
         modifies `h5f`
 
         Note on smoothing: at the moment, we time-bin the activity on the module level
@@ -244,37 +246,37 @@ def find_bursts_from_rates(
         the kernel (thus, keeping the high precision of each spike time).
     """
 
-    assert h5f.ana is not None, "`prepare_file(h5f)` first!"
+    assert h5f["ana"] is not None, "`prepare_file(h5f)` first!"
 
-    spikes = h5f.data.spiketimes
+    spikes = h5f["data.spiketimes"]
 
-    bursts = BetterDict()
-    bursts.module_level = BetterDict()
-    rates = BetterDict()
-    rates.dt = bs_small
-    rates.module_level = BetterDict()
-    rates.system_level = None # just create the dict entry at the nice position
-    rates.cv = BetterDict()
-    rates.cv.module_level = BetterDict()
-    rates.cv.system_level = None
+    bursts = benedict()
+    rates = benedict()
+    # bursts.module_level = benedict()
+    # rates.dt = bs_small
+    # rates.module_level = benedict()
+    # rates.system_level = None # just create the dict entry at the nice position
+    # rates.cv = benedict()
+    # rates.cv.module_level = benedict()
+    # rates.cv.system_level = None
 
     beg_times = []  # lists of length num_modules
     end_times = []
 
-    for m_id in h5f.ana.mods:
-        selects = np.where(h5f.data.neuron_module_id[:] == m_id)[0]
+    for m_id in h5f["ana.mods"]:
+        selects = np.where(h5f["data.neuron_module_id"][:] == m_id)[0]
         # if sensor is specified, we might get more neuron_module_id than were recorded
-        selects = selects[np.isin(selects, h5f.ana.neuron_ids)]
+        selects = selects[np.isin(selects, h5f["ana.neuron_ids"])]
         pop_rate = population_rate_exact_smoothing(
             spikes[selects],
             bin_size=bs_small,
             smooth_width=bs_large,
-            length=h5f.meta.dynamics_simulation_duration,
+            length=h5f["meta.dynamics_simulation_duration"],
         )
         # pop_rate = population_rate(
         #     spikes[selects],
         #     bin_size=bs_small,
-        #     length=h5f.meta.dynamics_simulation_duration,
+        #     length=h5f["meta.dynamics_simulation_duration"],
         # )
         # pop_rate = smooth_rate(pop_rate, clock_dt=bs_small, width=bs_large)
         # pop_rate = pop_rate / bs_small
@@ -291,18 +293,17 @@ def find_bursts_from_rates(
         beg_times.append(beg_time)
         end_times.append(end_time)
 
-        rates.module_level[m_id] = pop_rate
-        rates.cv.module_level[m_id] = np.nanstd(pop_rate) / np.nanmean(pop_rate)
-        bursts.module_level[m_id] = BetterDict()
-        bursts.module_level[m_id].beg_times = beg_time.copy()
-        bursts.module_level[m_id].end_times = end_time.copy()
-        bursts.module_level[m_id].rate_threshold = rate_threshold
+        rates[f"module_level.{m_id}"] = pop_rate
+        rates[f"cv.module_level.{m_id}"] = np.nanstd(pop_rate) / np.nanmean(pop_rate)
+        bursts[f"module_level.{m_id}.beg_times"] = beg_time.copy()
+        bursts[f"module_level.{m_id}.end_times"] = end_time.copy()
+        bursts[f"module_level.{m_id}.rate_threshold"] = rate_threshold
 
     pop_rate = population_rate_exact_smoothing(
         spikes[:],
         bin_size=bs_small,
         smooth_width=bs_large,
-        length=h5f.meta.dynamics_simulation_duration,
+        length=h5f["meta.dynamics_simulation_duration"],
     )
     rates.system_level = pop_rate
     rates.cv.system_level = np.nanstd(pop_rate) / np.nanmean(pop_rate)
@@ -311,21 +312,20 @@ def find_bursts_from_rates(
         beg_times, end_times, threshold=merge_threshold,
     )
 
-    bursts.system_level = BetterDict()
-    bursts.system_level.beg_times = all_begs.copy()
-    bursts.system_level.end_times = all_ends.copy()
-    bursts.system_level.module_sequences = all_seqs
+    bursts["system_level.beg_times"] = all_begs.copy()
+    bursts["system_level.end_times"] = all_ends.copy()
+    bursts["system_level.module_sequences"] = all_seqs
 
     if write_to_h5f:
-        if isinstance(h5f.ana.bursts, BetterDict):
-            h5f.ana.bursts.clear()
-        if isinstance(h5f.ana.rates, BetterDict):
-            h5f.ana.rates.clear()
+        if isinstance(h5f["ana.bursts"], benedict):
+            h5f["ana.bursts"].clear()
+        if isinstance(h5f["ana.rates"], benedict):
+            h5f["ana.rates"].clear()
         # so, overwriting keys with dicts (nesting) can cause memory leaks.
         # to avoid this, call .clear() before assigning the new dict
-        # testwise I made this the default for setting keys of BetterDict
-        h5f.ana.bursts = bursts
-        h5f.ana.rates = rates
+        # testwise I made this the default for setting keys of benedict
+        h5f["ana.bursts"] = bursts
+        h5f["ana.rates"] = rates
 
     return bursts, rates
 
@@ -335,14 +335,14 @@ def find_isis(h5f, write_to_h5f=True):
         What are the the inter-spike-intervals within and out of bursts?
     """
 
-    isi = BetterDict()
+    isi = benedict()
 
-    for idx, m_id in enumerate(h5f.ana.mods):
-        selects = np.where(h5f.data.neuron_module_id[:] == m_id)[0]
-        spikes_2d = h5f.data.spiketimes[selects]
+    for idx, m_id in enumerate(h5f["ana.mods"]):
+        selects = np.where(h5f["data.neuron_module_id"][:] == m_id)[0]
+        spikes_2d = h5f["data.spiketimes"][selects]
         try:
-            b = h5f.ana.bursts.module_level[m_id].beg_times
-            e = h5f.ana.bursts.module_level[m_id].end_times
+            b = h5f[f"ana.bursts.module_level.{m_id}.beg_times"]
+            e = h5f[f"ana.bursts.module_level.{m_id}.end_times"]
         except:
             if idx == 0:
                 log.info(
@@ -355,7 +355,7 @@ def find_isis(h5f, write_to_h5f=True):
         isi[m_id] = ll_isi
 
     if write_to_h5f:
-        h5f.ana.isi = isi
+        h5f["ana.isi"] = isi
 
     return isi
 
@@ -364,15 +364,15 @@ def find_ibis(h5f, write_to_h5f=True):
         What are the the inter-burst-intervals? End-of-burst to start-of-burst
     """
 
-    ibi = BetterDict()
-    ibi["module_level"] = BetterDict()
-    ibi["system_level"] = BetterDict()
+    ibi = benedict()
+    # ibi["module_level"] = benedict()
+    # ibi["system_level"] = benedict()
 
     l_ibi_across_mods = []
-    for idx, m_id in enumerate(h5f.ana.mods):
+    for idx, m_id in enumerate(h5f["ana.mods"]):
         try:
-            b = np.array(h5f.ana.bursts.module_level[m_id].beg_times)
-            e = np.array(h5f.ana.bursts.module_level[m_id].end_times)
+            b = np.array(h5f[f"ana.bursts.module_level.{m_id}.beg_times"])
+            e = np.array(h5f[f"ana.bursts.module_level.{m_id}.end_times"])
         except Exception as e:
             log.error(
                 "Bursts were not detected before searching IBI. Try `find_bursts_from_rates()`"
@@ -392,8 +392,8 @@ def find_ibis(h5f, write_to_h5f=True):
 
     # and again for system-wide
     try:
-        b = np.array(h5f.ana.bursts.system_level.beg_times)
-        e = np.array(h5f.ana.bursts.system_level.end_times)
+        b = np.array(h5f["ana.bursts.system_level.beg_times"])
+        e = np.array(h5f["ana.bursts.system_level.end_times"])
     except Exception as e:
         log.error(
             "Bursts were not detected before searching IBI. Try `find_bursts_from_rates()`"
@@ -414,7 +414,7 @@ def find_ibis(h5f, write_to_h5f=True):
             h5f.ana.ibi.clear()
         except:
             pass
-        h5f.ana.ibi = ibi
+        h5f["ana.ibi"] = ibi
 
     return ibi
 
@@ -458,16 +458,16 @@ def batch_pd_sequence_length_probabilities(list_of_filenames):
         # this adds the required entry for sequences
         find_bursts_from_rates(h5f)
         labels, probs, total = sequence_length_histogram_from_list(
-            list_of_sequences=h5f.ana.bursts.system_level.module_sequences,
-            mods=h5f.ana.mods,
+            list_of_sequences=h5f["ana.bursts.system_level.module_sequences"],
+            mods=h5f["ana.mods"],
         )
 
         # fetch meta data for every row
-        stim = h5f.ana.stimulation_description
-        bridge_weight = h5f.meta.dynamics_bridge_weight
+        stim = h5f["ana.stimulation_description"]
+        bridge_weight = h5f["meta.dynamics_bridge_weight"]
         if bridge_weight is None:
             bridge_weight = 1.0
-        num_connections = h5f.meta.topology_k_inter
+        num_connections = h5f["meta.topology_k_inter"]
 
         for ldx, l in enumerate(labels):
             df = df.append(
@@ -574,18 +574,18 @@ def _dfs_from_realization(candidate):
         return df
 
     # fetch meta data for every repetition (applied to multiple rows)
-    stim = h5f.ana.stimulation_description
-    rep = h5f.ana.repetition
-    bridge_weight = h5f.meta.dynamics_bridge_weight
+    stim = h5f["ana.stimulation_description"]
+    rep = h5f["ana.repetition"]
+    bridge_weight = h5f["meta.dynamics_bridge_weight"]
     if bridge_weight is None:
         bridge_weight = 1.0
-    num_connections = h5f.meta.topology_k_inter
+    num_connections = h5f["meta.topology_k_inter"]
     try:
-        num_inhibitory = len(h5f.data.neuron_inhibitory_ids[:])
+        num_inhibitory = len(h5f["data.neuron_inhibitory_ids"][:])
     except Exception as e:
         log.debug(e)
         # maybe its a single number, instead of a list
-        if isinstance(h5f.data.neuron_inhibitory_ids, numbers.Number):
+        if isinstance(h5f["data.neuron_inhibitory_ids"], numbers.Number):
             num_inhibitory = 1
         else:
             num_inhibitory = 0
@@ -597,7 +597,7 @@ def _dfs_from_realization(candidate):
     else:
         find_bursts_from_rates(h5f, rate_threshold=7.5)
 
-    data = h5f.ana.bursts.system_level
+    data = h5f["ana.bursts.system_level"]
     for idx in range(0, len(data.beg_times)):
         duration = data.end_times[idx] - data.beg_times[idx]
         seq_len = len(data.module_sequences[idx])
@@ -646,18 +646,18 @@ def batch_candidates_burst_times_and_isi(input_path, hot=False):
         find_isis(h5f)
         find_ibis(h5f)
 
-        this_burst = h5f.ana.bursts
-        this_isi = h5f.ana.isi
-        this_ibi = h5f.ana.ibi
+        this_burst = h5f["ana.bursts"]
+        this_isi = h5f["ana.isi"]
+        this_ibi = h5f["ana.ibi"]
 
         if cdx == 0:
             res = h5f
-            mods = h5f.ana.mods
+            mods = h5f["ana.mods"]
             continue
 
         # todo: consistency checks
         # lets at least check that the modules are consistent across candidates.
-        assert np.all(h5f.ana.mods == mods), "Modules differ between files"
+        assert np.all(h5f["ana.mods"] == mods), "Modules differ between files"
 
         # copy over system level burst
         b = res.ana.bursts.system_level
@@ -668,7 +668,7 @@ def batch_candidates_burst_times_and_isi(input_path, hot=False):
         # copy over system-level ibi
         res.ana.ibi.system_level.extend(this_ibi.system_level)
 
-        for m_id in h5f.ana.mods:
+        for m_id in h5f["ana.mods"]:
             # copy over module level bursts
             b = res.ana.bursts.module_level[m_id]
             b.beg_times.extend(this_burst.module_level[m_id].beg_times)
@@ -697,20 +697,20 @@ def batch_candidates_burst_times_and_isi(input_path, hot=False):
 
 def batch_isi_across_conditions():
 
-    stat = BetterDict()
+    stat = benedict()
     conds = _conditions()
     for k in tqdm(conds.varnames, desc="k values", position=0, leave=False):
-        stat[k] = BetterDict()
+        stat[k] = benedict()
         for stim in tqdm(
             conds[k].varnames, desc="stimulation targets", position=1, leave=False
         ):
             h5f = process_candidates_burst_times_and_isi(conds[k][stim])
             # preprocess so that plot functions wont do it again.
             # todo: make api consistent
-            h5f.ana.ensemble = BetterDict()
-            h5f.ana.ensemble.filenames = conds[k][stim]
-            h5f.ana.ensemble.bursts = h5f.ana.bursts
-            h5f.ana.ensemble.isi = h5f.ana.isi
+            h5f["ana.ensemble"] = benedict()
+            h5f["ana.ensemble.filenames"] = conds[k][stim]
+            h5f["ana.ensemble.bursts"] = h5f["ana.bursts"]
+            h5f["ana.ensemble.isi"] = h5f["ana.isi"]
 
             logging.getLogger("plot_helper").setLevel("WARNING")
             fig = ph.overview_burst_duration_and_isi(h5f, filenames=conds[k][stim])
@@ -729,10 +729,10 @@ def batch_isi_across_conditions():
             del fig
 
             # lets print some statistics
-            stat[k][stim] = BetterDict()
-            for m in h5f.ana.ensemble.isi.varnames:
+            stat[k][stim] = benedict()
+            for m in h5f["ana.ensemble.isi.varnames"]:
                 try:
-                    stat[k][stim][m] = np.mean(h5f.ana.ensemble.isi[m].in_bursts)
+                    stat[k][stim][m] = np.mean(h5f[f"ana.ensemble.isi.{m}.in_bursts"])
                 except Exception as e:
                     log.debug(e)
 
@@ -745,9 +745,9 @@ def batch_isi_across_conditions():
 def batch_conditions():
     # fmt:off
     path_base = "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/"
-    stim = BetterDict()
+    stim = benedict()
     for k in [0,1,2,3,5]:
-        stim[k] = BetterDict()
+        stim[k] = benedict()
         stim[k].off = f"{path_base}/dyn/2x2_fixed/gampa=35.00_rate=37.00_recovery=2.00_alpha=0.0125_k={k}_rep=*.hdf5"
         for s in ["0", "02", "012", "0123"]:
             stim[k][s] = f"{path_base}/jitter_{s}/gampa=35.00_rate=37.00_recovery=2.00_alpha=0.0125_k={k}_rep=*.hdf5"
@@ -838,7 +838,7 @@ def _inter_spike_intervals(spikes_2d, beg_times=None, end_times=None):
         cv_in_bursts = np.mean(cvs_in)
         cv_out_bursts = np.mean(cvs_out)
 
-    return BetterDict(
+    return benedict(
         all=isis_all,
         in_bursts=isis_in,
         out_bursts=isis_out,
@@ -1398,7 +1398,7 @@ def sequence_length_histogram_from_list(list_of_sequences, mods=[0, 1, 2, 3]):
 
     catalog = np.unique(seq_lens)
     len_hist = np.zeros(len(catalog))
-    lookup = dict()
+    lookup = benedict()
     for c in catalog:
         lookup[c] = np.where(catalog == c)[0][0]
 
