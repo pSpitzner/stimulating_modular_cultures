@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-06-23 19:45:09
+# @Last Modified: 2021-06-24 11:00:47
 # ------------------------------------------------------------------------------ #
 
 
@@ -150,10 +150,13 @@ def prepare_file(h5f, mod_colors="auto", hot=True):
         for n_id in range(0, num_n):
             mod_sorted[n_id] = np.argwhere(temp == n_id)
 
-        h5f["ana.mods"] = mods
+        h5f["ana.mods"] = [f"mod_{m}" for m in mods]
+        h5f["ana.mod_ids"] = mods
         h5f["ana.mod_sort"] = lambda x: mod_sorted[x]
-    except:
-        h5f["ana.mods"] = [0]
+    except Exception as e:
+        log.debug(e)
+        h5f["ana.mods"] = ["single_module"]
+        h5f["ana.mod_ids"] = [0]
         h5f["ana.mod_sort"] = lambda x: x
 
     # ------------------------------------------------------------------------------ #
@@ -234,6 +237,7 @@ def find_bursts_from_rates(
     rate_threshold=7.5,  # Hz
     merge_threshold=0.1,  # seconds, merge bursts if separated by less than this
     write_to_h5f=True,
+    return_res=False
 ):
     """
         Based on module-level firing rates, find bursting events.
@@ -248,13 +252,14 @@ def find_bursts_from_rates(
     """
 
     assert h5f["ana"] is not None, "`prepare_file(h5f)` first!"
+    assert write_to_h5f or return_res
 
     spikes = h5f["data.spiketimes"]
 
     bursts = benedict()
     rates = benedict()
+    rates["dt"] = bs_small
     # bursts.module_level = benedict()
-    # rates.dt = bs_small
     # rates.module_level = benedict()
     # rates.system_level = None # just create the dict entry at the nice position
     # rates.cv = benedict()
@@ -264,7 +269,9 @@ def find_bursts_from_rates(
     beg_times = []  # lists of length num_modules
     end_times = []
 
-    for m_id in h5f["ana.mods"]:
+    for mdx, m_id in enumerate(h5f["ana.mod_ids"]):
+        # for keys, use readable description of the module
+        m_dc = h5f["ana.mods"][mdx]
         selects = np.where(h5f["data.neuron_module_id"][:] == m_id)[0]
         # if sensor is specified, we might get more neuron_module_id than were recorded
         selects = selects[np.isin(selects, h5f["ana.neuron_ids"])]
@@ -294,11 +301,11 @@ def find_bursts_from_rates(
         beg_times.append(beg_time)
         end_times.append(end_time)
 
-        rates[f"module_level.{m_id}"] = pop_rate
-        rates[f"cv.module_level.{m_id}"] = np.nanstd(pop_rate) / np.nanmean(pop_rate)
-        bursts[f"module_level.{m_id}.beg_times"] = beg_time.copy()
-        bursts[f"module_level.{m_id}.end_times"] = end_time.copy()
-        bursts[f"module_level.{m_id}.rate_threshold"] = rate_threshold
+        rates[f"module_level.{m_dc}"] = pop_rate
+        rates[f"cv.module_level.{m_dc}"] = np.nanstd(pop_rate) / np.nanmean(pop_rate)
+        bursts[f"module_level.{m_dc}.beg_times"] = beg_time.copy()
+        bursts[f"module_level.{m_dc}.end_times"] = end_time.copy()
+        bursts[f"module_level.{m_dc}.rate_threshold"] = rate_threshold
 
     pop_rate = population_rate_exact_smoothing(
         spikes[:],
@@ -334,24 +341,28 @@ def find_bursts_from_rates(
         h5f["ana.bursts"] = bursts
         h5f["ana.rates"] = rates
 
-    return bursts, rates
+    if return_res:
+        return bursts, rates
 
 
-def find_isis(h5f, write_to_h5f=True):
+def find_isis(h5f, write_to_h5f=True, return_res=False):
     """
         What are the the inter-spike-intervals within and out of bursts?
     """
 
+    assert write_to_h5f or return_res
+
     isi = benedict()
 
-    for idx, m_id in enumerate(h5f["ana.mods"]):
+    for mdx, m_id in enumerate(h5f["ana.mod_ids"]):
+        m_dc = h5f["ana.mods"][mdx]
         selects = np.where(h5f["data.neuron_module_id"][:] == m_id)[0]
         spikes_2d = h5f["data.spiketimes"][selects]
         try:
-            b = h5f[f"ana.bursts.module_level.{m_id}.beg_times"]
-            e = h5f[f"ana.bursts.module_level.{m_id}.end_times"]
+            b = h5f[f"ana.bursts.module_level.{m_dc}.beg_times"]
+            e = h5f[f"ana.bursts.module_level.{m_dc}.end_times"]
         except:
-            if idx == 0:
+            if mdx == 0:
                 log.info(
                     "Bursts were not detected before searching ISI. Try `find_bursts_from_rates()`"
                 )
@@ -359,27 +370,30 @@ def find_isis(h5f, write_to_h5f=True):
             e = None
 
         ll_isi = _inter_spike_intervals(spikes_2d, beg_times=b, end_times=e,)
-        isi[m_id] = ll_isi
+        isi[m_dc] = ll_isi
 
     if write_to_h5f:
         h5f["ana.isi"] = isi
 
-    return isi
+    if return_res:
+        return isi
 
-def find_ibis(h5f, write_to_h5f=True):
+def find_ibis(h5f, write_to_h5f=True, return_res=False):
     """
         What are the the inter-burst-intervals? End-of-burst to start-of-burst
     """
+    assert write_to_h5f or return_res
 
     ibi = benedict()
     # ibi["module_level"] = benedict()
     # ibi["system_level"] = benedict()
 
     l_ibi_across_mods = []
-    for idx, m_id in enumerate(h5f["ana.mods"]):
+    for mdx, m_id in enumerate(h5f["ana.mods"]):
+        m_dc = h5f["ana.mods"][mdx]
         try:
-            b = np.array(h5f[f"ana.bursts.module_level.{m_id}.beg_times"])
-            e = np.array(h5f[f"ana.bursts.module_level.{m_id}.end_times"])
+            b = np.array(h5f[f"ana.bursts.module_level.{m_dc}.beg_times"])
+            e = np.array(h5f[f"ana.bursts.module_level.{m_dc}.end_times"])
         except Exception as e:
             log.error(
                 "Bursts were not detected before searching IBI. Try `find_bursts_from_rates()`"
@@ -392,12 +406,11 @@ def find_ibis(h5f, write_to_h5f=True):
             l_ibi = b[1:] - e[:-1]
 
         l_ibi = l_ibi.tolist()
-        ibi[f"module_level.{m_id}"] = l_ibi
+        ibi[f"module_level.{m_dc}"] = l_ibi
         l_ibi_across_mods.extend(l_ibi)
 
-    ibi["cv_across_modules"] = np.nanstd(l_ibi_across_mods) / np.nanmean(l_ibi_across_mods)
 
-    # and again for system-wide
+    # and again for system-wide, no matter how many modules involved
     try:
         b = np.array(h5f["ana.bursts.system_level.beg_times"])
         e = np.array(h5f["ana.bursts.system_level.end_times"])
@@ -412,9 +425,22 @@ def find_ibis(h5f, write_to_h5f=True):
     else:
         l_ibi = e[1:] - b[:-1]
 
-    l_ibi = l_ibi.tolist()
-    ibi["system_level"] = l_ibi
-    ibi["cv_system_level"] = np.nanstd(l_ibi) / np.nanmean(l_ibi)
+    ibi["system_level.any_module"] = l_ibi.tolist()
+    ibi["system_level.cv_any_module"] = np.nanstd(l_ibi) / np.nanmean(l_ibi)
+    ibi["system_level.cv_across_modules"] = np.nanstd(l_ibi_across_mods) / np.nanmean(l_ibi_across_mods)
+
+    # we are also interested in system-wide bursts that included all modules
+    try:
+        # l = np.vectorize(len)(h5f["ana.bursts.system_level.module_sequences"])
+        # deprication warning -.-
+        l = [len(seq) for seq in h5f["ana.bursts.system_level.module_sequences"]]
+        idx = np.where(np.array(l) >= len(h5f["ana.mods"]))
+        l_ibi = l_ibi[idx]
+        ibi["system_level.all_modules"] = l_ibi.tolist()
+        ibi["system_level.cv_all_modules"] = np.nanstd(l_ibi) / np.nanmean(l_ibi)
+    except Exception as e:
+        log.info("Failed to find system-wide ibis (where all modules are involved)")
+        log.info(e)
 
     if write_to_h5f:
         try:
@@ -423,7 +449,8 @@ def find_ibis(h5f, write_to_h5f=True):
             pass
         h5f["ana.ibi"] = ibi
 
-    return ibi
+    if return_res:
+        return ibi
 
 # ------------------------------------------------------------------------------ #
 # batch processing across realization
@@ -648,7 +675,7 @@ def batch_candidates_burst_times_and_isi(input_path, hot=False):
     for cdx, candidate in enumerate(
         tqdm(candidates, desc="Bursts and ISIs for files", leave=False)
     ):
-        h5f = h5.recursive_load(candidate, hot=hot)
+        h5f = h5.recursive_load(candidate, hot=hot, dtype=benedict)
         prepare_file(h5f)
         find_bursts_from_rates(h5f)
         find_isis(h5f)
@@ -668,27 +695,28 @@ def batch_candidates_burst_times_and_isi(input_path, hot=False):
         assert np.all(h5f["ana.mods"] == mods), "Modules differ between files"
 
         # copy over system level burst
-        b = res.ana.bursts.system_level
-        b.beg_times.extend(this_burst.system_level.beg_times)
-        b.end_times.extend(this_burst.system_level.end_times)
-        b.module_sequences.extend(this_burst.system_level.module_sequences)
+        b = res["ana.bursts.system_level"]
+        b["beg_times"].extend(this_burst["system_level.beg_times"])
+        b["end_times"].extend(this_burst["system_level.end_times"])
+        b["module_sequences"].extend(this_burst["system_level.module_sequences"])
 
         # copy over system-level ibi
-        res.ana.ibi.system_level.extend(this_ibi.system_level)
+        res["ana.ibi.system_level"].extend(this_ibi["system_level"])
 
-        for m_id in h5f["ana.mods"]:
+        for mdx, m_id in enumerate(h5f["ana.mod_ids"]):
+            m_dc = h5f["ana.mods"][mdx]
             # copy over module level bursts
-            b = res.ana.bursts.module_level[m_id]
-            b.beg_times.extend(this_burst.module_level[m_id].beg_times)
-            b.end_times.extend(this_burst.module_level[m_id].end_times)
+            b = res[f"ana.bursts.module_level.{m_dc}"]
+            b["beg_times"].extend(this_burst[f"module_level.{m_dc}.beg_times"])
+            b["end_times"].extend(this_burst[f"module_level.{m_dc}.end_times"])
 
             # and isis
-            i = res.ana.isi[m_id]
+            i = res[f"ana.isi.{m_dc}"]
             for var in ["all", "in_bursts", "out_bursts"]:
-                i[var].extend(this_isi[m_id][var])
+                i[var].extend(this_isi[m_dc][var])
 
             # and ibis
-            res.ana.ibi["module_level"][m_id].extend(this_ibi["module_level"][m_id])
+            res[f"ana.ibi.module_level.{m_dc}"].extend(this_ibi[f"module_level.{m_dc}"])
 
 
         if hot:
