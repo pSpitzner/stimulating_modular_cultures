@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-06-24 11:07:38
+# @Last Modified: 2021-06-24 17:42:12
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -133,6 +133,14 @@ def overview_dynamic(h5f, filenames=None):
 
     fig.tight_layout()
 
+    # print the ibi
+    try:
+        ah.find_ibis(h5f)
+        ibi = np.nanmean(h5f["ana.ibi.system_level.all_modules"])
+        log.info(f"System-wide IBI: {ibi:.2f} seconds")
+    except Exception as e:
+        log.debug(e)
+
     return fig
 
 
@@ -235,7 +243,7 @@ def plot_module_rates(h5f, ax=None, apply_formatting=True, mark_bursts=True):
         m_dc = h5f["ana.mods"][mdx]
         pop_rate = h5f[f"ana.rates.module_level"][m_dc]
         # log.info(f"Threshold from SNR: {ah.get_threshold_via_signal_to_noise_ratio(pop_rate)}")
-        log.info(f'CV {m_id}: {h5f[f"ana.rates.cv.module_level"][m_dc]:.3f}')
+        log.info(f'CV {m_dc}: {h5f[f"ana.rates.cv.module_level"][m_dc]:.3f}')
         mean_rate = np.nanmean(pop_rate)
         ax.plot(
             np.arange(0, len(pop_rate)) * dt,
@@ -292,7 +300,7 @@ def plot_system_rate(h5f, ax=None, apply_formatting=True):
         label=f"system: {mean_rate:.2f} Hz",
         color="black",
     )
-    log.info(f'CV  : {h5f["ana.rates.cv.system_level"]:.3f}')
+    log.info(f'CV system rate: {h5f["ana.rates.cv.system_level"]:.3f}')
 
     leg = ax.legend(loc=1)
 
@@ -337,8 +345,13 @@ def plot_bursts_into_timeseries(h5f, ax=None, apply_formatting=True):
             lw=0,
         )
 
-    beg_times = h5f["ana.bursts.system_level.beg_times"]
-    end_times = h5f["ana.bursts.system_level.end_times"]
+    # only interested in bursts that extended across all modules
+    beg_times = np.array(h5f["ana.bursts.system_level.beg_times"])
+    end_times = np.array(h5f["ana.bursts.system_level.end_times"])
+    l = [len(seq) for seq in h5f["ana.bursts.system_level.module_sequences"]]
+    idx = np.where(np.array(l) >= len(h5f["ana.mods"]))
+    beg_times = beg_times[idx]
+    end_times = end_times[idx]
 
     log.info(f"Found {len(beg_times)} system-wide bursts")
 
@@ -1240,7 +1253,11 @@ def plot_connectivity_layout(h5f, ax=None, apply_formatting=True):
             pos[n] = (h5f["data.neuron_pos_x"][idx], h5f["data.neuron_pos_y"][idx])
 
         # add edges
-        G.add_edges_from(h5f["data.connectivity_matrix_sparse"][:])
+        try:
+            # for large data, we might not have loaded the matrix.
+            G.add_edges_from(h5f["data.connectivity_matrix_sparse"][:])
+        except Exception as e:
+            log.info(e)
 
         # add to h5f
         h5f["ana.networkx"] = benedict()

@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-06-24 12:55:34
+# @Last Modified: 2021-06-24 17:40:49
 # ------------------------------------------------------------------------------ #
 
 
@@ -16,8 +16,8 @@ import numbers
 import numpy as np
 import pandas as pd
 
-import hi5 as h5
 # from hi5 import BetterDict
+import hi5 as h5
 from addict import Dict
 from benedict import benedict
 from tqdm import tqdm
@@ -31,6 +31,7 @@ log = logging.getLogger(__name__)
 
 try:
     from numba import jit, prange
+
     # raise ImportError
     log.info("Using numba for parallelizable functions")
 
@@ -47,6 +48,7 @@ try:
             NumbaDeprecationWarning,
             NumbaPendingDeprecationWarning,
         )
+
         warnings.simplefilter("ignore", category=NumbaDeprecationWarning)
         warnings.simplefilter("ignore", category=NumbaPendingDeprecationWarning)
     except:
@@ -76,6 +78,7 @@ except ImportError:
     def List(*args):
         return list(*args)
 
+
 # ------------------------------------------------------------------------------ #
 # Parallelize with dask
 # ------------------------------------------------------------------------------ #
@@ -85,6 +88,7 @@ from dask.distributed import Client, SSHCluster, LocalCluster, as_completed
 
 client = None
 cluster = None
+
 
 def init_dask():
     global cluster
@@ -108,12 +112,15 @@ def init_dask():
         cluster = LocalCluster(local_directory=f"{tempfile.gettempdir()}/dask/")
         client = Client(cluster)
 
+
 # ------------------------------------------------------------------------------ #
 # high level functions
 # ------------------------------------------------------------------------------ #
 
 
-def prepare_file(h5f, mod_colors="auto", hot=True):
+def prepare_file(
+    h5f, mod_colors="auto", hot=True, skip=None,
+):
     """
         modifies h5f in place! (not on disk, only in RAM)
 
@@ -128,7 +135,7 @@ def prepare_file(h5f, mod_colors="auto", hot=True):
     log.debug("Preparing File")
 
     if isinstance(h5f, str):
-        h5f = h5.recursive_load(h5f, hot=hot, dtype=benedict)
+        h5f = h5.recursive_load(h5f, hot=hot, skip=skip, dtype=benedict)
 
     h5f["ana"] = benedict()
     num_n = h5f["meta.topology_num_neur"]
@@ -208,9 +215,9 @@ def prepare_file(h5f, mod_colors="auto", hot=True):
         stim_str = "Off"
     else:
         try:
-            stim_neurons = np.unique(h5f["data.stimulation_times_as_list"][:, 0]).astype(
-                int
-            )
+            stim_neurons = np.unique(
+                h5f["data.stimulation_times_as_list"][:, 0]
+            ).astype(int)
             stim_mods = np.unique(h5f["data.neuron_module_id"][stim_neurons])
             stim_str = f"On {str(tuple(stim_mods)).replace(',)', ')')}"
         except Exception as e:
@@ -237,7 +244,7 @@ def find_bursts_from_rates(
     rate_threshold=7.5,  # Hz
     merge_threshold=0.1,  # seconds, merge bursts if separated by less than this
     write_to_h5f=True,
-    return_res=False
+    return_res=False,
 ):
     """
         Based on module-level firing rates, find bursting events.
@@ -378,6 +385,7 @@ def find_isis(h5f, write_to_h5f=True, return_res=False):
     if return_res:
         return isi
 
+
 def find_ibis(h5f, write_to_h5f=True, return_res=False):
     """
         What are the the inter-burst-intervals? End-of-burst to start-of-burst
@@ -409,7 +417,6 @@ def find_ibis(h5f, write_to_h5f=True, return_res=False):
         ibi[f"module_level.{m_dc}"] = l_ibi
         l_ibi_across_mods.extend(l_ibi)
 
-
     # and again for system-wide, no matter how many modules involved
     try:
         b = np.array(h5f["ana.bursts.system_level.beg_times"])
@@ -427,15 +434,22 @@ def find_ibis(h5f, write_to_h5f=True, return_res=False):
 
     ibi["system_level.any_module"] = l_ibi.tolist()
     ibi["system_level.cv_any_module"] = np.nanstd(l_ibi) / np.nanmean(l_ibi)
-    ibi["system_level.cv_across_modules"] = np.nanstd(l_ibi_across_mods) / np.nanmean(l_ibi_across_mods)
+    ibi["system_level.cv_across_modules"] = np.nanstd(l_ibi_across_mods) / np.nanmean(
+        l_ibi_across_mods
+    )
 
     # we are also interested in system-wide bursts that included all modules
     try:
         # l = np.vectorize(len)(h5f["ana.bursts.system_level.module_sequences"][1:])
         # deprication warning -.-
-        l = [len(seq) for seq in h5f["ana.bursts.system_level.module_sequences"][1:]]
-        idx = np.where(np.array(l) >= len(h5f["ana.mods"]))
-        l_ibi = l_ibi[idx]
+        slen = [len(seq) for seq in h5f["ana.bursts.system_level.module_sequences"]]
+        idx = np.where(np.array(slen) >= len(h5f["ana.mods"]))
+        b = b[idx]
+        e = e[idx]
+        if len(b) < 2:
+            l_ibi = np.array([])
+        else:
+            l_ibi = e[1:] - b[:-1]
         ibi["system_level.all_modules"] = l_ibi.tolist()
         ibi["system_level.cv_all_modules"] = np.nanstd(l_ibi) / np.nanmean(l_ibi)
     except Exception as e:
@@ -444,13 +458,14 @@ def find_ibis(h5f, write_to_h5f=True, return_res=False):
 
     if write_to_h5f:
         try:
-            h5f.ana.ibi.clear()
+            h5f["ana.ibi"].clear()
         except:
             pass
         h5f["ana.ibi"] = ibi
 
     if return_res:
         return ibi
+
 
 # ------------------------------------------------------------------------------ #
 # batch processing across realization
@@ -524,7 +539,9 @@ def batch_pd_sequence_length_probabilities(list_of_filenames):
     return df
 
 
-def batch_pd_bursts(load_from_disk=False, list_of_filenames=None, df_path=None, client=client):
+def batch_pd_bursts(
+    load_from_disk=False, list_of_filenames=None, df_path=None, client=client
+):
     """
         Create a pandas data frame (long form, every row corresponds to one burst.
         Remaining columns include meta data, conditions etc.
@@ -564,7 +581,6 @@ def batch_pd_bursts(load_from_disk=False, list_of_filenames=None, df_path=None, 
 
     assert len(candidates) > 0, f"Are the filenames correct?"
 
-
     if client is None:
         res = []
         for candidate in tqdm(candidates, desc="Burst duration for files"):
@@ -572,8 +588,13 @@ def batch_pd_bursts(load_from_disk=False, list_of_filenames=None, df_path=None, 
     else:
         # use dask to do this in parallel
         from dask.distributed import as_completed
+
         futures = client.map(_dfs_from_realization, candidates)
-        for future in tqdm(as_completed(futures), total=len(futures), desc="Burst duration for files (using dask)"):
+        for future in tqdm(
+            as_completed(futures),
+            total=len(futures),
+            desc="Burst duration for files (using dask)",
+        ):
             pass
         res = client.gather(futures)
 
@@ -586,6 +607,7 @@ def batch_pd_bursts(load_from_disk=False, list_of_filenames=None, df_path=None, 
         log.debug(e)
 
     return res
+
 
 def _dfs_from_realization(candidate):
     columns = [
@@ -717,7 +739,6 @@ def batch_candidates_burst_times_and_isi(input_path, hot=False):
 
             # and ibis
             res[f"ana.ibi.module_level.{m_dc}"].extend(this_ibi[f"module_level.{m_dc}"])
-
 
         if hot:
             # only close the last file (which we opened), and let's hope no other file
@@ -1538,8 +1559,6 @@ def sequence_length_histogram_from_pd_df(df, keepcols=[]):
 #     df_out = pd.DataFrame(columns=df.columns)
 
 
-
-
 def _pd_are_row_entries_the_same(df):
     assert len(df.shape) == 1
     arr = df.to_numpy()
@@ -1547,5 +1566,3 @@ def _pd_are_row_entries_the_same(df):
         return True
     else:
         return False
-
-
