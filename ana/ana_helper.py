@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-06-24 11:00:47
+# @Last Modified: 2021-06-24 12:55:34
 # ------------------------------------------------------------------------------ #
 
 
@@ -431,9 +431,9 @@ def find_ibis(h5f, write_to_h5f=True, return_res=False):
 
     # we are also interested in system-wide bursts that included all modules
     try:
-        # l = np.vectorize(len)(h5f["ana.bursts.system_level.module_sequences"])
+        # l = np.vectorize(len)(h5f["ana.bursts.system_level.module_sequences"][1:])
         # deprication warning -.-
-        l = [len(seq) for seq in h5f["ana.bursts.system_level.module_sequences"]]
+        l = [len(seq) for seq in h5f["ana.bursts.system_level.module_sequences"][1:]]
         idx = np.where(np.array(l) >= len(h5f["ana.mods"]))
         l_ibi = l_ibi[idx]
         ibi["system_level.all_modules"] = l_ibi.tolist()
