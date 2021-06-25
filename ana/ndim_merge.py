@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-06-24 20:45:47
+# @Last Modified: 2021-06-25 09:58:09
 #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into an ndim array
@@ -29,6 +29,7 @@ import numpy as np
 from collections import OrderedDict
 from tqdm import tqdm
 from benedict import benedict
+
 # from addict import Dict
 
 log = logging.getLogger(__name__)
@@ -48,7 +49,7 @@ d_obs = OrderedDict()
 d_obs["jA"] = "/meta/dynamics_jA"
 d_obs["jG"] = "/meta/dynamics_jG"
 # d_obs["jM"] = "/meta/dynamics_jM"
-# d_obs["rate"] = "/meta/dynamics_rate"
+d_obs["rate"] = "/meta/dynamics_rate"
 # d_obs["tD"] = "/meta/dynamics_tD"
 # d_obs["alpha"] = "/meta/topology_alpha"
 # d_obs["k_inter"] = "/meta/topology_k_inter"
@@ -77,7 +78,9 @@ def all_in_one(candidate=None):
         ]
 
     # load and process
-    h5f = ah.prepare_file(candidate, hot=False)
+    h5f = ah.prepare_file(
+        candidate, hot=False, skip=["connectivity_matrix", "connectivity_matrix_sparse"]
+    )
     ah.find_bursts_from_rates(h5f)
     ah.find_ibis(h5f)
 
@@ -112,7 +115,9 @@ def all_in_one(candidate=None):
         res["ibis_module"] = np.nanmean(ibis_module)
         res["ibis_system"] = np.nanmean(h5f["ana.ibi.system_level.all_modules"])
         res["ibis_cv_module"] = np.nanmean(h5f["ana.ibi.system_level.cv_any_module"])
-        res["ibis_cv_system"] = np.nanmean(h5f["ana.ibi.system_level.cv_across_modules"])
+        res["ibis_cv_system"] = np.nanmean(
+            h5f["ana.ibi.system_level.cv_across_modules"]
+        )
     except KeyError as e:
         log.error(h5f.keypaths())
         raise e
@@ -136,6 +141,7 @@ l_ana_keys += all_in_one(candidate=None)
 # arguments
 # ------------------------------------------------------------------------------ #
 
+
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Merge Multidm")
     parser.add_argument(
@@ -156,6 +162,7 @@ def parse_arguments():
 # ------------------------------------------------------------------------------ #
 futures = None
 
+
 def main():
     args = parse_arguments()
 
@@ -171,7 +178,6 @@ def main():
     else:
         candidates = glob.glob(full_path(args.input_path))
         log.info(f"{args.input_path} is a (list of) file")
-
 
     merge_path = full_path(args.output_path)
     log.info(f"Merging (overwriting) to {merge_path}")
@@ -314,6 +320,7 @@ def main():
 
     return res_ndim, d_obs, d_axes
 
+
 # ------------------------------------------------------------------------------ #
 # helper
 # ------------------------------------------------------------------------------ #
@@ -321,7 +328,7 @@ def main():
 # we have to pass global variables so that they are available in each worker.
 # simple set them as default arguments so only `candidate` varies between workers
 def analyse_candidate(candidate, d_axes, d_obs):
-# for candidate in tqdm(l_valid, desc="Files"):
+    # for candidate in tqdm(l_valid, desc="Files"):
     index = ()
     for obs in d_axes.keys():
         # get value
@@ -361,7 +368,6 @@ def full_path(path):
     return os.path.abspath(os.path.expanduser(path))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     dh.init_dask()
     res_ndim, d_obs, d_axes = main()
-
