@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-06-24 17:40:49
+# @Last Modified: 2021-06-24 19:43:22
 # ------------------------------------------------------------------------------ #
 
 
@@ -28,12 +28,14 @@ import warnings
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)-8s [%(name)s] %(message)s")
 log = logging.getLogger(__name__)
+warnings.filterwarnings("ignore")  # suppress numpy warnings
 
 try:
     from numba import jit, prange
 
     # raise ImportError
-    log.info("Using numba for parallelizable functions")
+    # let's not print this 256 times on import when using 256 threads :P
+    # log.info("Using numba for parallelizable functions")
 
     try:
         from numba.typed import List
@@ -55,7 +57,7 @@ try:
         pass
 
 except ImportError:
-    log.info("Numba not available, skipping parallelization")
+    log.info("Numba not available, skipping compilation")
     # replace numba functions if numba not available:
     # we only use jit and prange
     # helper needed for decorators with kwargs
@@ -77,40 +79,6 @@ except ImportError:
 
     def List(*args):
         return list(*args)
-
-
-# ------------------------------------------------------------------------------ #
-# Parallelize with dask
-# ------------------------------------------------------------------------------ #
-
-from dask_jobqueue import SGECluster
-from dask.distributed import Client, SSHCluster, LocalCluster, as_completed
-
-client = None
-cluster = None
-
-
-def init_dask():
-    global cluster
-    global client
-
-    if "sohrab" in os.uname().nodename:
-        cluster = SGECluster(
-            cores=1,
-            memory="12GB",
-            queue="rostam.q",
-            death_timeout=120,
-            log_directory="./log/dask/",
-            local_directory="/scratch01.local/pspitzner/dask/",
-            interface="ib0",
-            n_workers=256,
-            extra=[
-                '--preload \'import sys; sys.path.append("./ana/"); sys.path.append("/home/pspitzner/code/pyhelpers/");\''
-            ],
-        )
-    else:
-        cluster = LocalCluster(local_directory=f"{tempfile.gettempdir()}/dask/")
-        client = Client(cluster)
 
 
 # ------------------------------------------------------------------------------ #
@@ -540,7 +508,7 @@ def batch_pd_sequence_length_probabilities(list_of_filenames):
 
 
 def batch_pd_bursts(
-    load_from_disk=False, list_of_filenames=None, df_path=None, client=client
+    load_from_disk=False, list_of_filenames=None, df_path=None, client=None
 ):
     """
         Create a pandas data frame (long form, every row corresponds to one burst.
