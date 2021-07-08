@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-06-24 18:23:02
-# @Last Modified: 2021-06-24 19:38:02
+# @Last Modified: 2021-07-08 17:02:45
 # ------------------------------------------------------------------------------ #
 
 import os
@@ -15,7 +15,7 @@ client = None
 cluster = None
 
 
-def init_dask():
+def init_dask(n_workers = 256):
     """
         initializer for dask. never call this in the main part of your script, this
         will create a bunch of errors.
@@ -40,11 +40,40 @@ def init_dask():
             log_directory="./log/dask/",
             local_directory="/scratch01.local/pspitzner/dask/",
             interface="ib0",
-            n_workers=256,
+            n_workers=n_workers,
             extra=[
                 '--preload \'import sys; sys.path.append("./ana/"); sys.path.append("/home/pspitzner/code/pyhelpers/");\''
             ],
         )
+    elif "tahmineh" in os.uname().nodename:
+        cluster = SGECluster(
+            cores=32,
+            memory="192GB",
+            processes=16,
+            job_extra=["-pe mvapich2-sam 32"],
+            log_directory="/scratch01.local/pspitzner/dask/logs",
+            local_directory="/scratch01.local/pspitzner/dask/scratch",
+            interface="ib0",
+            n_workers=n_workers,
+            extra=[
+                '--preload \'import sys; sys.path.append("./ana/"); sys.path.append("/home/pspitzner/code/pyhelpers/");\''
+            ],
+        )
+    elif "rudabeh" in os.uname().nodename:
+        cluster = SGECluster(
+            cores=32,
+            memory="192GB",
+            processes=16,
+            job_extra=["-pe mvapich2-zal 32"],
+            log_directory="/scratch01.local/pspitzner/dask/logs",
+            local_directory="/scratch01.local/pspitzner/dask/scratch",
+            interface="ib0",
+            n_workers=n_workers,
+            extra=[
+                '--preload \'import sys; sys.path.append("./ana/"); sys.path.append("/home/pspitzner/code/pyhelpers/");\''
+            ],
+        )
+
     else:
         cluster = LocalCluster(local_directory=f"{tempfile.gettempdir()}/dask/")
         client = Client(cluster)

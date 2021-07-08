@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-07-08 15:51:55
+# @Last Modified: 2021-07-08 21:44:19
 # ------------------------------------------------------------------------------ #
 
 
@@ -633,6 +633,7 @@ def _dfs_from_realization(candidate):
     columns = [
         "Duration",
         "Sequence length",
+        "Fraction of neurons",
         "First module",
         "Stimulation",
         "Connections",
@@ -674,17 +675,25 @@ def _dfs_from_realization(candidate):
     else:
         find_bursts_from_rates(h5f, rate_threshold=7.5)
 
+    find_participating_fraction_in_bursts(h5f)
+
     data = h5f["ana.bursts.system_level"]
-    for idx in range(0, len(data.beg_times)):
-        duration = data.end_times[idx] - data.beg_times[idx]
-        seq_len = len(data.module_sequences[idx])
-        first_mod = data.module_sequences[idx][0]
+    bt = h5f["ana.bursts.system_level.beg_times"]
+    et = h5f["ana.bursts.system_level.end_times"]
+    ms = h5f["ana.bursts.system_level.module_sequences"]
+    pf = h5f["ana.bursts.system_level.participating_fraction"]
+    for idx in range(0, len(bt)):
+        duration = et[idx] - bt[idx]
+        seq_len = len(ms[idx])
+        first_mod = ms[idx][0]
+        fraction = pf[idx]
         df = df.append(
             pd.DataFrame(
                 data=[
                     [
                         duration,
                         seq_len,
+                        pf,
                         first_mod,
                         stim,
                         num_connections,
@@ -935,7 +944,7 @@ def _functional_complexity(spikes, selects = None, num_bins = 20):
         selects = slice(None)
 
     # use 40 ms time window by default
-    counts = ah.binned_spike_count(spikes, 40/1000)
+    counts = binned_spike_count(spikes, 40/1000)
     rij = np.corrcoef(counts)
     np.fill_diagonal(rij, 0)
     rij = rij.flatten()
