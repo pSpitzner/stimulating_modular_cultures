@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-07-08 15:28:58
+# @Last Modified: 2021-07-08 15:51:55
 # ------------------------------------------------------------------------------ #
 
 
@@ -487,7 +487,6 @@ def find_participating_fraction_in_bursts(h5f, write_to_h5f=True, return_res=Fal
     if return_res:
         return bursts
 
-
 # ------------------------------------------------------------------------------ #
 # batch processing across realization
 # ------------------------------------------------------------------------------ #
@@ -925,6 +924,29 @@ def _inter_spike_intervals(spikes_2d, beg_times=None, end_times=None):
         cv_out_bursts=cv_out_bursts,
     )
 
+
+def _functional_complexity(spikes, selects = None, num_bins = 20):
+    # Zamora-Lopez et al 2016
+    def fc(prob, m):
+        c = 1 - np.sum(np.fabs(prob-1/m)) * m / 2 / (m-1)
+        return c
+
+    if selects is None:
+        selects = slice(None)
+
+    # use 40 ms time window by default
+    counts = ah.binned_spike_count(spikes, 40/1000)
+    rij = np.corrcoef(counts)
+    np.fill_diagonal(rij, 0)
+    rij = rij.flatten()
+
+    bw = 1.0 / num_bins
+    bins = np.arange(0, 1+0.1*bw, bw)
+
+    prob, _ = np.histogram(rij, bins=bins)
+    prob = prob / np.sum(prob)
+
+    return fc(prob, num_bins)
 
 @jit(nopython=True, parallel=True, fastmath=True, cache=True)
 def binned_spike_count(spiketimes, bin_size, length=None):

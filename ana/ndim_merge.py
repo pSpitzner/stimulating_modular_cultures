@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-06-25 09:58:09
+# @Last Modified: 2021-07-08 15:56:17
 #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into an ndim array
@@ -75,6 +75,7 @@ def all_in_one(candidate=None):
             "ibis_module",
             "ibis_cv_system",
             "ibis_cv_module",
+            "functional_complexity",
         ]
 
     # load and process
@@ -121,6 +122,12 @@ def all_in_one(candidate=None):
     except KeyError as e:
         log.error(h5f.keypaths())
         raise e
+
+    try:
+        res["functional_complexity"] = ah._functional_complexity(spikes = h5f["data.spiketimes"][:])
+    except Exception as e:
+        log.debug(e)
+        res["functional_complexity"] = np.nan
 
     h5.close_hot(h5f)
     h5f.clear()
