@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-07-08 12:01:46
+# @Last Modified: 2021-07-08 15:28:58
 # ------------------------------------------------------------------------------ #
 
 
@@ -478,6 +478,7 @@ def find_participating_fraction_in_bursts(h5f, write_to_h5f=True, return_res=Fal
     selects = h5f["ana.neuron_ids"]
     bt = bursts["system_level.beg_times"]
     et = bursts["system_level.end_times"]
+    fraction = np.zeros(len(bt))
     for bdx in range(0, len(bt)):
         n_ids = np.where((bt[bdx] <= spikes[selects]) & (spikes[selects] <= et[bdx]))[0]
         fraction[bdx] = len(np.unique(n_ids)) / len(selects)

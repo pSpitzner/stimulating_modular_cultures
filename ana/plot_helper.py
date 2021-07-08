@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-07-08 13:57:50
+# @Last Modified: 2021-07-08 15:31:16
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -1155,6 +1155,7 @@ def plot_distribution_isi(
 
 def plot_distribution_participating_fraction(
     h5f, ax=None, apply_formatting=True,
+    num_bins=20,
 ):
     """
         Plot the fraction of neurons participating in a burst
@@ -1172,16 +1173,19 @@ def plot_distribution_participating_fraction(
     fractions = h5f["ana.bursts.system_level.participating_fraction"]
     log.info(f"Mean fraction: {np.nanmean(fractions)*100:.1f}%")
 
+    bw = 1.0 / num_bins
+    bins = np.arange(0, 1+0.1*bw, bw)
+
     kwargs = {
         "ax": ax,
         "kde": False,
         # "binwidth": 2.5 / 1000,  # ms
         # "binrange": (0.06, 0.12),
-        # "bins": np.linspace(-3, 3, num=200),
+        "bins": bins,
         # "stat": "density",
         "stat": "probability",
         # 'multiple' : 'stack',
-        "element": "poly",
+        "element": "step",
     }
 
     sns.histplot(
