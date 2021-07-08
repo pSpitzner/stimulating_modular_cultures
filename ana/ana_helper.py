@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-06-24 19:43:22
+# @Last Modified: 2021-07-08 12:01:46
 # ------------------------------------------------------------------------------ #
 
 
@@ -92,6 +92,13 @@ def prepare_file(
     """
         modifies h5f in place! (not on disk, only in RAM)
 
+        # Parameters
+        h5f           : file path as str or existing h5f benedict
+        mod_colors    : "auto" or False (all back) or list of colors
+        hot           : wether to load data to ram (true) or fetch as needed (false)
+        skip          : lists of names of datasets of the h5file that are excluded,
+                        if `h5f` is a path
+
         # adds the following attributes:
         h5f["ana.mod_sort"]   : function that maps from neuron_id to sorted id, by module
         h5f["ana.mods"]       : list of unique module ids
@@ -130,7 +137,7 @@ def prepare_file(
         h5f["ana.mod_sort"] = lambda x: mod_sorted[x]
     except Exception as e:
         log.debug(e)
-        h5f["ana.mods"] = ["single_module"]
+        h5f["ana.mods"] = ["mod_0"]
         h5f["ana.mod_ids"] = [0]
         h5f["ana.mod_sort"] = lambda x: x
 
@@ -209,7 +216,7 @@ def find_bursts_from_rates(
     h5f,
     bs_large=0.02,  # seconds, time bin size to smooth over (gaussian kernel)
     bs_small=0.0005,  # seconds, small bin size
-    rate_threshold=7.5,  # Hz
+    rate_threshold=None,  # default 7.5 Hz
     merge_threshold=0.1,  # seconds, merge bursts if separated by less than this
     write_to_h5f=True,
     return_res=False,
@@ -228,6 +235,9 @@ def find_bursts_from_rates(
 
     assert h5f["ana"] is not None, "`prepare_file(h5f)` first!"
     assert write_to_h5f or return_res
+
+    if rate_threshold is None:
+        rate_threshold = 7.5
 
     spikes = h5f["data.spiketimes"]
 
@@ -332,6 +342,7 @@ def find_isis(h5f, write_to_h5f=True, return_res=False):
     for mdx, m_id in enumerate(h5f["ana.mod_ids"]):
         m_dc = h5f["ana.mods"][mdx]
         selects = np.where(h5f["data.neuron_module_id"][:] == m_id)[0]
+        selects = selects[np.isin(selects, h5f["ana.neuron_ids"])] # sensor
         spikes_2d = h5f["data.spiketimes"][selects]
         try:
             b = h5f[f"ana.bursts.module_level.{m_dc}.beg_times"]
@@ -433,6 +444,47 @@ def find_ibis(h5f, write_to_h5f=True, return_res=False):
 
     if return_res:
         return ibi
+
+
+def find_participating_fraction_in_bursts(h5f, write_to_h5f=True, return_res=False):
+    """
+        Once we have found bursts, check what is the fraction of neurons participating
+        in every burst
+    """
+
+    assert "ana.bursts" in h5f.keypaths(), "run `find_bursts_from_rates` first"
+    assert write_to_h5f or return_res
+
+    spikes = h5f["data.spiketimes"]
+    bursts = h5f["ana.bursts"]
+    if not write_to_h5f:
+        bursts = bursts.clone()
+
+    for mdx, m_id in enumerate(h5f["ana.mod_ids"]):
+        m_dc = h5f["ana.mods"][mdx]
+        selects = np.where(h5f["data.neuron_module_id"][:] == m_id)[0]
+        selects = selects[np.isin(selects, h5f["ana.neuron_ids"])]  # sensor
+        bt = bursts[f"module_level.{m_dc}.beg_times"]
+        et = bursts[f"module_level.{m_dc}.end_times"]
+        fraction = np.zeros(len(bt))
+        for bdx in range(0, len(bt)):
+            n_ids = np.where(
+                (bt[bdx] <= spikes[selects]) & (spikes[selects] <= et[bdx])
+            )[0]
+            fraction[bdx] = len(np.unique(n_ids)) / len(selects)
+        bursts[f"module_level.{m_dc}.participating_fraction"] = fraction.tolist()
+
+    # system level
+    selects = h5f["ana.neuron_ids"]
+    bt = bursts["system_level.beg_times"]
+    et = bursts["system_level.end_times"]
+    for bdx in range(0, len(bt)):
+        n_ids = np.where((bt[bdx] <= spikes[selects]) & (spikes[selects] <= et[bdx]))[0]
+        fraction[bdx] = len(np.unique(n_ids)) / len(selects)
+    bursts["system_level.participating_fraction"] = fraction.tolist()
+
+    if return_res:
+        return bursts
 
 
 # ------------------------------------------------------------------------------ #
@@ -874,6 +926,51 @@ def _inter_spike_intervals(spikes_2d, beg_times=None, end_times=None):
 
 
 @jit(nopython=True, parallel=True, fastmath=True, cache=True)
+def binned_spike_count(spiketimes, bin_size, length=None):
+    """
+        Similar to `population_rate`, but we get a number of spike counts, per neuron
+        as needed for e.g. cross-correlations.
+
+        Parameters
+        ----------
+        spiketimes :
+            np array with first dim neurons, second dim spiketimes. nan-padded
+        bin_size :
+            float, in units of spiketimes
+        length :
+            duration of output trains, in units of spiketimes. Default: None,
+            uses last spiketime
+
+        Returns
+        -------
+        counts : 2d array
+            time series of the counted number of spikes per bin,
+            one row for each neuron, in steps of bin_size
+    """
+
+    num_n = spiketimes.shape[0]
+
+    if length is not None:
+        num_bins = int(np.ceil(length / bin_size))
+    else:
+        t_min = 0.0
+        t_max = np.nanmax(spiketimes)
+        num_bins = int(np.ceil((t_max - t_min) / bin_size))
+
+    counts = np.zeros(shape=(num_n, num_bins), dtype="int64")
+
+    for n_id in range(0, num_n):
+        train = spiketimes[n_id]
+        for t in train:
+            if not np.isfinite(t):
+                break
+            t_idx = int(t / bin_size)
+            counts[n_id, t_idx] += 1
+
+    return counts
+
+
+@jit(nopython=True, parallel=True, fastmath=True, cache=True)
 def population_rate(spiketimes, bin_size, length=None):
     """
         Calculate the activity across the whole population. naive binning,
@@ -886,6 +983,9 @@ def population_rate(spiketimes, bin_size, length=None):
             np array with first dim neurons, second dim spiketimes. nan-padded
         bin_size :
             float, in units of spiketimes
+        length :
+            duration of output, in units of spiketimes. Default: None,
+            uses last spiketime
 
         Returns
         -------

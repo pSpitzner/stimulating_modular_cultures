@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-06-24 17:42:12
+# @Last Modified: 2021-07-08 13:57:50
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -98,13 +98,12 @@ def overview_topology(h5f, filenames=None, skip_graph=False):
         axes[1, 2].set_aspect(1)
         axes[1, 2].autoscale()
 
-
     fig.tight_layout()
 
     return fig
 
 
-def overview_dynamic(h5f, filenames=None):
+def overview_dynamic(h5f, filenames=None, threshold=None):
 
     # fig, axes = plt.subplots(4, 1, sharex=True, figsize=(4, 7))
     fig = plt.figure(figsize=(4, 7))
@@ -119,11 +118,17 @@ def overview_dynamic(h5f, filenames=None):
     if not "ana" in h5f.keypaths():
         ah.prepare_file(h5f)
 
+    if threshold is not None:
+        # (re) do the detection so that we do not have default values
+        ah.find_bursts_from_rates(h5f, rate_threshold=threshold)
+        ah.find_ibis(h5f)
+
     plot_parameter_info(h5f, axes[0])
     plot_raster(h5f, axes[1])
     plot_module_rates(h5f, axes[2])
     plot_system_rate(h5f, axes[2])
-    plot_bursts_into_timeseries(h5f, axes[3])
+    ax = plot_bursts_into_timeseries(h5f, axes[3])
+    _style_legend(ax.legend(loc=1))
     ax = plot_initiation_site(h5f, axes[4])
     ax.xaxis.set_major_locator(plt.NullLocator())
     ax.xaxis.set_minor_locator(plt.NullLocator())
@@ -133,13 +138,7 @@ def overview_dynamic(h5f, filenames=None):
 
     fig.tight_layout()
 
-    # print the ibi
-    try:
-        ah.find_ibis(h5f)
-        ibi = np.nanmean(h5f["ana.ibi.system_level.all_modules"])
-        log.info(f"System-wide IBI: {ibi:.2f} seconds")
-    except Exception as e:
-        log.debug(e)
+    plot_distribution_participating_fraction(h5f)
 
     return fig
 
@@ -195,6 +194,13 @@ def plot_raster(h5f, ax=None, apply_formatting=True, sort_by_module=True):
 
     ax.set_rasterization_zorder(-1)
 
+    if len(h5f["ana.neuron_ids"]) > 500:
+        marker = "."
+        kwargs = dict(alpha=1, markersize=1.0, markeredgewidth=0)
+    else:
+        marker = "|"
+        kwargs = dict(alpha=0.5)
+
     for n_id in h5f["ana.neuron_ids"]:
 
         if sort_by_module:
@@ -208,10 +214,9 @@ def plot_raster(h5f, ax=None, apply_formatting=True, sort_by_module=True):
         ax.plot(
             spikes,
             n_id_sorted * np.ones(len(spikes)),
-            "|",
-            alpha=0.5,
-            zorder=-2,
+            marker,
             color=h5f["ana.mod_colors"][m_id],
+            **kwargs,
         )
 
     if apply_formatting:
@@ -302,13 +307,9 @@ def plot_system_rate(h5f, ax=None, apply_formatting=True):
     )
     log.info(f'CV system rate: {h5f["ana.rates.cv.system_level"]:.3f}')
 
-    leg = ax.legend(loc=1)
+    _style_legend(ax.legend(loc=1))
 
     if apply_formatting:
-        leg.get_frame().set_linewidth(0.0)
-        leg.get_frame().set_facecolor("#e4e5e6")
-        leg.get_frame().set_alpha(0.95)
-
         ax.margins(x=0, y=0)
         ax.set_ylabel("Rates [Hz]")
         ax.set_xlabel("Time [seconds]")
@@ -325,17 +326,32 @@ def plot_bursts_into_timeseries(h5f, ax=None, apply_formatting=True):
     else:
         fig = ax.get_figure()
 
+    # calculate ibi to make a meaningful legend
+    if "ana.ibi" not in h5f.keypaths():
+        try:
+            ah.find_ibis(h5f)
+        except Exception as e:
+            log.debug(e)
+
     pad = 3
     for mdx, m_id in enumerate(h5f["ana.mod_ids"]):
         m_dc = h5f["ana.mods"][mdx]
         beg_times = h5f[f"ana.bursts.module_level.{m_dc}.beg_times"]
         end_times = h5f[f"ana.bursts.module_level.{m_dc}.end_times"]
+
+        num_b = len(beg_times)
+        try:
+            ibi = np.nanmean(h5f[f"ana.ibi.module_level.{m_dc}"])
+        except:
+            ibi = np.nan
+
         ax.plot(
             beg_times,
             np.ones(len(beg_times)) * (pad + 1 + m_id),
             marker="4",
             color=h5f["ana.mod_colors"][m_id],
             lw=0,
+            label=f"{num_b} bursts, ~{ibi:.1f} s",
         )
         ax.plot(
             end_times,
@@ -353,9 +369,22 @@ def plot_bursts_into_timeseries(h5f, ax=None, apply_formatting=True):
     beg_times = beg_times[idx]
     end_times = end_times[idx]
 
-    log.info(f"Found {len(beg_times)} system-wide bursts")
+    num_b = len(beg_times)
+    try:
+        ibi = np.nanmean(h5f[f"ana.ibi.system_level.all_modules"])
+    except:
+        ibi = np.nan
+    log.info(f"Found {num_b} system-wide bursts")
+    log.info(f"System-wide IBI: {ibi:.2f} seconds")
 
-    ax.plot(beg_times, np.ones(len(beg_times)) * (pad), marker="4", color="black", lw=0)
+    ax.plot(
+        beg_times,
+        np.ones(len(beg_times)) * (pad),
+        marker="4",
+        color="black",
+        lw=0,
+        label=f"{num_b} bursts, ~{ibi:.1f} s",
+    )
     ax.plot(end_times, np.ones(len(end_times)) * (pad), marker="3", color="black", lw=0)
 
     ax.set_ylim(0, len(h5f["ana.mods"]) + 2 * pad)
@@ -401,9 +430,9 @@ def plot_parameter_info(h5f, ax=None, apply_formatting=True, add=[]):
 
     try:
         dat.append(["", ""])
-        # dat.append(["Noise Rate [Hz]", h5f["meta.dynamics_rate"]])
         dat.append(["AMPA [mV]", h5f["meta.dynamics_jA"]])
         dat.append(["GABA [mV]", h5f["meta.dynamics_jG"]])
+        dat.append(["Noise Rate [Hz]", h5f["meta.dynamics_rate"]])
         dat.append(
             [
                 "E/I",
@@ -861,6 +890,81 @@ def _stimulation_color_palette():
 # ------------------------------------------------------------------------------ #
 
 
+def plot_distribution_correlation_coefficients(
+    h5f, ax=None, apply_formatting=True, selects=None,
+    num_bins = 20,
+):
+    """
+    Uses (naively) binned spike counts per neuron to calculate correlation coefficients
+    with `numpy.corrcoef`.
+
+    # Parameters
+    selects : if None, all neurons are used, else `selected` is used for slicing.
+    num_bins : number of bins to discretize correlation coefficients.
+    """
+
+    assert "data.spiketimes" in h5f.keypaths()
+    if selects is None:
+        selects = slice(None)
+    spikes = h5f["data.spiketimes"][selects, :]
+
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.get_figure()
+
+    counts = ah.binned_spike_count(spikes, 40/1000)
+    rij = np.corrcoef(counts)
+    np.fill_diagonal(rij, 0)
+    rij = rij.flatten()
+
+    bw = 1.0 / num_bins
+    bins = np.arange(0, 1+0.1*bw, bw)
+
+
+    try:
+        color=h5f["ana.mod_colors"][0] if len(h5f["ana.mod_colors"]) == 1 else "black",
+    except:
+        color = "black";
+
+    kwargs = {
+        "ax": ax,
+        "kde": False,
+        "bins": bins,
+        "stat": "density",
+        # 'multiple' : 'stack',
+        "element": "step",
+    }
+
+    sns.histplot(
+        data=rij,
+        color=color,
+        alpha=0.2,
+        **kwargs,
+    )
+
+    if apply_formatting:
+        ax.set_xlabel(r"Correlation coefficients $r_{ij}$")
+        ax.set_ylabel(r"Prob. density $P(r_{ij})$")
+        # ax.legend()
+        fig.tight_layout()
+
+
+
+    # lets also calculate gorkas functional complexity measure
+    def functional_complexity(prob, m):
+        c = 1 - np.sum(np.fabs(prob-1/m)) * m / 2 / (m-1)
+        return c
+
+    prob, _ = np.histogram(rij, bins=bins)
+    prob = prob / np.sum(prob)
+
+    log.info(f"Functional Complexity: {functional_complexity(prob, num_bins):.2f}")
+
+    return ax
+
+
+
 def plot_distribution_burst_duration(
     h5f, ax=None, apply_formatting=True, filenames=None
 ):
@@ -959,7 +1063,7 @@ def plot_distribution_isi(
     """
     assert which in ["all", "in_bursts", "out_bursts"]
 
-    if h5f["ana.isi"] is None:
+    if "ana.isi" not in h5f.keypaths():
         log.info("Finding ISIS")
         assert which == "all", "`find_bursts` before plotting isis other than `all`"
         if not "ana.bursts" in h5f.keypaths():
@@ -1044,6 +1148,55 @@ def plot_distribution_isi(
         ax.set_xlabel(r"Inter-spike Interval (seconds)")
         ax.set_ylabel(r"Prob. Density (log ISI)")
         ax.legend()
+        fig.tight_layout()
+
+    return ax
+
+
+def plot_distribution_participating_fraction(
+    h5f, ax=None, apply_formatting=True,
+):
+    """
+        Plot the fraction of neurons participating in a burst
+    """
+
+    assert "ana.bursts" in h5f.keypaths()
+    if "ana.bursts.system_level.participating_fraction" not in h5f.keypaths():
+        ah.find_participating_fraction_in_bursts(h5f)
+
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.get_figure()
+
+    fractions = h5f["ana.bursts.system_level.participating_fraction"]
+    log.info(f"Mean fraction: {np.nanmean(fractions)*100:.1f}%")
+
+    kwargs = {
+        "ax": ax,
+        "kde": False,
+        # "binwidth": 2.5 / 1000,  # ms
+        # "binrange": (0.06, 0.12),
+        # "bins": np.linspace(-3, 3, num=200),
+        # "stat": "density",
+        "stat": "probability",
+        # 'multiple' : 'stack',
+        "element": "poly",
+    }
+
+    sns.histplot(
+        data=fractions,
+        # binwidth=1 / 1000,
+        color=h5f["ana.mod_colors"][0] if len(h5f["ana.mod_colors"]) == 1 else "black",
+        alpha=0.2,
+        **kwargs,
+        label="system-wide",
+    )
+
+    if apply_formatting:
+        ax.set_xlabel(r"Fraction of neurons")
+        ax.set_ylabel(r"Prob. Density (log ISI)")
+        # ax.legend()
         fig.tight_layout()
 
     return ax
@@ -1315,6 +1468,12 @@ def _plot_axons(h5f, ax):
 # ------------------------------------------------------------------------------ #
 # helper
 # ------------------------------------------------------------------------------ #
+
+
+def _style_legend(leg):
+    leg.get_frame().set_linewidth(0.0)
+    leg.get_frame().set_facecolor("#e4e5e6")
+    leg.get_frame().set_alpha(0.9)
 
 
 def _ticklabels_lin_to_log10(x, pos):
