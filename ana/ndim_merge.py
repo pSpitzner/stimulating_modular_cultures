@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-07-08 15:56:17
+# @Last Modified: 2021-07-12 09:02:16
 #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into an ndim array
@@ -53,6 +53,7 @@ d_obs["rate"] = "/meta/dynamics_rate"
 # d_obs["tD"] = "/meta/dynamics_tD"
 # d_obs["alpha"] = "/meta/topology_alpha"
 # d_obs["k_inter"] = "/meta/topology_k_inter"
+d_obs["k_frac"] = "/meta/dynamics_k_frac"
 
 # functions for analysis. candidate is the file path (e.g. to a hdf5 file)
 # need to return a dict where the key becomes the hdf5 data set name
@@ -76,6 +77,7 @@ def all_in_one(candidate=None):
             "ibis_cv_system",
             "ibis_cv_module",
             "functional_complexity",
+            "participating_fraction",
         ]
 
     # load and process
@@ -124,10 +126,21 @@ def all_in_one(candidate=None):
         raise e
 
     try:
-        res["functional_complexity"] = ah._functional_complexity(spikes = h5f["data.spiketimes"][:])
+        res["functional_complexity"] = ah._functional_complexity(
+            spikes=h5f["data.spiketimes"][:]
+        )
     except Exception as e:
         log.debug(e)
         res["functional_complexity"] = np.nan
+
+    try:
+        ah.find_participating_fraction_in_bursts(h5f)
+        res["participating_fraction"] = np.nanmean(
+            h5f["ana.bursts.system_level.participating_fraction"]
+        )
+    except Exception as e:
+        log.info(e)
+        res["participating_fraction"] = np.nan
 
     h5.close_hot(h5f)
     h5f.clear()

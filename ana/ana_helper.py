@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-07-08 21:44:19
+# @Last Modified: 2021-07-08 21:52:36
 # ------------------------------------------------------------------------------ #
 
 
@@ -989,7 +989,7 @@ def binned_spike_count(spiketimes, bin_size, length=None):
         t_max = np.nanmax(spiketimes)
         num_bins = int(np.ceil((t_max - t_min) / bin_size))
 
-    counts = np.zeros(shape=(num_n, num_bins), dtype="int64")
+    counts = np.zeros(shape=(num_n, num_bins))
 
     for n_id in range(0, num_n):
         train = spiketimes[n_id]
