@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-07-12 09:02:16
+# @Last Modified: 2021-07-12 11:22:43
 #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into an ndim array
@@ -62,63 +62,63 @@ d_obs["k_frac"] = "/meta/dynamics_k_frac"
 def all_in_one(candidate=None):
     if candidate is None:
         return [
-            "num_bursts",
-            "num_b_1",
-            "num_b_geq_2",
-            "num_b_geq_4",
+            "any_num_b",
+            "mod_num_b_1",
+            "mod_num_b_2",
+            "mod_num_b_4",
             "sys_rate_cv",
-            "mean_rate",
-            "blen_all",
-            "blen_1",
-            "blen_4",
-            "blen_geq_2",
-            "ibis_system",
-            "ibis_module",
-            "ibis_cv_system",
-            "ibis_cv_module",
-            "functional_complexity",
-            "participating_fraction",
+            "sys_mean_rate",
+            "sys_blen",
+            "mod_blen_1",
+            "mod_blen_2",
+            "mod_blen_4",
+            "sys_ibis",
+            "any_ibis",
+            "sys_ibis_cv",
+            "any_ibis_cv",
+            "sys_functional_complexity",
+            "sys_participating_fraction",
         ]
 
     # load and process
     h5f = ah.prepare_file(
         candidate, hot=False, skip=["connectivity_matrix", "connectivity_matrix_sparse"]
     )
-    ah.find_bursts_from_rates(h5f)
+    ah.find_bursts_from_rates(h5f, rate_threshold = 1)
     ah.find_ibis(h5f)
 
     res = dict()
-    res["num_bursts"] = len(h5f["ana.bursts.system_level.beg_times"])
-    res["num_b_1"] = len(
+    res["any_num_b"] = len(h5f["ana.bursts.system_level.beg_times"])
+    res["mod_num_b_1"] = len(
         [x for x in h5f["ana.bursts.system_level.module_sequences"] if len(x) == 1]
     )
-    res["num_b_geq_2"] = len(
-        [x for x in h5f["ana.bursts.system_level.module_sequences"] if len(x) >= 2]
+    res["mod_num_b_2"] = len(
+        [x for x in h5f["ana.bursts.system_level.module_sequences"] if len(x) == 2]
     )
-    res["num_b_geq_4"] = len(
-        [x for x in h5f["ana.bursts.system_level.module_sequences"] if len(x) >= 4]
+    res["mod_num_b_4"] = len(
+        [x for x in h5f["ana.bursts.system_level.module_sequences"] if len(x) == 4]
     )
     res["sys_rate_cv"] = h5f["ana.rates.cv.system_level"]
-    res["mean_rate"] = np.nanmean(h5f["ana.rates.system_level"])
+    res["sys_mean_rate"] = np.nanmean(h5f["ana.rates.system_level"])
 
+    slen = np.array([len(x) for x in h5f["ana.bursts.system_level.module_sequences"]])
     blen = np.array(h5f["ana.bursts.system_level.end_times"]) - np.array(
         h5f["ana.bursts.system_level.beg_times"]
     )
-    slen = np.array([len(x) for x in h5f["ana.bursts.system_level.module_sequences"]])
-    res["blen_all"] = np.nanmean(blen)
-    res["blen_1"] = np.nanmean(blen[np.where(slen == 1)[0]])
-    res["blen_4"] = np.nanmean(blen[np.where(slen == 4)[0]])
-    res["blen_geq_2"] = np.nanmean(blen[np.where(slen >= 2)[0]])
+    res["sys_blen"] = np.nanmean(blen)
+    res["mod_blen_1"] = np.nanmean(blen[np.where(slen == 1)[0]])
+    res["mod_blen_2"] = np.nanmean(blen[np.where(slen >= 2)[0]])
+    res["mod_blen_4"] = np.nanmean(blen[np.where(slen == 4)[0]])
 
     # ibis
     try:
         ibis_module = []
         for m_dc in h5f["ana.ibi.module_level"].keys():
             ibis_module.extend(h5f["ana.ibi.module_level"][m_dc])
-        res["ibis_module"] = np.nanmean(ibis_module)
-        res["ibis_system"] = np.nanmean(h5f["ana.ibi.system_level.all_modules"])
-        res["ibis_cv_module"] = np.nanmean(h5f["ana.ibi.system_level.cv_any_module"])
-        res["ibis_cv_system"] = np.nanmean(
+        res["any_ibis"] = np.nanmean(ibis_module)
+        res["sys_ibis"] = np.nanmean(h5f["ana.ibi.system_level.all_modules"])
+        res["any_ibis_cv"] = np.nanmean(h5f["ana.ibi.system_level.cv_any_module"])
+        res["sys_ibis_cv"] = np.nanmean(
             h5f["ana.ibi.system_level.cv_across_modules"]
         )
     except KeyError as e:
@@ -126,21 +126,21 @@ def all_in_one(candidate=None):
         raise e
 
     try:
-        res["functional_complexity"] = ah._functional_complexity(
+        res["sys_functional_complexity"] = ah._functional_complexity(
             spikes=h5f["data.spiketimes"][:]
         )
     except Exception as e:
         log.debug(e)
-        res["functional_complexity"] = np.nan
+        res["sys_functional_complexity"] = np.nan
 
     try:
         ah.find_participating_fraction_in_bursts(h5f)
-        res["participating_fraction"] = np.nanmean(
+        res["sys_participating_fraction"] = np.nanmean(
             h5f["ana.bursts.system_level.participating_fraction"]
         )
     except Exception as e:
         log.info(e)
-        res["participating_fraction"] = np.nan
+        res["sys_participating_fraction"] = np.nan
 
     h5.close_hot(h5f)
     h5f.clear()
