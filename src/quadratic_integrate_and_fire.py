@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2021-06-17 15:15:14
+# @Last Modified: 2021-07-13 11:30:54
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 and runs the simulations in brian.
@@ -546,6 +546,11 @@ try:
     shutil.rmtree(cache_dir, ignore_errors=True)
 except Exception as e:
     log.exception("Unable to remove cached files")
+
+try:
+    os.remove(args.input_path)
+except:
+    log.exception("Unable to remove input file")
 
 
 # import plot_helper as ph
