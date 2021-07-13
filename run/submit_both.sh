@@ -4,7 +4,7 @@
 
 #$ -S /bin/bash
 #$ -N brian
-#$ -q rostam.q
+#$ -q zal.q
 #$ -l h_vmem=15G # job is killed if exceeding this
 #$ -cwd
 #$ -o ./log/
