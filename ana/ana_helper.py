@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-07-08 21:52:36
+# @Last Modified: 2021-07-14 11:21:41
 # ------------------------------------------------------------------------------ #
 
 
@@ -342,7 +342,7 @@ def find_isis(h5f, write_to_h5f=True, return_res=False):
     for mdx, m_id in enumerate(h5f["ana.mod_ids"]):
         m_dc = h5f["ana.mods"][mdx]
         selects = np.where(h5f["data.neuron_module_id"][:] == m_id)[0]
-        selects = selects[np.isin(selects, h5f["ana.neuron_ids"])] # sensor
+        selects = selects[np.isin(selects, h5f["ana.neuron_ids"])]  # sensor
         spikes_2d = h5f["data.spiketimes"][selects]
         try:
             b = h5f[f"ana.bursts.module_level.{m_dc}.beg_times"]
@@ -486,6 +486,56 @@ def find_participating_fraction_in_bursts(h5f, write_to_h5f=True, return_res=Fal
 
     if return_res:
         return bursts
+
+
+# todo: implement convention write_to_h5f
+def find_functional_complexity(
+    h5f,
+    write_to_h5f=True,
+    return_res=False,
+    which="neurons",
+    time_bin_size=None,
+    num_bins=20,
+):
+    """
+    Find functional complexity, either from module rates or neurons.
+
+    # Paramters
+    which : str, "neurons" or "modules", if "modules", mod rates have to be in h5f
+    time_bin_size : float, if "neurons" select the bin size for `binned_spike_count`
+    num_bins : int, number of bins for the correlation coefficients (m)
+
+
+    # Returns
+    C : float, functional complexity
+    rij : 2d array, correlation coefficients, with nans along the diagonal
+    """
+
+    assert which in ["neurons", "modules"]
+
+    if which == "neurons":
+        if time_bin_size is None:
+            time_bin_size = 40 / 1000  # default 40 ms
+
+        # if sensor is specified, we might get more neuron_module_id than were recorded
+        # selects = np.where(h5f["data.neuron_module_id"][:] == m_id)[0]
+        # selects = selects[np.isin(selects, h5f["ana.neuron_ids"])]
+        selects = h5f["ana.neuron_ids"]
+        spikes = h5f["data.spiketimes"][selects, :]
+
+        series = binned_spike_count(spikes, time_bin_size)
+
+    elif which == "modules":
+        assert "ana.rates.module_level" in h5f.keypaths(), "`find_rates` first"
+        num_steps = len(h5f["ana.rates.module_level.mod_0"])
+        series = np.zeros(shape=(4, num_steps))
+        for mdx, m_id in enumerate(h5f["ana.mod_ids"]):
+            m_dc = h5f["ana.mods"][mdx]
+            series[mdx, :] = h5f[f"ana.rates.module_level.{m_dc}"][:]
+
+    if return_res:
+        return _functional_complexity(series, num_bins)
+
 
 # ------------------------------------------------------------------------------ #
 # batch processing across realization
@@ -934,30 +984,41 @@ def _inter_spike_intervals(spikes_2d, beg_times=None, end_times=None):
     )
 
 
-def _functional_complexity(spikes, selects = None, num_bins = 20):
-    # Zamora-Lopez et al 2016
-    def fc(prob, m):
-        c = 1 - np.sum(np.fabs(prob-1/m)) * m / 2 / (m-1)
-        return c
+def _functional_complexity(series, num_bins=20):
+    """
+    Uses np corrcoef on series to get correlation coefficients and calculate
+    gorkas functional complexity measure (Zamora-Lopez et al 2016)
 
-    if selects is None:
-        selects = slice(None)
+    # Paramters
+    series : 2d ndarray, first dim unit (neurons), second dim observations
 
-    # use 40 ms time window by default
-    counts = binned_spike_count(spikes, 40/1000)
-    rij = np.corrcoef(counts)
-    np.fill_diagonal(rij, 0)
-    rij = rij.flatten()
+    # Returns
+    C : float, functional complexity
+    rij : 2d array, correlation coefficients, with nans along the diagonal
+    """
+
+    rij = np.corrcoef(series)
+    np.fill_diagonal(rij, np.nan)
+    # "only interested in pair-wise interactions, discard diagonal entries rii"
+
+    flat = rij.flatten()
+    flat = flat[~np.isnan(flat)]
 
     bw = 1.0 / num_bins
-    bins = np.arange(0, 1+0.1*bw, bw)
+    bins = np.arange(0, 1 + 0.1 * bw, bw)
 
-    prob, _ = np.histogram(rij, bins=bins)
+    prob, _ = np.histogram(flat, bins=bins)
     prob = prob / np.sum(prob)
 
-    return fc(prob, num_bins)
+    # Zamora-Lopez et al 2016
+    def fc(prob, m):
+        c = 1 - np.sum(np.fabs(prob - 1 / m)) * m / 2 / (m - 1)
+        return c
 
-@jit(nopython=True, parallel=True, fastmath=True, cache=True)
+    return fc(prob, num_bins), rij
+
+
+@jit(nopython=True, parallel=True, fastmath=False, cache=True)
 def binned_spike_count(spiketimes, bin_size, length=None):
     """
         Similar to `population_rate`, but we get a number of spike counts, per neuron
@@ -1002,7 +1063,7 @@ def binned_spike_count(spiketimes, bin_size, length=None):
     return counts
 
 
-@jit(nopython=True, parallel=True, fastmath=True, cache=True)
+@jit(nopython=True, parallel=True, fastmath=False, cache=True)
 def population_rate(spiketimes, bin_size, length=None):
     """
         Calculate the activity across the whole population. naive binning,
@@ -1051,7 +1112,7 @@ def population_rate(spiketimes, bin_size, length=None):
     return rate
 
 
-@jit(nopython=True, parallel=True, fastmath=True, cache=True)
+@jit(nopython=True, parallel=False, fastmath=False, cache=True)
 def population_rate_exact_smoothing(spiketimes, bin_size, smooth_width, length=None):
     """
         Applies a gaussian kernel to every spike time, and keeps full precision of the
@@ -1092,7 +1153,11 @@ def population_rate_exact_smoothing(spiketimes, bin_size, smooth_width, length=N
     for n in prange(spiketimes.shape[0]):
         for mu in spiketimes[n, :]:
             if np.isnan(mu):
+                # nan-checks such as np.nan do not work with fastmath=False in numba jit.
+                # np.nanmax seems to work, though
+                # https://github.com/numba/numba/issues/2919
                 break
+
             # only consider bins 4 sigma around the spike time
             # bin_beg = int((mu - 0 * sigma) / bin_size)
             bin_beg = int((mu - 4 * sigma) / bin_size)
@@ -1163,7 +1228,7 @@ def burst_detection_pop_rate(
         return beg_time, end_time, series
 
 
-@jit(nopython=True, parallel=False, fastmath=True, cache=True)
+@jit(nopython=True, parallel=False, fastmath=False, cache=True)
 def merge_if_below_separation_threshold(beg_time, end_time, threshold):
 
     """
@@ -1215,7 +1280,7 @@ def merge_if_below_separation_threshold(beg_time, end_time, threshold):
     return beg_res, end_res
 
 
-@jit(nopython=True, parallel=False, fastmath=True, cache=True)
+@jit(nopython=True, parallel=False, fastmath=False, cache=True)
 def arg_merge_if_below_separation_threshold(beg_time, end_time, threshold):
     # same as above just that here we return the indices that would provide
     # the merged arrays. (like e.g. np.argsort)

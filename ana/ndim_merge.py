@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-07-12 11:22:43
+# @Last Modified: 2021-07-14 11:18:02
 #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into an ndim array
@@ -53,7 +53,7 @@ d_obs["rate"] = "/meta/dynamics_rate"
 # d_obs["tD"] = "/meta/dynamics_tD"
 # d_obs["alpha"] = "/meta/topology_alpha"
 # d_obs["k_inter"] = "/meta/topology_k_inter"
-d_obs["k_frac"] = "/meta/dynamics_k_frac"
+# d_obs["k_frac"] = "/meta/dynamics_k_frac"
 
 # functions for analysis. candidate is the file path (e.g. to a hdf5 file)
 # need to return a dict where the key becomes the hdf5 data set name
@@ -126,21 +126,30 @@ def all_in_one(candidate=None):
         raise e
 
     try:
-        res["sys_functional_complexity"] = ah._functional_complexity(
-            spikes=h5f["data.spiketimes"][:]
+        C, _ =  ah.find_functional_complexity(
+            h5f, which="neurons", return_res=True, write_to_h5f=False
         )
     except Exception as e:
         log.debug(e)
-        res["sys_functional_complexity"] = np.nan
+        C = np.nan
+    res["sys_functional_complexity"] = C
+
+    try:
+        C, _ =  ah.find_functional_complexity(
+            h5f, which="modules", return_res=True, write_to_h5f=False
+        )
+    except Exception as e:
+        log.debug(e)
+        C = np.nan
+    res["any_functional_complexity"] = C
 
     try:
         ah.find_participating_fraction_in_bursts(h5f)
-        res["sys_participating_fraction"] = np.nanmean(
-            h5f["ana.bursts.system_level.participating_fraction"]
-        )
+        C = np.nanmean(h5f["ana.bursts.system_level.participating_fraction"])
     except Exception as e:
         log.info(e)
-        res["sys_participating_fraction"] = np.nan
+        C = np.nan
+    res["sys_participating_fraction"] = C
 
     h5.close_hot(h5f)
     h5f.clear()

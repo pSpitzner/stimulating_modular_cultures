@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-07-08 15:31:16
+# @Last Modified: 2021-07-14 11:14:49
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -425,14 +425,18 @@ def plot_parameter_info(h5f, ax=None, apply_formatting=True, add=[]):
         ax.set_title("Parameters")
 
     dat = []
-    dat.append(["Connections k", h5f["meta.topology_k_inter"]])
-    dat.append(["Stimulation", h5f["ana.stimulation_description"]])
+    # dat.append(["Connections k", h5f["meta.topology_k_inter"]])
+    # dat.append(["Stimulation", h5f["ana.stimulation_description"]])
 
     try:
         dat.append(["", ""])
         dat.append(["AMPA [mV]", h5f["meta.dynamics_jA"]])
         dat.append(["GABA [mV]", h5f["meta.dynamics_jG"]])
         dat.append(["Noise Rate [Hz]", h5f["meta.dynamics_rate"]])
+    except:
+        pass
+
+    try:
         dat.append(
             [
                 "E/I",
@@ -440,6 +444,11 @@ def plot_parameter_info(h5f, ax=None, apply_formatting=True, add=[]):
                 / len(h5f["data.neuron_inhibitory_ids"]),
             ]
         )
+    except:
+        pass
+
+    try:
+        dat.append(["Connections", f'{h5f["meta.dynamics_k_frac"]*100:.1f}%'])
     except:
         pass
 
@@ -891,41 +900,42 @@ def _stimulation_color_palette():
 
 
 def plot_distribution_correlation_coefficients(
-    h5f, ax=None, apply_formatting=True, selects=None,
-    num_bins = 20,
+    h5f, ax=None, apply_formatting=True, num_bins=20, which="neurons",
 ):
     """
     Uses (naively) binned spike counts per neuron to calculate correlation coefficients
     with `numpy.corrcoef`.
 
     # Parameters
-    selects : if None, all neurons are used, else `selected` is used for slicing.
     num_bins : number of bins to discretize correlation coefficients.
     """
 
-    assert "data.spiketimes" in h5f.keypaths()
-    if selects is None:
-        selects = slice(None)
-    spikes = h5f["data.spiketimes"][selects, :]
+    assert which in ["neurons", "modules"]
+
+    C, rij = ah.find_functional_complexity(
+        h5f, which=which, num_bins=num_bins, return_res=True, write_to_h5f=False
+    )
+
+    log.info(f"Functional Complexity: {C:.3f}")
+
+    foo, bar = plt.subplots()
+    im = bar.matshow(rij)
+    plt.colorbar(im)
+
+    bw = 1.0 / num_bins
+    bins = np.arange(0, 1 + 0.1 * bw, bw)
+
+    try:
+        color = (
+            h5f["ana.mod_colors"][0] if len(h5f["ana.mod_colors"]) == 1 else "black",
+        )
+    except:
+        color = "black"
 
     if ax is None:
         fig, ax = plt.subplots()
     else:
         fig = ax.get_figure()
-
-    counts = ah.binned_spike_count(spikes, 40/1000)
-    rij = np.corrcoef(counts)
-    np.fill_diagonal(rij, 0)
-    rij = rij.flatten()
-
-    bw = 1.0 / num_bins
-    bins = np.arange(0, 1+0.1*bw, bw)
-
-
-    try:
-        color=h5f["ana.mod_colors"][0] if len(h5f["ana.mod_colors"]) == 1 else "black",
-    except:
-        color = "black";
 
     kwargs = {
         "ax": ax,
@@ -936,33 +946,19 @@ def plot_distribution_correlation_coefficients(
         "element": "step",
     }
 
+    # im pretty sure sns ignores nans (rij diagonal)
     sns.histplot(
-        data=rij,
-        color=color,
-        alpha=0.2,
-        **kwargs,
+        data=rij.flatten(), color=color, alpha=0.2, **kwargs,
     )
 
     if apply_formatting:
+        ax.set_title(f"{which} C = {C:.3f}")
         ax.set_xlabel(r"Correlation coefficients $r_{ij}$")
         ax.set_ylabel(r"Prob. density $P(r_{ij})$")
         # ax.legend()
         fig.tight_layout()
 
-
-
-    # lets also calculate gorkas functional complexity measure
-    def functional_complexity(prob, m):
-        c = 1 - np.sum(np.fabs(prob-1/m)) * m / 2 / (m-1)
-        return c
-
-    prob, _ = np.histogram(rij, bins=bins)
-    prob = prob / np.sum(prob)
-
-    log.info(f"Functional Complexity: {functional_complexity(prob, num_bins):.2f}")
-
     return ax
-
 
 
 def plot_distribution_burst_duration(
@@ -1154,8 +1150,7 @@ def plot_distribution_isi(
 
 
 def plot_distribution_participating_fraction(
-    h5f, ax=None, apply_formatting=True,
-    num_bins=20,
+    h5f, ax=None, apply_formatting=True, num_bins=20,
 ):
     """
         Plot the fraction of neurons participating in a burst
@@ -1174,7 +1169,7 @@ def plot_distribution_participating_fraction(
     log.info(f"Mean fraction: {np.nanmean(fractions)*100:.1f}%")
 
     bw = 1.0 / num_bins
-    bins = np.arange(0, 1+0.1*bw, bw)
+    bins = np.arange(0, 1 + 0.1 * bw, bw)
 
     kwargs = {
         "ax": ax,
@@ -1198,7 +1193,59 @@ def plot_distribution_participating_fraction(
     )
 
     if apply_formatting:
-        ax.set_xlabel(r"Fraction of neurons")
+        ax.set_xlabel(r"Fraction of neurons in bursts")
+        ax.set_ylabel(r"Prob. Density")
+        # ax.legend()
+        fig.tight_layout()
+
+    return ax
+
+
+def plot_distribution_sequence_length(h5f, ax=None, apply_formatting=True):
+    """
+        Plot the distribution of sequence lengths' during bursts
+    """
+
+    assert "ana.bursts" in h5f.keypaths()
+
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.get_figure()
+
+    seq_lens = h5f["ana.bursts.system_level.module_sequences"]
+    seq_lens = np.array([len(s) for s in seq_lens])
+    log.info(seq_lens)
+
+    num_bins = len(h5f["ana.mods"])
+    bins = np.arange(-0.5, num_bins + 1 + 0.6, 1)
+
+    log.info(bins)
+    counts, _ = np.histogram(seq_lens, binwidth=1)
+    log.info(f"seq lenghts: {counts}")
+
+    kwargs = {
+        "ax": ax,
+        "kde": False,
+        "binwidth": 1,
+        # "binrange": (0.06, 0.12),
+        # "bins": bins,
+        "stat": "density",
+        # 'multiple' : 'stack',
+        "element": "step",
+    }
+
+    sns.histplot(
+        data=seq_lens,
+        # binwidth=1 / 1000,
+        color=h5f["ana.mod_colors"][0] if len(h5f["ana.mod_colors"]) == 1 else "black",
+        alpha=0.2,
+        **kwargs,
+        label="system-wide",
+    )
+
+    if apply_formatting:
+        ax.set_xlabel(r"Sequence Length")
         ax.set_ylabel(r"Prob. Density (log ISI)")
         # ax.legend()
         fig.tight_layout()
