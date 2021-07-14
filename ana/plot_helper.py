@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-07-14 11:14:49
+# @Last Modified: 2021-07-14 15:27:41
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -1192,9 +1192,17 @@ def plot_distribution_participating_fraction(
         label="system-wide",
     )
 
+    # now this is hacky:
+    try:
+        C = ah._functional_complexity(np.array(fractions), num_bins)
+    except Exception as e:
+        log.debug(e)
+        C = np.nan
+
     if apply_formatting:
         ax.set_xlabel(r"Fraction of neurons in bursts")
         ax.set_ylabel(r"Prob. Density")
+        ax.set_title(f"C={C:.3f}")
         # ax.legend()
         fig.tight_layout()
 

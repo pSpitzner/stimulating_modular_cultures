@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-07-14 11:21:41
+# @Last Modified: 2021-07-14 15:22:33
 # ------------------------------------------------------------------------------ #
 
 
@@ -533,8 +533,10 @@ def find_functional_complexity(
             m_dc = h5f["ana.mods"][mdx]
             series[mdx, :] = h5f[f"ana.rates.module_level.{m_dc}"][:]
 
+    rij = np.corrcoef(series)
+
     if return_res:
-        return _functional_complexity(series, num_bins)
+        return _functional_complexity(rij, num_bins), rij
 
 
 # ------------------------------------------------------------------------------ #
@@ -984,22 +986,24 @@ def _inter_spike_intervals(spikes_2d, beg_times=None, end_times=None):
     )
 
 
-def _functional_complexity(series, num_bins=20):
+def _functional_complexity(rij, num_bins=20):
     """
     Uses np corrcoef on series to get correlation coefficients and calculate
     gorkas functional complexity measure (Zamora-Lopez et al 2016)
 
     # Paramters
-    series : 2d ndarray, first dim unit (neurons), second dim observations
+    num_bins : number of bins for the histogram (m)
+    rij : 2d array, correlation coefficeints, (or a 1d array, already flattened)
 
     # Returns
     C : float, functional complexity
-    rij : 2d array, correlation coefficients, with nans along the diagonal
     """
 
-    rij = np.corrcoef(series)
-    np.fill_diagonal(rij, np.nan)
-    # "only interested in pair-wise interactions, discard diagonal entries rii"
+    try:
+        # "only interested in pair-wise interactions, discard diagonal entries rii"
+        np.fill_diagonal(rij, np.nan)
+    except:
+        pass
 
     flat = rij.flatten()
     flat = flat[~np.isnan(flat)]
@@ -1015,7 +1019,7 @@ def _functional_complexity(series, num_bins=20):
         c = 1 - np.sum(np.fabs(prob - 1 / m)) * m / 2 / (m - 1)
         return c
 
-    return fc(prob, num_bins), rij
+    return fc(prob, num_bins)
 
 
 @jit(nopython=True, parallel=True, fastmath=False, cache=True)
