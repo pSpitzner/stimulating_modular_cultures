@@ -2,11 +2,14 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-06-24 18:23:02
-# @Last Modified: 2021-07-08 17:02:45
+# @Last Modified: 2021-07-14 11:44:21
 # ------------------------------------------------------------------------------ #
 
 import os
 import tempfile
+import logging
+
+log = logging.getLogger(__name__)
 
 from dask_jobqueue import SGECluster
 from dask.distributed import Client, SSHCluster, LocalCluster, as_completed
@@ -78,5 +81,7 @@ def init_dask(n_workers = 256):
         cluster = LocalCluster(local_directory=f"{tempfile.gettempdir()}/dask/")
         client = Client(cluster)
 
+    log.info(cluster)
+    log.info(client)
 
 
