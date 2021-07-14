@@ -17,6 +17,7 @@ export OMP_NUM_THREADS=1
 export NUMBA_NUM_THREADS=1
 
 date
+uname -n
 
 source /home/pspitzner/.bashrc
 conda activate brian
