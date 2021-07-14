@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-07-14 11:58:42
+# @Last Modified: 2021-07-14 12:01:18
 #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into an ndim array
@@ -186,6 +186,7 @@ def parse_arguments():
     )
     parser.add_argument(
         "-c", "--cores", dest="num_cores", help="number of dask cores",
+        default=256, type=int,
     )
     return parser.parse_args()
 
