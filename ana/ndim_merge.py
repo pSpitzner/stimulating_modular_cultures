@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-07-14 11:18:02
+# @Last Modified: 2021-07-14 11:39:58
 #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into an ndim array
@@ -77,6 +77,7 @@ def all_in_one(candidate=None):
             "sys_ibis_cv",
             "any_ibis_cv",
             "sys_functional_complexity",
+            "any_functional_complexity",
             "sys_participating_fraction",
         ]
 
