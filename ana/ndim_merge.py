@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-07-14 15:46:07
+# @Last Modified: 2021-07-14 15:49:22
 #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into an ndim array
@@ -155,7 +155,7 @@ def all_in_one(candidate=None):
 
     try:
         fractions = h5f["ana.bursts.system_level.participating_fraction"]
-        C = ah._functional_complexity(np.array(fractions) num_bins=20)
+        C = ah._functional_complexity(np.array(fractions), num_bins=20)
     except Exception as e:
         log.debug(e)
         C = np.nan
