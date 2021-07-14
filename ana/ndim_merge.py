@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-07-14 11:39:58
+# @Last Modified: 2021-07-14 11:58:42
 #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into an ndim array
@@ -85,7 +85,7 @@ def all_in_one(candidate=None):
     h5f = ah.prepare_file(
         candidate, hot=False, skip=["connectivity_matrix", "connectivity_matrix_sparse"]
     )
-    ah.find_bursts_from_rates(h5f, rate_threshold = 1)
+    ah.find_bursts_from_rates(h5f, rate_threshold = 2.5)
     ah.find_ibis(h5f)
 
     res = dict()
@@ -184,6 +184,9 @@ def parse_arguments():
     parser.add_argument(
         "-o", dest="output_path", help="output path", metavar="FILE", required=True
     )
+    parser.add_argument(
+        "-c", "--cores", dest="num_cores", help="number of dask cores",
+    )
     return parser.parse_args()
 
 
@@ -193,8 +196,7 @@ def parse_arguments():
 futures = None
 
 
-def main():
-    args = parse_arguments()
+def main(args):
 
     # if a directory is provided as input, merge individual hdf5 files down
     if os.path.isdir(args.input_path):
@@ -399,5 +401,6 @@ def full_path(path):
 
 
 if __name__ == "__main__":
-    dh.init_dask()
-    res_ndim, d_obs, d_axes = main()
+    args = parse_arguments()
+    dh.init_dask(args.num_cores)
+    res_ndim, d_obs, d_axes = main(args)
