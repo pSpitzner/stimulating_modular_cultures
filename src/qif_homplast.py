@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2021-06-07 12:31:51
+# @Last Modified: 2021-08-04 20:41:30
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # with homeostatic plasticity
@@ -47,10 +47,10 @@ prefs.codegen.target = "cython"
 
 # fmt: off
 # membrane potentials
-vReset = -60 * mV  # resting potential, neuron relaxes towards this without stimulation
+vRef   = -60 * mV  # resting potential, neuron relaxes towards this without stimulation
 vThr   = -45 * mV  # threshold potential
 vPeak  =  35 * mV  # peak potential, after vThr is passed, rapid growth towards this
-vRest  = -50 * mV  # reset potential
+vReset = -50 * mV  # reset potential
 
 # soma
 tV = 50 * ms  # time scale of membrane potential
@@ -169,16 +169,16 @@ num_n, a_ij_sparse, mod_ids = topo.load_topology(args.input_path)
 G = NeuronGroup(
     N=num_n,
     model="""
-        dv/dt = ( k*(v-vReset)*(v-vThr) -u +I               # [6] soma potential
+        dv/dt = ( k*(v-vRef)*(v-vThr) -u +I               # [6] soma potential
                   +xi*(jS/tV)**0.5      )/tV   : volt       # white noise term
         dI/dt = -I/tA                          : volt       # [9, 10]
-        du/dt = ( b*(v-vReset) -u )/tU         : volt       # [7] inhibitory current
+        du/dt = ( b*(v-vRef) -u )/tU         : volt       # [7] inhibitory current
         dD/dt = ( 1-D)/tD                      : 1          # [11] recovery to one
         dH/dt = jH * rH / tH                   : 1          # Hom plast, steady increase
     """,
     threshold="v > vPeak",
     reset="""
-        v = vRest                        # [8]
+        v = vReset                        # [8]
         u = u + uIncre                   # [8]
         D = D * beta                     # [11] delta-function term on spike
         H = clip( H - jH/tH, 0, inf )    # after spike, reduce H
@@ -212,7 +212,7 @@ log.info("Applying connectivity from sparse matrix")
 S.connect(i=a_ij_sparse[:, 0], j=a_ij_sparse[:, 1])
 
 # initalize to a somewhat sensible state. we could have different neuron types
-G.v = "vRest + 5*mV*rand()"
+G.v = "vReset + 5*mV*rand()"
 
 # initalize H to ~ 1.0 so that we are close to the dynamic state without homplast
 G.H = "0.9 + 0.2*rand()"

@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-05-06 09:35:48
-# @Last Modified: 2021-06-07 17:18:47
+# @Last Modified: 2021-08-04 20:41:16
 # ------------------------------------------------------------------------------ #
 # Here we try to find out what the impact of input from single bridges is.
 # Todo:
@@ -54,10 +54,10 @@ prefs.codegen.target = "numpy"
 
 # fmt: off
 # membrane potentials
-vReset = -60 * mV  # resting potential, neuron relaxes towards this without stimulation
+vRef   = -60 * mV  # resting potential, neuron relaxes towards this without stimulation
 vThr   = -45 * mV  # threshold potential
 vPeak  =  35 * mV  # peak potential, after vThr is passed, rapid growth towards this
-vRest  = -50 * mV  # reset potential
+vReset = -50 * mV  # reset potential
 
 # soma
 tV = 50 * ms  # time scale of membrane potential
@@ -191,17 +191,17 @@ num_n, a_ij_sparse, mod_ids = topo.load_topology(args.input_path)
 G = NeuronGroup(
     N=num_n,
     model="""
-        dv/dt = ( k*(v-vReset)*(v-vThr) -u +IA -IG          # [6] soma potential
+        dv/dt = ( k*(v-vRef)*(v-vThr) -u +IA -IG          # [6] soma potential
                   +xi*(jS/tV)**0.5      )/tV   : volt       # white noise term
         dIA/dt = -IA/tA                        : volt       # [9, 10]
         dIG/dt = -IG/tG                        : volt       # [9, 10]
-        du/dt = ( b*(v-vReset) -u )/tU         : volt       # [7] inhibitory current
+        du/dt = ( b*(v-vRef) -u )/tU         : volt       # [7] inhibitory current
         dD/dt = ( 1-D)/tD                      : 1          # [11] recovery to one
         j     : volt  (constant)                 # neuron specific synaptic weight
     """,
     threshold="v > vPeak",
     reset="""
-        v = vRest           # [8]
+        v = vReset           # [8]
         u = u + uIncr       # [8]
         D = D * beta        # [11] delta-function term on spike
     """,
@@ -243,7 +243,7 @@ if len(inhib_ids) > 0:
     G_inh = G[t2b[inhib_ids]]
 
 # initalize according to neuron type
-G.v = "vRest + 5*mV*rand()"
+G.v = "vReset + 5*mV*rand()"
 G.j = 0  # the lines below should overwrite this, sanity check
 if len(inhib_ids) > 0:
     G_inh.j = jG

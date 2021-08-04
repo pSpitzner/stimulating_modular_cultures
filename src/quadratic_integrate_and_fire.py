@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2021-07-13 11:30:54
+# @Last Modified: 2021-08-04 20:41:17
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 and runs the simulations in brian.
@@ -50,10 +50,10 @@ if prefs.codegen.target != "cython":
 
 # fmt: off
 # membrane potentials
-vReset = -60 * mV  # resting potential, neuron relaxes towards this without stimulation
+vRef   = -60 * mV  # resting potential, neuron relaxes towards this without stimulation
 vThr   = -45 * mV  # threshold potential
 vPeak  =  35 * mV  # peak potential, after vThr is passed, rapid growth towards this
-vRest  = -50 * mV  # reset potential
+vReset = -50 * mV  # reset potential
 
 # soma
 tV = 50 * ms  # time scale of membrane potential
@@ -190,17 +190,17 @@ num_n, a_ij_sparse, mod_ids = topo.load_topology(args.input_path)
 G = NeuronGroup(
     N=num_n,
     model="""
-        dv/dt = ( k*(v-vReset)*(v-vThr) -u +IA -IG          # [6] soma potential
+        dv/dt = ( k*(v-vRef)*(v-vThr) -u +IA -IG          # [6] soma potential
                   +xi*(jS/tV)**0.5      )/tV   : volt       # white noise term
         dIA/dt = -IA/tA                        : volt       # [9, 10]
         dIG/dt = -IG/tG                        : volt       # [9, 10]
-        du/dt = ( b*(v-vReset) -u )/tU         : volt       # [7] recovery variable
+        du/dt = ( b*(v-vRef) -u )/tU         : volt       # [7] recovery variable
         dD/dt = ( 1-D)/tD                      : 1          # [11] recovery to one
         j     : volt  (constant)                 # neuron specific synaptic weight
     """,
     threshold="v > vPeak",
     reset="""
-        v = vRest        # [8]
+        v = vReset        # [8]
         u = u + uIncr    # [8]
         D = D * beta     # [11] delta-function term on spike
     """,
@@ -240,7 +240,7 @@ G_exc = G[t2b[excit_ids]]
 G_bridge = G[t2b[bridge_ids]]
 
 # initalize according to neuron type
-G.v = "vRest + 5*mV*rand()"
+G.v = "vReset + 5*mV*rand()"
 G.j = 0  # the lines below should overwrite this, sanity check
 G_inh.j = jG
 G_exc.j = jA

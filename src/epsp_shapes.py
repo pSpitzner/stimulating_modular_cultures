@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-18 13:06:40
-# @Last Modified: 2021-06-07 12:32:38
+# @Last Modified: 2021-08-04 20:41:22
 # ------------------------------------------------------------------------------ #
 # Small script to investigate dynamic parameters and their impact on the
 # single neuron level
@@ -61,10 +61,10 @@ prefs.codegen.target = "cython"
 
 # fmt: off
 # membrane potentials
-vReset = -60 * mV  # resting potential, neuron relaxes towards this without stimulation
+vRef   = -60 * mV  # resting potential, neuron relaxes towards this without stimulation
 vThr   = -45 * mV  # threshold potential
 vPeak  =  35 * mV  # peak potential, after vThr is passed, rapid growth towards this
-vRest  = -35 * mV  # reset potential
+vReset = -35 * mV  # reset potential
 
 # soma
 tV = 50 * ms  # time scale of membrane potential
@@ -120,16 +120,16 @@ numpy.random.seed(6626)
 G = NeuronGroup(
     N=1,
     model="""
-        dv/dt = ( k*(v-vReset)*(v-vThr) -u +I                     # [6] soma potential
+        dv/dt = ( k*(v-vRef)*(v-vThr) -u +I                     # [6] soma potential
                   +xi*(jS/tV)**0.5      )/tV   : volt       # white noise term
         I : volt
         # dI/dt = -I/tA                          : volt       # [9, 10]
-        du/dt = ( b*(v-vReset) -u )/tU             : volt       # [7] membrane recovery
+        du/dt = ( b*(v-vRef) -u )/tU             : volt       # [7] membrane recovery
         dD/dt = ( 1-D)/tD                      : 1          # [11] recovery to one
     """,
     threshold="v > vPeak",
     reset="""
-        v = vRest           # [8]
+        v = vReset           # [8]
         u = u + d        # [8]
         D = D * beta     # [11] delta-function term on spike
     """,
@@ -140,15 +140,15 @@ G = NeuronGroup(
 G2 = NeuronGroup(
     N=1,
     model="""
-        dv/dt = ( k*(v-vReset)*(v-vThr) -u +I                     # [6] soma potential
+        dv/dt = ( k*(v-vRef)*(v-vThr) -u +I                     # [6] soma potential
                   +xi*(jS/tV)**0.5      )/tV   : volt       # white noise term
         dI/dt = -I/tA                          : volt       # [9, 10]
-        du/dt = ( b*(v-vReset) -u )/tU             : volt       # [7] membrane recovery
+        du/dt = ( b*(v-vRef) -u )/tU             : volt       # [7] membrane recovery
         dD/dt = ( 1-D)/tD                      : 1          # [11] recovery to one
     """,
     threshold="v > vPeak",
     reset="""
-        v = vRest           # [8]
+        v = vReset           # [8]
         u = u + uIncre      # [8]
         D = D * beta        # [11] delta-function term on spike
     """,
@@ -180,10 +180,10 @@ S = Synapses(
 S.connect('i==j')
 
 # initalize to a somewhat sensible state. we could have different neuron types
-G.v = "vReset"
+G.v = "vRef"
 G.D = "1"
 G.I = 0
-G2.v = "vReset"
+G2.v = "vRef"
 G2.D = "1"
 G2.I = 0
 
@@ -246,10 +246,10 @@ def plot_panels(monitor, ax=None, palette='blues'):
         ax[vdx].spines["left"].set_position(("outward", 5))
 
     ax[1].set_ylim(-65, 40)
-    ax[1].axhline(vReset/mV, ls=':', color='gray', zorder=0)
+    ax[1].axhline(vRef/mV, ls=':', color='gray', zorder=0)
     ax[1].axhline(vThr/mV, ls=':', color='gray', zorder=0)
     ax[1].axhline(vPeak/mV, ls=':', color='gray', zorder=0)
-    ax[1].axhline(vRest/mV, ls=':', color='gray', zorder=0)
+    ax[1].axhline(vReset/mV, ls=':', color='gray', zorder=0)
 
     ax[0].set_ylim(0,60.0)
     ax[2].set_ylim(0,200.0)
