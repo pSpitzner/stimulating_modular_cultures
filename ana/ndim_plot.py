@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-06-08 16:51:39
+# @Last Modified: 2021-07-12 13:50:22
 #
 # plot a merged down, multidimensional hdf5 file (from individual simulations)
 # and select which dims to show where
@@ -58,6 +58,9 @@ parser.add_argument(
 )
 parser.add_argument(
     "-l", "--line", dest="enable_lineplot", default=False, action="store_true",
+)
+parser.add_argument(
+    "-cm", "--colormap", dest="cmap", default="Auto", type=str,
 )
 
 args = parser.parse_args()
@@ -212,7 +215,7 @@ if args.enable_lineplot:
     ax.legend()
     ax_1d = ax
 
-fig, ax = plt.subplots(figsize=(10, 4))
+fig, ax = plt.subplots(figsize=(4, 4))
 
 # otherwise, we create a 2d heatmap
 # plot using seaborn and pandas DataFrame (its just more convenient than manually)
@@ -229,14 +232,14 @@ if args.center_cmap_around is None:
         "vmax": np.nanmax(data_mean[np.isfinite(data_mean)]),
         # 'vmin': 0,
         # 'vmax': 150,
-        "cmap": "Blues",
+        "cmap": "Blues" if args.cmap == "Auto" else args.cmap,
     }
 else:
     kwargs = {
         "vmin": 0,
         "vmax": args.center_cmap_around * 2,
         "center": args.center_cmap_around,
-        "cmap": "twilight",
+        "cmap": "twilight" if args.cmap == "Auto" else args.cmap,
     }
 
 sns.heatmap(
@@ -252,6 +255,7 @@ sns.heatmap(
 ax.set_xlabel(x_obs)
 ax.set_ylabel(y_obs)
 ax.invert_yaxis()
+fig.tight_layout()
 
 for text in args.input_path.split("/"):
     if "2x2" in text:
