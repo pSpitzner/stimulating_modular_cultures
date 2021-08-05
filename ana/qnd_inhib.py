@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-06-08 13:49:46
-# @Last Modified: 2021-06-23 16:43:14
+# @Last Modified: 2021-07-08 21:38:59
 # ------------------------------------------------------------------------------ #
 # from the E-vs-I sweep (ndim merge), plot various observables as a function
 # of inhibitory current strength
@@ -32,8 +32,21 @@ from mpl_toolkits.mplot3d import Axes3D
 
 input_path = "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/inhibition_sweep_gaba_160/ndim.hdf5"
 # input_path = "/Users/paul/mpi/simulation/alpha_synuclein/_latest/dat/inhib/gaba_sweep.hdf5"
+# input_path = "/Users/paul/mpi/simulation/alpha_synuclein/_latest/dat/inhib_rate_sweep/rate_sweep.hdf5"
+# input_path = "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/inhibition_sweep_rate_100/ndim.hdf5"
+# input_path = "/Users/paul/mpi/simulation/alpha_synuclein/_latest/dat/k_frac_sweep_1/k_frac_sweep.hdf5"
+# input_path = "/Users/paul/mpi/simulation/alpha_synuclein/_latest/dat/esweep/esweep.hdf5"
 
 x_axis = "/data/axis_jG"
+# x_axis = "/data/axis_k_frac"
+y_set = "/data/axis_jA"
+# x_axis = "/data/axis_rate"
+# y_set = "/data/axis_jG"
+
+# y_set = "/data/axis_jG"
+# x_axis = "/data/axis_jA"
+
+
 
 base_colors = dict()
 base_colors["num_bursts"] = cc.to_hex(f"black")
@@ -73,6 +86,7 @@ for odx, obs_to_plot in enumerate(
         "ibis_system",
         "ibis_cv_system",
         "ibis_cv_module",
+        "functional_complexity",
     ]
 ):
 
@@ -84,17 +98,16 @@ for odx, obs_to_plot in enumerate(
     except:
         ax.set_title(obs_to_plot)
 
-    x = h5.load(input_path, x_axis, silent=True)
-    data_nd = h5.load(input_path, f"/data/{obs_to_plot}", silent=True)
+    x = h5.load(input_path, x_axis, silent=True, keepdim=True)
+    data_nd = h5.load(input_path, f"/data/{obs_to_plot}", silent=True, keepdim=True)
     data_3d = np.nanmean(data_nd, axis=-1)
     err_3d = np.nanstd(data_nd, axis=-1) / np.sqrt(data_nd.shape[-1])
 
-    which = h5.load(input_path, "/data/axis_jA", silent=True)
+    which = h5.load(input_path, y_set, silent=True, keepdim=True)
     # which = np.delete(which, np.where(which == 25))
     for wdx in range(len(which)):
         w = which[wdx]
-        if w == 25:
-            continue
+        if w == 25: continue
         alpha = np.fmin(1, 1 / (len(which) - wdx ))
         try:
             color = cc.alpha_to_solid_on_bg(base_colors[obs_to_plot], alpha)
@@ -104,19 +117,28 @@ for odx, obs_to_plot in enumerate(
         # ax.plot(x, data_3d[wdx, :], label = f"jA = {w}", color = color)
         ax.errorbar(
             x=x,
+            # y=data_3d[wdx, :] if not "num_b" in obs_to_plot else 3600 / data_3d[wdx, :],
             y=data_3d[wdx, :],
             yerr=err_3d[wdx, :],
+            # y=data_3d[:,wdx],
+            # yerr=err_3d[:,wdx],
             fmt="-",
             markersize=1,
             elinewidth=0.5,
             capsize=3,
-            label=f"jA = {w}",
+            label=f'{y_set.replace("/data/axis_", "")} = {w}',
             color=color,
         )
 
-    ax.set_xlabel("GABA strength jG (inhibition)")
-    # ax.set_xlabel("Noise rate (Hz)")
-    # ax.legend()
+    if "rate" in x_axis:
+        ax.set_xlabel("Noise rate (Hz)")
+    elif "jG" in x_axis:
+        ax.set_xlabel("GABA strength jG (inhibition)")
+    elif "jA" in x_axis:
+        ax.set_xlabel("AMPA strength jA (excitation)")
+    elif "k_frac" in x_axis:
+        ax.set_xlabel("Fraction of Connections")
+    ax.legend()
 
     if "num_b" in obs_to_plot:
         ax.set_ylabel("# Bursts (in 1 hour)")
