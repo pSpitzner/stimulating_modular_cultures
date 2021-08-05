@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-07-14 15:22:33
+# @Last Modified: 2021-08-05 15:15:01
 # ------------------------------------------------------------------------------ #
 
 
@@ -449,7 +449,11 @@ def find_ibis(h5f, write_to_h5f=True, return_res=False):
 def find_participating_fraction_in_bursts(h5f, write_to_h5f=True, return_res=False):
     """
         Once we have found bursts, check what is the fraction of neurons participating
-        in every burst
+        in every burst, and the total number of spikes.
+
+        adds `participating_fraction` to the bursts: fraction of unique neurons fired
+        a spike in the burst (relative to total number of neurons in module / system)
+        adds `num_spikes_in_bursts`: how many spikes per contributing neuron
     """
 
     assert "ana.bursts" in h5f.keypaths(), "run `find_bursts_from_rates` first"
@@ -467,25 +471,34 @@ def find_participating_fraction_in_bursts(h5f, write_to_h5f=True, return_res=Fal
         bt = bursts[f"module_level.{m_dc}.beg_times"]
         et = bursts[f"module_level.{m_dc}.end_times"]
         fraction = np.zeros(len(bt))
+        num_spks = np.zeros(len(bt))
         for bdx in range(0, len(bt)):
             n_ids = np.where(
                 (bt[bdx] <= spikes[selects]) & (spikes[selects] <= et[bdx])
             )[0]
-            fraction[bdx] = len(np.unique(n_ids)) / len(selects)
+            n_unk = len(np.unique(n_ids))
+            fraction[bdx] = n_unk / len(selects)
+            num_spks[bdx] = len(n_ids) / n_unk
         bursts[f"module_level.{m_dc}.participating_fraction"] = fraction.tolist()
+        bursts[f"module_level.{m_dc}.num_spikes_in_bursts"] = num_spks.tolist()
 
     # system level
     selects = h5f["ana.neuron_ids"]
     bt = bursts["system_level.beg_times"]
     et = bursts["system_level.end_times"]
     fraction = np.zeros(len(bt))
+    num_spks = np.zeros(len(bt))
     for bdx in range(0, len(bt)):
         n_ids = np.where((bt[bdx] <= spikes[selects]) & (spikes[selects] <= et[bdx]))[0]
-        fraction[bdx] = len(np.unique(n_ids)) / len(selects)
+        n_unk = len(np.unique(n_ids))
+        fraction[bdx] = n_unk / len(selects)
+        num_spks[bdx] = len(n_ids) / n_unk
     bursts["system_level.participating_fraction"] = fraction.tolist()
+    bursts["system_level.num_spikes_in_bursts"] = num_spks.tolist()
 
     if return_res:
         return bursts
+
 
 
 # todo: implement convention write_to_h5f

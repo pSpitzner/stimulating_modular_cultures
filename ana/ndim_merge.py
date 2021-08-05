@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-07-14 15:49:22
+# @Last Modified: 2021-08-04 22:28:17
 #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into an ndim array
@@ -19,6 +19,7 @@ import logging
 import warnings
 import functools
 import tempfile
+import psutil
 
 # import matplotlib as mpl
 # import matplotlib.pyplot as plt
@@ -53,7 +54,7 @@ d_obs["rate"] = "/meta/dynamics_rate"
 # d_obs["tD"] = "/meta/dynamics_tD"
 # d_obs["alpha"] = "/meta/topology_alpha"
 # d_obs["k_inter"] = "/meta/topology_k_inter"
-# d_obs["k_frac"] = "/meta/dynamics_k_frac"
+d_obs["k_frac"] = "/meta/dynamics_k_frac"
 
 # functions for analysis. candidate is the file path (e.g. to a hdf5 file)
 # need to return a dict where the key becomes the hdf5 data set name
@@ -72,6 +73,7 @@ def all_in_one(candidate=None):
             "mod_blen_1",
             "mod_blen_2",
             "mod_blen_4",
+            "mod_num_spikes_in_bursts_1",
             "sys_ibis",
             "any_ibis",
             "sys_ibis_cv",
@@ -80,6 +82,7 @@ def all_in_one(candidate=None):
             "any_functional_complexity",
             "sys_participating_fraction",
             "sys_participating_fraction_complexity",
+            "any_num_spikes_in_bursts",
         ]
 
     # load and process
@@ -160,6 +163,21 @@ def all_in_one(candidate=None):
         log.debug(e)
         C = np.nan
     res["sys_participating_fraction_complexity"] = C
+
+    try:
+        C = np.nanmean(h5f["ana.bursts.system_level.num_spikes_in_bursts"])
+    except Exception as e:
+        log.debug(e)
+        C = np.nan
+    res["any_num_spikes_in_bursts"] = C
+
+    try:
+        spks = h5f["ana.bursts.system_level.num_spikes_in_bursts"]
+        C = np.nanmean(spks[np.where(slen == 1)[0]])
+    except:
+        C = np.nan
+    res["mod_num_spikes_in_bursts_1"] = C
+
 
     h5.close_hot(h5f)
     h5f.clear()
@@ -378,6 +396,8 @@ def analyse_candidate(candidate, d_axes, d_obs):
         # transform to index
         temp = np.where(d_axes[obs] == temp)[0][0]
         index += (temp,)
+
+        # psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024
 
     res = all_in_one(candidate)
 
