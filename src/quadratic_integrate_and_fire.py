@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2021-08-04 20:41:17
+# @Last Modified: 2021-08-05 16:39:17
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 and runs the simulations in brian.
@@ -92,11 +92,13 @@ jS = 300 * mV * mV * ms * ms  # white noise strength, via xi = dt**.5 * randn()
 defaultclock.dt = 0.05 * ms
 
 # whether to record state variables
-record_state = False
+# before enabeling this, do the math on ram requirements!
+# 160 Neurons, at 1ms recording time step and one variable ~ 2GB RAM for 3600sec sim
+record_state = True
 # which variables
-record_state_vars = ["v", "IG", "u", "D"]
-# for which neurons
-record_state_idxs = [0,1,2,3]
+record_state_vars = ["D"]
+# for which neurons, True for everything, 'averaged_across` or list of indices
+record_state_idxs = True # "averged_across" # [0, 1, 2, 3]
 
 # whether to record population rates
 record_rates = False
@@ -344,7 +346,13 @@ run(args.equil_duration, report="stdout", report_period=60 * 60 * second)
 spks_m = SpikeMonitor(G)
 
 if record_state:
-    stat_m = StateMonitor(G, record_state_vars, record=t2b[record_state_idxs])
+    if record_state_idxs == "averged_across":
+        rec = True
+    elif isinstance(record_state_idxs, list):
+        rec = t2b[record_state_idxs]
+    else:
+        rec = record_state_idxs
+    stat_m = StateMonitor(G, record_state_vars, record=rec, dt = 25*ms)
 
 if record_rates:
     rate_m = PopulationRateMonitor(G)
@@ -437,7 +445,7 @@ else:
             ] = "List of module ids that were stimulation targets"
 
         if record_state:
-            # write the time axis once for all variables and neurons (should be shared!)
+            # write the time axis once for all variables and neurons (should be shared)
             t_axis = (stat_m.t - args.equil_duration) / second
             dset = f.create_dataset(
                 "/data/state_vars_time", compression="gzip", data=t_axis
@@ -448,14 +456,16 @@ else:
                 # no need to back-convert indices here, we specified which neurons
                 # to record
                 data = stat_m.variables[var].get_value()
+
+                if record_state_idxs == "averged_across":
+                    data = np.nanmean(data, axis = -1)
+
                 dset = f.create_dataset(
                     f"/data/state_vars_{var}", compression="gzip", data=data.T
                 )
                 dset.attrs[
                     "description"
                 ] = f"state variable {var}, dim 1 neurons, dim 2 value for time, recorded neurons: {record_state_idxs}"
-
-        #     for state_var in record_state_vars:
 
         if record_rates:
             # we could write rates, but
@@ -547,10 +557,10 @@ try:
 except Exception as e:
     log.exception("Unable to remove cached files")
 
-try:
-    os.remove(args.input_path)
-except:
-    log.exception("Unable to remove input file")
+# try:
+    # os.remove(args.input_path)
+# except:
+    # log.exception("Unable to remove input file")
 
 
 # import plot_helper as ph
