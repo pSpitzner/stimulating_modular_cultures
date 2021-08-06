@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-08-05 15:15:01
+# @Last Modified: 2021-08-05 20:27:58
 # ------------------------------------------------------------------------------ #
 
 
@@ -478,7 +478,7 @@ def find_participating_fraction_in_bursts(h5f, write_to_h5f=True, return_res=Fal
             )[0]
             n_unk = len(np.unique(n_ids))
             fraction[bdx] = n_unk / len(selects)
-            num_spks[bdx] = len(n_ids) / n_unk
+            num_spks[bdx] = len(n_ids) / n_unk if n_unk > 0 else 0
         bursts[f"module_level.{m_dc}.participating_fraction"] = fraction.tolist()
         bursts[f"module_level.{m_dc}.num_spikes_in_bursts"] = num_spks.tolist()
 
@@ -492,7 +492,7 @@ def find_participating_fraction_in_bursts(h5f, write_to_h5f=True, return_res=Fal
         n_ids = np.where((bt[bdx] <= spikes[selects]) & (spikes[selects] <= et[bdx]))[0]
         n_unk = len(np.unique(n_ids))
         fraction[bdx] = n_unk / len(selects)
-        num_spks[bdx] = len(n_ids) / n_unk
+        num_spks[bdx] = len(n_ids) / n_unk if n_unk > 0 else 0
     bursts["system_level.participating_fraction"] = fraction.tolist()
     bursts["system_level.num_spikes_in_bursts"] = num_spks.tolist()
 

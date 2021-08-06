@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-07-14 15:27:41
+# @Last Modified: 2021-08-05 20:25:12
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -103,17 +103,25 @@ def overview_topology(h5f, filenames=None, skip_graph=False):
     return fig
 
 
-def overview_dynamic(h5f, filenames=None, threshold=None):
+def overview_dynamic(h5f, filenames=None, threshold=None, states=True):
 
-    # fig, axes = plt.subplots(4, 1, sharex=True, figsize=(4, 7))
-    fig = plt.figure(figsize=(4, 7))
+    # if we have recorded depletion, let's plot that, too
+    depletion = False
+    if "data.state_vars_D" in h5f.keypaths() and states:
+        depletion = True
+
+    fig = plt.figure(figsize=(4, 7.5))
     axes = []
-    gs = fig.add_gridspec(4, 2)  # [row, column]
+    if depletion:
+        gs = fig.add_gridspec(5, 2)  # [row, column]
+    else:
+        gs = fig.add_gridspec(4, 2)  # [row, column]
     axes.append(fig.add_subplot(gs[0, 1]))
     axes.append(fig.add_subplot(gs[1, :]))
     axes.append(fig.add_subplot(gs[2, :], sharex=axes[1]))
     axes.append(fig.add_subplot(gs[3, :], sharex=axes[1]))
     axes.append(fig.add_subplot(gs[0, 0]))
+    axes.append(fig.add_subplot(gs[4, :], sharex=axes[1]))
 
     if not "ana" in h5f.keypaths():
         ah.prepare_file(h5f)
@@ -135,6 +143,11 @@ def overview_dynamic(h5f, filenames=None, threshold=None):
 
     axes[1].set_xlabel("")
     axes[2].set_xlabel("")
+
+    if depletion:
+        axes[3].set_xlabel("")
+        ax = plot_state_variable(h5f, axes[5], variable="D")
+        ax.set_ylim(0.4, 1)
 
     fig.tight_layout()
 
@@ -196,12 +209,15 @@ def plot_raster(h5f, ax=None, apply_formatting=True, sort_by_module=True):
 
     if len(h5f["ana.neuron_ids"]) > 500:
         marker = "."
-        kwargs = dict(alpha=1, markersize=1.0, markeredgewidth=0)
+        kwargs = dict(alpha=1, markersize=1.5, markeredgewidth=0)
     else:
-        marker = "|"
-        kwargs = dict(alpha=0.5)
+        # marker = "|"
+        marker = "."
+        kwargs = dict(alpha=0.75, markersize=2.0, markeredgewidth=0)
 
     for n_id in h5f["ana.neuron_ids"]:
+        # if n_id > 1000:
+        # continue
 
         if sort_by_module:
             n_id_sorted = h5f["ana.mod_sort"](n_id)
@@ -216,6 +232,7 @@ def plot_raster(h5f, ax=None, apply_formatting=True, sort_by_module=True):
             n_id_sorted * np.ones(len(spikes)),
             marker,
             color=h5f["ana.mod_colors"][m_id],
+            # zorder=-2,
             **kwargs,
         )
 
@@ -314,6 +331,63 @@ def plot_system_rate(h5f, ax=None, apply_formatting=True):
         ax.set_ylabel("Rates [Hz]")
         ax.set_xlabel("Time [seconds]")
 
+        fig.tight_layout()
+
+    return ax
+
+
+def plot_state_variable(h5f, ax=None, apply_formatting=True, variable="D"):
+    """
+        We may either have an average value, then the h5f dataset has shape(1, t)
+        or an entry for every neuron, then shape(N, t)
+
+        could add a strides argument for high t-resolutions
+    """
+
+    log.info(f"Plotting state variable '{variable}'")
+    assert f"data.state_vars_{variable}" in h5f.keypaths()
+    stat_vals = h5f[f"data.state_vars_{variable}"] # avoid loading this with [:]!
+
+
+
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.get_figure()
+
+    for mdx, m_id in enumerate(h5f["ana.mod_ids"]):
+        m_dc = h5f["ana.mods"][mdx]
+
+        selects = np.where(h5f["data.neuron_module_id"][:] == m_id)[0]
+        # mean across neurons
+        ax.plot(
+            h5f[f"data.state_vars_time"][:],
+            np.nanmean(stat_vals[selects, :], axis=0),
+            color = h5f["ana.mod_colors"][m_id],
+            zorder = 1,
+        )
+
+        # show some faint lines for individual neurons from each module
+        num_examples = 0
+        if len(selects) >= num_examples:
+            selects = selects[0:num_examples]
+        for s in selects:
+            ax.plot(
+                h5f[f"data.state_vars_time"][:],
+                stat_vals[s],
+                lw = 0.5,
+                color = h5f["ana.mod_colors"][m_id],
+                zorder = 0,
+                alpha = 0.5,
+            )
+
+    if apply_formatting:
+        ax.margins(x=0, y=0)
+        if variable == "D":
+            ax.set_ylabel("Resources")
+        else:
+            ax.set_ylabel(f"state {variable}")
+        ax.set_xlabel("Time [seconds]")
         fig.tight_layout()
 
     return ax
@@ -1156,6 +1230,7 @@ def plot_distribution_participating_fraction(
         Plot the fraction of neurons participating in a burst
     """
 
+    log.info("Plotting participating fraction")
     assert "ana.bursts" in h5f.keypaths()
     if "ana.bursts.system_level.participating_fraction" not in h5f.keypaths():
         ah.find_participating_fraction_in_bursts(h5f)
@@ -1329,6 +1404,109 @@ def plot_distribution_degree_k(h5f, ax=None, apply_formatting=True, filenames=No
             ha="right",
             va="top",
         )
+
+    return ax
+
+
+def plot_distribution_degree_for_neuron_distance(
+    h5f, ax=None, apply_formatting=True, filenames=None
+):
+    """
+        Plot the distribution of the network degree for `h5f`, as a function
+        of the distance between the neurons.
+
+        uses `data.connectivity_matrix_sparse` and `data.neuron_pos_x` (and y)
+
+        if `filenames` is provided, distribution data is accumulated from all files,
+        and only styling/meta information is used from `h5f`.
+    """
+
+    from itertools import combinations
+
+    def local_prep(h5f):
+        try:
+            # dont load this guys via [:], lets keep them "hot"
+            a_ij_sparse = h5f["data.connectivity_matrix_sparse"]
+            pos_x = h5f["data.neuron_pos_x"]
+            pos_y = h5f["data.neuron_pos_y"]
+            k_dists = np.ones(a_ij_sparse.shape[0]) * np.nan
+            # assume len of positions match number of neurons in a_ij
+            for row in tqdm(range(0, a_ij_sparse.shape[0])):
+                src, tar = a_ij_sparse[row, :]
+                dist_sq = (pos_x[src] - pos_x[tar]) ** 2 + (
+                    pos_y[src] - pos_y[tar]
+                ) ** 2
+                k_dists[row] = np.sqrt(dist_sq)
+
+
+            if len(pos_x) > 5000:
+                log.info("Large population, using random sample")
+                # for large populations, we cant fit N^2 distances to ram
+                selects = np.sort(np.random.choice(len(pos_x), size=5000, replace=False))
+            else:
+                selects = slice(None)
+
+            # arrays of combinations shape (N, 2)
+            xc = np.array(list(combinations(pos_x[selects], 2)))
+            yc = np.array(list(combinations(pos_y[selects], 2)))
+            n_dists = np.sqrt(
+                np.power(xc[:, 0] - xc[:, 1], 2) + np.power(yc[:, 0] - yc[:, 1], 2)
+            )
+
+            return k_dists, n_dists
+
+        except Exception as e:
+            log.error(e)
+            return np.array([])
+
+    if filenames is None:
+        k_dists, n_dists = local_prep(h5f)
+    else:
+        raise NotImplementedError
+
+    n_h, bins = np.histogram(n_dists, bins=50)
+    n_k, _ = np.histogram(k_dists, bins=bins)
+    bin_centers = (bins[0:-1] + bins[1:])/2
+
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.get_figure()
+
+    kwargs = {
+        "ax": ax,
+        "kde": True,
+        # "bins": br,
+        "stat": "probability",
+        # 'multiple' : 'stack',
+        "element": "step",
+        "alpha": 0.25,
+    }
+
+    sns.histplot(
+        x = bin_centers,
+        weights = n_k / n_h,
+        label=r"$k/h$", color=matplotlib.cm.get_cmap("tab10").colors[0], **kwargs,
+    )
+
+    sns.histplot(
+        x = bin_centers,
+        weights = n_k,
+        label=r"$k$", color=matplotlib.cm.get_cmap("tab10").colors[1], **kwargs,
+    )
+
+    sns.histplot(
+        x = bin_centers,
+        weights = n_h,
+        label=r"$h$", color=matplotlib.cm.get_cmap("tab10").colors[2], **kwargs,
+    )
+
+
+    if apply_formatting:
+        ax.set_xlabel(f"Distance between neurons")
+        ax.set_ylabel(f"Probability of a conneciton")
+        ax.set_title("Degree vs. distance")
+        ax.legend(loc="upper right")
 
     return ax
 
