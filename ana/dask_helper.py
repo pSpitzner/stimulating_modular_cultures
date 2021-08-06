@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-06-24 18:23:02
-# @Last Modified: 2021-07-14 11:51:59
+# @Last Modified: 2021-08-06 11:10:19
 # ------------------------------------------------------------------------------ #
 
 import os
@@ -73,6 +73,7 @@ def init_dask(n_workers = 256):
             log_directory="/scratch01.local/pspitzner/dask/logs",
             local_directory="/scratch01.local/pspitzner/dask/scratch",
             interface="ib0",
+            walltime='02:30:00',
             extra=[
                 '--preload \'import sys; sys.path.append("./ana/"); sys.path.append("/home/pspitzner/code/pyhelpers/");\''
             ],
