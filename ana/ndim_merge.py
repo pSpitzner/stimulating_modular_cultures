@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-08-04 22:28:17
+# @Last Modified: 2021-08-06 10:48:57
 #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into an ndim array
@@ -54,7 +54,7 @@ d_obs["rate"] = "/meta/dynamics_rate"
 # d_obs["tD"] = "/meta/dynamics_tD"
 # d_obs["alpha"] = "/meta/topology_alpha"
 # d_obs["k_inter"] = "/meta/topology_k_inter"
-d_obs["k_frac"] = "/meta/dynamics_k_frac"
+# d_obs["k_frac"] = "/meta/dynamics_k_frac"
 
 # functions for analysis. candidate is the file path (e.g. to a hdf5 file)
 # need to return a dict where the key becomes the hdf5 data set name
