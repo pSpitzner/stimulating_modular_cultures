@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-08-05 20:27:58
+# @Last Modified: 2021-08-06 12:11:52
 # ------------------------------------------------------------------------------ #
 
 
@@ -509,6 +509,7 @@ def find_functional_complexity(
     which="neurons",
     time_bin_size=None,
     num_bins=20,
+    bins = None,
 ):
     """
     Find functional complexity, either from module rates or neurons.
@@ -517,6 +518,7 @@ def find_functional_complexity(
     which : str, "neurons" or "modules", if "modules", mod rates have to be in h5f
     time_bin_size : float, if "neurons" select the bin size for `binned_spike_count`
     num_bins : int, number of bins for the correlation coefficients (m)
+    bins :     use these bins to pass to np.histogram and ignore `num_bins`
 
 
     # Returns
@@ -549,7 +551,7 @@ def find_functional_complexity(
     rij = np.corrcoef(series)
 
     if return_res:
-        return _functional_complexity(rij, num_bins), rij
+        return _functional_complexity(rij, num_bins, bins), rij
 
 
 # ------------------------------------------------------------------------------ #
@@ -999,7 +1001,7 @@ def _inter_spike_intervals(spikes_2d, beg_times=None, end_times=None):
     )
 
 
-def _functional_complexity(rij, num_bins=20):
+def _functional_complexity(rij, num_bins=20, bins = None):
     """
     Uses np corrcoef on series to get correlation coefficients and calculate
     gorkas functional complexity measure (Zamora-Lopez et al 2016)
@@ -1021,8 +1023,9 @@ def _functional_complexity(rij, num_bins=20):
     flat = rij.flatten()
     flat = flat[~np.isnan(flat)]
 
-    bw = 1.0 / num_bins
-    bins = np.arange(0, 1 + 0.1 * bw, bw)
+    if bins is None:
+        bw = 1.0 / num_bins
+        bins = np.arange(0, 1 + 0.1 * bw, bw)
 
     prob, _ = np.histogram(flat, bins=bins)
     prob = prob / np.sum(prob)

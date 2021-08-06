@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-08-06 10:48:57
+# @Last Modified: 2021-08-06 12:54:53
 #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into an ndim array
@@ -62,28 +62,36 @@ d_obs["rate"] = "/meta/dynamics_rate"
 # todo: add description
 def all_in_one(candidate=None):
     if candidate is None:
-        return [
-            "any_num_b",
-            "mod_num_b_1",
-            "mod_num_b_2",
-            "mod_num_b_4",
-            "sys_rate_cv",
-            "sys_mean_rate",
-            "sys_blen",
-            "mod_blen_1",
-            "mod_blen_2",
-            "mod_blen_4",
-            "mod_num_spikes_in_bursts_1",
-            "sys_ibis",
-            "any_ibis",
-            "sys_ibis_cv",
-            "any_ibis_cv",
-            "sys_functional_complexity",
-            "any_functional_complexity",
-            "sys_participating_fraction",
-            "sys_participating_fraction_complexity",
-            "any_num_spikes_in_bursts",
-        ]
+        res = dict()
+        # scalars
+        res["any_num_b"] = 1
+        res["mod_num_b_1"] = 1
+        res["mod_num_b_2"] = 1
+        res["mod_num_b_4"] = 1
+        res["sys_rate_cv"] = 1
+        res["sys_mean_rate"] = 1
+        res["sys_blen"] = 1
+        res["mod_blen_1"] = 1
+        res["mod_blen_2"] = 1
+        res["mod_blen_4"] = 1
+        res["mod_num_spikes_in_bursts_1"] = 1
+        res["sys_ibis"] = 1
+        res["any_ibis"] = 1
+        res["sys_ibis_cv"] = 1
+        res["any_ibis_cv"] = 1
+        res["sys_functional_complexity"] = 1
+        res["any_functional_complexity"] = 1
+        res["sys_participating_fraction"] = 1
+        res["sys_participating_fraction_complexity"] = 1
+        res["any_num_spikes_in_bursts"] = 1
+
+        # histograms
+        res["sys_hbins_participating_fraction"] = 21
+        res["sys_hvals_participating_fraction"] = 20
+        res["sys_hbins_functional_complexity"] = 21
+        res["sys_hvals_functional_complexity"] = 20
+
+        return res
 
     # load and process
     h5f = ah.prepare_file(
@@ -92,6 +100,7 @@ def all_in_one(candidate=None):
     ah.find_bursts_from_rates(h5f, rate_threshold = 2.5)
     ah.find_ibis(h5f)
 
+    # number of bursts and duration
     res = dict()
     res["any_num_b"] = len(h5f["ana.bursts.system_level.beg_times"])
     res["mod_num_b_1"] = len(
@@ -130,31 +139,50 @@ def all_in_one(candidate=None):
         log.error(h5f.keypaths())
         raise e
 
+    # functional complexity
+    bw = 1.0 / 20
+    bins = np.arange(0, 1 + 0.1 * bw, bw)
+    res["sys_hbins_functional_complexity"] = bins.copy()
+    res["sys_hbins_participating_fraction"] = bins.copy()
+
     try:
-        C, _ =  ah.find_functional_complexity(
-            h5f, which="neurons", return_res=True, write_to_h5f=False
+        C, rij =  ah.find_functional_complexity(
+            h5f, which="neurons", return_res=True, write_to_h5f=False,
+            bins = bins
         )
+        # this is not the place to do this, but ok
+        np.fill_diagonal(rij, np.nan)
+        rij, _ = np.histogram(rij.flatten(), bins=bins)
     except Exception as e:
         log.debug(e)
         C = np.nan
+        rij = np.ones(21) * np.nan
+
     res["sys_functional_complexity"] = C
+    res["sys_hvals_functional_complexity"] = rij.copy()
 
     try:
         C, _ =  ah.find_functional_complexity(
-            h5f, which="modules", return_res=True, write_to_h5f=False
+            h5f, which="modules", return_res=True, write_to_h5f=False,
+            bins = bins
         )
     except Exception as e:
         log.debug(e)
         C = np.nan
     res["any_functional_complexity"] = C
 
+    # participating fraction
     try:
         ah.find_participating_fraction_in_bursts(h5f)
-        C = np.nanmean(h5f["ana.bursts.system_level.participating_fraction"])
+        fracs = h5f["ana.bursts.system_level.participating_fraction"]
+        C = np.nanmean(fracs)
+        rij, _ = np.histogram(fracs, bins=bins)
     except Exception as e:
         log.debug(e)
         C = np.nan
+        rij = np.ones(21) * np.nan
     res["sys_participating_fraction"] = C
+    res["sys_hvals_participating_fraction"] = rij.copy()
 
     try:
         fractions = h5f["ana.bursts.system_level.participating_fraction"]
@@ -183,16 +211,6 @@ def all_in_one(candidate=None):
     h5f.clear()
 
     return res
-
-
-# a list of analysis functions to call on the candidate
-# l_ana_functions = list()
-# l_ana_functions.append(all_in_one)
-
-# all the keys that will be returned from above
-l_ana_keys = []
-# for f in l_ana_functions:
-l_ana_keys += all_in_one(candidate=None)
 
 # ------------------------------------------------------------------------------ #
 # arguments
@@ -231,10 +249,10 @@ def main(args):
         candidates = glob.glob(full_path(args.input_path + "/*.hdf5"))
         log.info(f"{args.input_path} is a directory, using contained hdf5 files")
     elif len(glob.glob(full_path(args.input_path))) <= 1:
-        log.info(
+        log.error(
             "Provide a directory with hdf5 files or wildcarded path as string: 'path/to/file_ptrn*.hdf5''"
         )
-        exit()
+        sys.exit()
     else:
         candidates = glob.glob(full_path(args.input_path))
         log.info(f"{args.input_path} is a (list of) file")
@@ -316,12 +334,19 @@ def main(args):
         log.info(f"{obs: >10}: {d_axes[obs]}")
     log.info(f"Repetitions: {num_rep}")
 
+    # ------------------------------------------------------------------------------ #
+    # res_ndim
+    # ------------------------------------------------------------------------------ #
     log.info(f"Analysing:")
-    # results for all scalars
     res_ndim = dict()
-    for key in l_ana_keys:
-        # keep repetitions always as the last axes
-        res_ndim[key] = np.ones(shape=axes_shape + (num_rep,)) * np.nan
+    # dict of key -> needed space
+    res_dict = all_in_one(None)
+    for key in res_dict.keys():
+        # keep repetitions always as the last axes for scalars, else the hist content
+        if "hbins" in key or "hvals" in key:
+            res_ndim[key] = np.ones(shape=axes_shape + (num_rep, res_dict[key])) * np.nan
+        else:
+            res_ndim[key] = np.ones(shape=axes_shape + (num_rep,)) * np.nan
 
     # set arguments for variables needed by every worker
     f = functools.partial(analyse_candidate, d_axes=d_axes, d_obs=d_obs)
@@ -371,7 +396,12 @@ def main(args):
 
     for key in res_ndim.keys():
         dset = f_tar.create_dataset(f"/data/{key}", data=res_ndim[key])
-        dset.attrs["description"] = desc_axes
+        if "hbins" in key:
+            dset.attrs["description"] = "like scalars, but last dim are histogram bin edges"
+        elif "weights" in key:
+            dset.attrs["description"] = "like scalars, but last dim are histogram weights"
+        else:
+            dset.attrs["description"] = desc_axes
 
     dset = f_tar.create_dataset("/data/num_samples", data=sampled)
     dset.attrs["description"] = "number of repetitions in /data/ibi, same shape"
