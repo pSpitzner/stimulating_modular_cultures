@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-08-06 12:54:53
+# @Last Modified: 2021-08-09 09:33:18
 #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into an ndim array
@@ -200,7 +200,7 @@ def all_in_one(candidate=None):
     res["any_num_spikes_in_bursts"] = C
 
     try:
-        spks = h5f["ana.bursts.system_level.num_spikes_in_bursts"]
+        spks = np.array(h5f["ana.bursts.system_level.num_spikes_in_bursts"])
         C = np.nanmean(spks[np.where(slen == 1)[0]])
     except:
         C = np.nan
