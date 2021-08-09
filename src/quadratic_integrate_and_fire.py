@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2021-08-05 16:39:17
+# @Last Modified: 2021-08-09 16:29:54
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 and runs the simulations in brian.
@@ -97,8 +97,9 @@ defaultclock.dt = 0.05 * ms
 record_state = True
 # which variables
 record_state_vars = ["D"]
-# for which neurons, True for everything, 'averaged_across` or list of indices
-record_state_idxs = True # "averged_across" # [0, 1, 2, 3]
+# for which neurons, True for everything, or list of indices
+record_state_idxs = True # [0, 1, 2, 3]
+record_state_idxs = np.arange(0, 160)
 
 # whether to record population rates
 record_rates = False
@@ -348,10 +349,11 @@ spks_m = SpikeMonitor(G)
 if record_state:
     if record_state_idxs == "averged_across":
         rec = True
-    elif isinstance(record_state_idxs, list):
-        rec = t2b[record_state_idxs]
-    else:
+    elif isinstance(record_state_idxs, bool):
         rec = record_state_idxs
+    else:
+        # list
+        rec = t2b[record_state_idxs]
     stat_m = StateMonitor(G, record_state_vars, record=rec, dt = 25*ms)
 
 if record_rates:
@@ -453,9 +455,13 @@ else:
             dset.attrs["description"] = "time axis of all state variables, in seconds"
 
             for idx, var in enumerate(record_state_vars):
-                # no need to back-convert indices here, we specified which neurons
-                # to record
-                data = stat_m.variables[var].get_value()
+                # careful to back-convert indices here
+                if isinstance(record_state_idxs, bool):
+                    data = stat_m.variables[var].get_value()[:, t2b]
+                else:
+                    # list
+                    # we already called t2b for the selection, no need again
+                    data = stat_m.variables[var].get_value()[:, :]
 
                 if record_state_idxs == "averged_across":
                     data = np.nanmean(data, axis = -1)
