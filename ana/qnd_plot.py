@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-08-06 17:30:40
+# @Last Modified: 2021-08-09 09:38:12
 #
 # plot a merged down, multidimensional hdf5 file (from individual simulations)
 # and select which dims to show where
@@ -59,6 +59,8 @@ def o_labels(short):
         label += "Fraction complexity"
     elif "participating_fraction" in short:
         label += "Fraction of neurons in bursts"
+    elif "num_spikes_in_bursts" in short:
+        label += "Spikes per neuron per burst"
     else:
         return short
 
@@ -117,7 +119,7 @@ elif os.path.isfile(args.input_path):
 
 # get all observables that qualify (i.e. are not axis)
 l_obs_candidates = h5.ls(input_path, "/data/")
-l_obs_candidates = [obs for obs in l_obs_candidates if obs.find("axis_") != 0]
+l_obs_candidates = [obs for obs in l_obs_candidates if obs.find("axis_") != 0 and obs.find("hbins") == -1 and obs.find("hvals") == -1]
 assert len(l_obs_candidates) > 0
 
 

@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2021-08-09 16:29:54
+# @Last Modified: 2021-08-30 16:24:03
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 and runs the simulations in brian.
@@ -347,9 +347,7 @@ run(args.equil_duration, report="stdout", report_period=60 * 60 * second)
 spks_m = SpikeMonitor(G)
 
 if record_state:
-    if record_state_idxs == "averged_across":
-        rec = True
-    elif isinstance(record_state_idxs, bool):
+    if isinstance(record_state_idxs, bool):
         rec = record_state_idxs
     else:
         # list
@@ -462,9 +460,6 @@ else:
                     # list
                     # we already called t2b for the selection, no need again
                     data = stat_m.variables[var].get_value()[:, :]
-
-                if record_state_idxs == "averged_across":
-                    data = np.nanmean(data, axis = -1)
 
                 dset = f.create_dataset(
                     f"/data/state_vars_{var}", compression="gzip", data=data.T

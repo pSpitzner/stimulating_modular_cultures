@@ -15,8 +15,8 @@ l_mod = np.array(["off"])
 l_rep = np.arange(0, 50)
 l_jA = [35.0, 30.0, 40.0]
 l_jG = [50.0]
-l_jM = [25.0]
-l_rate = np.arange(24.0, 71.0, 2.0)
+l_jM = [20.0]
+l_rate = np.arange(38.0, 100.0, 2.0)
 
 print("l_jA  ", l_jA)
 print("l_jG  ", l_jG)
