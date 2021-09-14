@@ -12,11 +12,11 @@ seed = 5_000
 l_topo = ["2x2_fixed"]
 l_k_inter = np.array([5])
 l_mod = np.array(["off"])
-l_rep = np.arange(0, 50)
+l_rep = np.arange(0, 25)
 l_jA = [35.0, 30.0, 40.0]
 l_jG = [50.0]
-l_jM = [20.0]
-l_rate = np.arange(38.0, 100.0, 2.0)
+l_jM = [15.0, 17.5]
+l_rate = np.arange(40.0, 142.0, 2.0)
 
 print("l_jA  ", l_jA)
 print("l_jG  ", l_jG)
@@ -26,7 +26,7 @@ print("l_rate", l_rate)
 bridge_weight = 1.0
 inh_frac = 0.20
 
-arg_list = product(l_topo, l_k_inter, l_jA, l_jG, l_jM, l_rate, l_rep)
+arg_list = product(l_topo, l_k_inter, l_jA, l_jG, l_jM, l_rep)
 
 count_dynamic = 0
 count_topo = 0
@@ -43,21 +43,24 @@ with open("./parameters_topo.tsv", "w") as f_topo:
             jA = args[2]
             jG = args[3]
             jM = args[4]
-            rate = args[5]
-            rep = args[6]
+            rep = args[-1]
+            mod = l_mod[0]
 
-            f_base = f"k={k_inter:d}_jA={jA:.1f}_jG={jG:.1f}_jM={jM:.1f}_rate={rate:.1f}_rep={rep:03d}.hdf5"
+            seed += 1
 
-            topo_path = f"/scratch03.local/pspitzner/inhib02/dat/inhibition_sweep_rate_160/topo/{f_base}"
-            f_topo.write(
-                # topology command
-                f"/data.nst/share/projects/paul_brian_modular_cultures/topology_orlandi_standalone/exe/orlandi_standalone "
-                + f"-N 160 -s {seed:d} -o {topo_path} "
-                + f"-f {topo} -a 0.0125 -a_weighted 1 -k {k_inter}\n"
-            )
-            count_topo += 1
+            # same seeds for all rates so that topo matches
+            for rate in l_rate:
+                f_base = f"k={k_inter:d}_jA={jA:.1f}_jG={jG:.1f}_jM={jM:.1f}_rate={rate:.1f}_rep={rep:03d}.hdf5"
 
-            for mod in l_mod:
+                topo_path = f"/scratch03.local/pspitzner/inhib02/dat/inhibition_sweep_rate_160/topo/{f_base}"
+                f_topo.write(
+                    # topology command
+                    f"/data.nst/share/projects/paul_brian_modular_cultures/topology_orlandi_standalone/exe/orlandi_standalone "
+                    + f"-N 160 -s {seed:d} -o {topo_path} "
+                    + f"-f {topo} -a 0.0125 -a_weighted 1 -k {k_inter}\n"
+                )
+                count_topo += 1
+
                 dyn_path = f"/scratch03.local/pspitzner/inhib02/dat/inhibition_sweep_rate_160/dyn/stim={mod}_{f_base}"
 
                 if mod == "off":
@@ -77,7 +80,6 @@ with open("./parameters_topo.tsv", "w") as f_topo:
                 )
 
                 count_dynamic += 1
-                seed += 1
 
 
 print(f"number of argument combinations for topology: {count_topo}")
