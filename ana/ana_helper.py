@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-08-06 12:11:52
+# @Last Modified: 2021-08-10 11:10:26
 # ------------------------------------------------------------------------------ #
 
 
@@ -478,7 +478,7 @@ def find_participating_fraction_in_bursts(h5f, write_to_h5f=True, return_res=Fal
             )[0]
             n_unk = len(np.unique(n_ids))
             fraction[bdx] = n_unk / len(selects)
-            num_spks[bdx] = len(n_ids) / n_unk if n_unk > 0 else 0
+            num_spks[bdx] = len(n_ids) / np.fmax(n_unk, 1)
         bursts[f"module_level.{m_dc}.participating_fraction"] = fraction.tolist()
         bursts[f"module_level.{m_dc}.num_spikes_in_bursts"] = num_spks.tolist()
 
@@ -492,7 +492,7 @@ def find_participating_fraction_in_bursts(h5f, write_to_h5f=True, return_res=Fal
         n_ids = np.where((bt[bdx] <= spikes[selects]) & (spikes[selects] <= et[bdx]))[0]
         n_unk = len(np.unique(n_ids))
         fraction[bdx] = n_unk / len(selects)
-        num_spks[bdx] = len(n_ids) / n_unk if n_unk > 0 else 0
+        num_spks[bdx] = len(n_ids) / np.fmax(n_unk, 1)
     bursts["system_level.participating_fraction"] = fraction.tolist()
     bursts["system_level.num_spikes_in_bursts"] = num_spks.tolist()
 
@@ -553,6 +553,44 @@ def find_functional_complexity(
     if return_res:
         return _functional_complexity(rij, num_bins, bins), rij
 
+
+def find_state_variable(h5f, variable, write_to_h5f=True, return_res=False):
+    """
+        from the neuron-level state variable,
+        calculate module-level state variables and some properties
+    """
+
+    assert f"data.state_vars_{variable}" in h5f.keypaths()
+    assert f"data.state_vars_time" in h5f.keypaths()
+
+    states = benedict()
+    states["time"] = h5f["data.state_vars_time"][:]
+    stat_vals = h5f[f"data.state_vars_{variable}"]
+
+    # merge down neurons to modules
+    for mdx, m_id in enumerate(h5f["ana.mod_ids"]):
+        m_dc = h5f["ana.mods"][mdx]
+
+        selects = np.where(h5f["data.neuron_module_id"][:] == m_id)[0]
+        selects = selects[np.isin(selects, h5f["ana.neuron_ids"])]
+
+        states[f"module_level.{m_dc}"] = np.nanmean(stat_vals[selects, :], axis=0)
+
+    # system-wide
+    states["system_level"] = np.nanmean(stat_vals, axis=0)
+
+    if write_to_h5f:
+        try:
+            h5f["ana.states"].clear()
+        except Exception as e:
+            log.debug(e)
+        # so, overwriting keys with dicts (nesting) can cause memory leaks.
+        # to avoid this, call .clear() before assigning the new dict
+        # testwise I made this the default for setting keys of benedict
+        h5f["ana.states"] = states
+
+    if return_res:
+        return states
 
 # ------------------------------------------------------------------------------ #
 # batch processing across realization

@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-08-05 20:25:12
+# @Last Modified: 2021-08-10 11:24:43
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -121,7 +121,8 @@ def overview_dynamic(h5f, filenames=None, threshold=None, states=True):
     axes.append(fig.add_subplot(gs[2, :], sharex=axes[1]))
     axes.append(fig.add_subplot(gs[3, :], sharex=axes[1]))
     axes.append(fig.add_subplot(gs[0, 0]))
-    axes.append(fig.add_subplot(gs[4, :], sharex=axes[1]))
+    if depletion:
+        axes.append(fig.add_subplot(gs[4, :], sharex=axes[1]))
 
     if not "ana" in h5f.keypaths():
         ah.prepare_file(h5f)
@@ -147,7 +148,7 @@ def overview_dynamic(h5f, filenames=None, threshold=None, states=True):
     if depletion:
         axes[3].set_xlabel("")
         ax = plot_state_variable(h5f, axes[5], variable="D")
-        ax.set_ylim(0.4, 1)
+        ax.set_ylim(0.0, 1)
 
     fig.tight_layout()
 
@@ -407,6 +408,7 @@ def plot_bursts_into_timeseries(h5f, ax=None, apply_formatting=True):
         except Exception as e:
             log.debug(e)
 
+    total_num_b = 0
     pad = 3
     for mdx, m_id in enumerate(h5f["ana.mod_ids"]):
         m_dc = h5f["ana.mods"][mdx]
@@ -414,6 +416,7 @@ def plot_bursts_into_timeseries(h5f, ax=None, apply_formatting=True):
         end_times = h5f[f"ana.bursts.module_level.{m_dc}.end_times"]
 
         num_b = len(beg_times)
+        total_num_b += num_b
         try:
             ibi = np.nanmean(h5f[f"ana.ibi.module_level.{m_dc}"])
         except:
@@ -435,6 +438,8 @@ def plot_bursts_into_timeseries(h5f, ax=None, apply_formatting=True):
             lw=0,
         )
 
+    log.info(f"Found {total_num_b} bursts across modules")
+
     # only interested in bursts that extended across all modules
     beg_times = np.array(h5f["ana.bursts.system_level.beg_times"])
     end_times = np.array(h5f["ana.bursts.system_level.end_times"])
@@ -448,7 +453,7 @@ def plot_bursts_into_timeseries(h5f, ax=None, apply_formatting=True):
         ibi = np.nanmean(h5f[f"ana.ibi.system_level.all_modules"])
     except:
         ibi = np.nan
-    log.info(f"Found {num_b} system-wide bursts")
+    log.info(f"Found {num_b} bursts system-wide")
     log.info(f"System-wide IBI: {ibi:.2f} seconds")
 
     ax.plot(
@@ -972,6 +977,13 @@ def _stimulation_color_palette():
 # distributions
 # ------------------------------------------------------------------------------ #
 
+def _plot_matrix(c, **kwargs):
+    fig, ax = plt.subplots()
+    im = ax.matshow(c, **kwargs)
+    plt.colorbar(im)
+
+    return ax
+
 
 def plot_distribution_correlation_coefficients(
     h5f, ax=None, apply_formatting=True, num_bins=20, which="neurons",
@@ -992,9 +1004,7 @@ def plot_distribution_correlation_coefficients(
 
     log.info(f"Functional Complexity: {C:.3f}")
 
-    foo, bar = plt.subplots()
-    im = bar.matshow(rij)
-    plt.colorbar(im)
+    _plot_matrix(rij, vmin=0, vmax=1)
 
     bw = 1.0 / num_bins
     bins = np.arange(0, 1 + 0.1 * bw, bw)
