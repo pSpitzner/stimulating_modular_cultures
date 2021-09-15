@@ -1313,10 +1313,14 @@ def merge_if_below_separation_threshold(beg_time, end_time, threshold):
 
     # skip a new burst beginning if within threshold of the previous ending
     skip = False
+    beg = 0
+    end = 0
 
     for idx in range(0, len(beg_time) - 1):
 
-        end = end_time[idx]
+        if end_time[idx] >= end_time[end]:
+            end = idx
+
         if not skip:
             beg = beg_time[idx]
 
@@ -1346,12 +1350,19 @@ def arg_merge_if_below_separation_threshold(beg_time, end_time, threshold):
     beg_res = []
     end_res = []
 
+    if len(beg_time) == 0:
+        return beg_res, end_res
+
     # skip a new burst beginning if within threshold of the previous ending
     skip = False
+    beg = 0
+    end = 0
 
     for idx in range(0, len(beg_time) - 1):
 
-        end = idx
+        if end_time[idx] >= end_time[end]:
+            end = idx
+
         if not skip:
             beg = idx
 
