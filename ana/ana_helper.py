@@ -1318,8 +1318,8 @@ def merge_if_below_separation_threshold(beg_time, end_time, threshold):
 
     for idx in range(0, len(beg_time) - 1):
 
-        if end_time[idx] >= end_time[end]:
-            end = idx
+        if end_time[idx] >= end:
+            end = end_time[idx]
 
         if not skip:
             beg = beg_time[idx]
