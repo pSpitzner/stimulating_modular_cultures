@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-08-10 11:24:43
+# @Last Modified: 2021-09-16 18:21:36
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -152,7 +152,7 @@ def overview_dynamic(h5f, filenames=None, threshold=None, states=True):
 
     fig.tight_layout()
 
-    plot_distribution_participating_fraction(h5f)
+    # plot_distribution_participating_fraction(h5f)
 
     return fig
 
@@ -971,6 +971,52 @@ def _stimulation_color_palette():
     }
 
     return palette
+
+
+def plot_comparison_rij_between_conditions(fname_1, fname_2, label_1="f1", label_2="f2"):
+    """
+        Plot a rij for every neuron pair between conditions.
+        Assumes that fname_1 and fname_2 lead to h5files with the same neuron positions
+        under different dynamic conditions.
+    """
+
+    fig, ax = plt.subplots()
+
+    h5f_1 = ah.prepare_file(fname_1)
+    h5f_2 = ah.prepare_file(fname_2)
+
+
+    rij_mat_1, rij_within_1, rij_across_1 = ah.find_rij_within_across(h5f_1)
+    rij_mat_2, rij_within_2, rij_across_2 = ah.find_rij_within_across(h5f_2)
+
+    temp_ax = _plot_matrix(rij_mat_1, vmin=0, vmax=1)
+    temp_ax.set_title(label_1)
+    temp_ax.get_figure().tight_layout()
+    temp_ax = _plot_matrix(rij_mat_2, vmin=0, vmax=1)
+    temp_ax.set_title(label_2)
+    temp_ax.get_figure().tight_layout()
+
+
+    ax.plot(rij_within_1, rij_within_2, ".", color="C0", markersize=1.5, markeredgewidth=0, label="within modules", alpha=1, zorder=1)
+    ax.plot(rij_across_1, rij_across_2, ".", color="C1", markersize=1.5, markeredgewidth=0, label="across modules", alpha=1, zorder=0)
+
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.plot([0, 1], [0, 1], zorder = -2, color="gray")
+
+    ax.set_xlabel(label_1)
+    ax.set_ylabel(label_2)
+    ax.legend()
+
+    fig.tight_layout()
+
+    ah.h5.close_hot(h5f_1)
+    ah.h5.close_hot(h5f_2)
+
+    # return rij_within_1, rij_within_2
+    # return rij_1, rij_2
+    return ax
+
 
 
 # ------------------------------------------------------------------------------ #

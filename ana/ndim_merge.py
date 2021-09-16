@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-08-09 09:33:18
+# @Last Modified: 2021-09-16 18:44:22
 #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into an ndim array
@@ -97,7 +97,7 @@ def all_in_one(candidate=None):
     h5f = ah.prepare_file(
         candidate, hot=False, skip=["connectivity_matrix", "connectivity_matrix_sparse"]
     )
-    ah.find_bursts_from_rates(h5f, rate_threshold = 2.5)
+    ah.find_bursts_from_rates(h5f, rate_threshold = 5.0)
     ah.find_ibis(h5f)
 
     # number of bursts and duration

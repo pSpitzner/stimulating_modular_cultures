@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-08-10 11:10:26
+# @Last Modified: 2021-09-16 18:39:16
 # ------------------------------------------------------------------------------ #
 
 
@@ -500,7 +500,6 @@ def find_participating_fraction_in_bursts(h5f, write_to_h5f=True, return_res=Fal
         return bursts
 
 
-
 # todo: implement convention write_to_h5f
 def find_functional_complexity(
     h5f,
@@ -509,7 +508,7 @@ def find_functional_complexity(
     which="neurons",
     time_bin_size=None,
     num_bins=20,
-    bins = None,
+    bins=None,
 ):
     """
     Find functional complexity, either from module rates or neurons.
@@ -591,6 +590,43 @@ def find_state_variable(h5f, variable, write_to_h5f=True, return_res=False):
 
     if return_res:
         return states
+
+
+def find_rij_within_across(h5f):
+    """
+        We already have a nice way to get the rij in `find_functional_complexity`.
+        Lets use that and do the sorting afterwards.
+    """
+
+    # this gives us rij as a matrix, 2d np array
+    _, rij = find_functional_complexity(h5f, which="neurons", return_res=True)
+
+    # 40 ^ 2 * 4 / 2 + 40 * 120 * 4 / 2
+
+    n = len(h5f["data.neuron_module_id"][:])
+    # n_mods = len(h5f["ana.mod_ids"])
+    # n_per_mod = int(n / n_mods)
+    # n_within = int(n_per_mod * n_per_mod * n_mods / 2)
+    # n_across = int(n_per_mod * (n - n_per_mod) * n_mods / 2)
+
+    rij_within = []
+    rij_across = []
+
+    adx = 0
+    wdx = 0
+    for i in range(0, n):
+        for j in range(0, n):
+            if j >= i:
+                # skip upper diagonal
+                continue
+
+            if h5f["data.neuron_module_id"][i] == h5f["data.neuron_module_id"][j]:
+                rij_within.append(rij[i, j])
+            else:
+                rij_across.append(rij[i, j])
+
+    return rij, rij_within, rij_across
+
 
 # ------------------------------------------------------------------------------ #
 # batch processing across realization
@@ -1039,7 +1075,7 @@ def _inter_spike_intervals(spikes_2d, beg_times=None, end_times=None):
     )
 
 
-def _functional_complexity(rij, num_bins=20, bins = None):
+def _functional_complexity(rij, num_bins=20, bins=None):
     """
     Uses np corrcoef on series to get correlation coefficients and calculate
     gorkas functional complexity measure (Zamora-Lopez et al 2016)
