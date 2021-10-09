@@ -74,11 +74,13 @@ jG = 70 * mV       # GABA current strength
 
 # noise
 beta = 0.8         # D = beta*D after spike, to reduce efficacy, beta < 1
-rate = 37 * Hz     # rate for the poisson input (shot-noise), between 10 - 50 Hz
-jM   = 25 * mV     # shot noise (minis) strength, between 10 - 50 mV
+rate = 80 * Hz     # rate for the poisson input (shot-noise), between 10 - 50 Hz
+jM   = 15 * mV     # shot noise (minis) strength, between 10 - 50 mV
                    # (sum of minis arriving at target neuron)
 jS = 300 * mV * mV * ms * ms  # white noise strength, via xi = dt**.5 * randn()
 
+jE = 50 * mV       # strength of external, constant current that is turned on when
+                   # stimulating optogenetically
 
 # ------------------------------------------------------------------------------ #
 # simulation parameters
@@ -117,6 +119,7 @@ parser.add_argument("-o",  dest="output_path", help="output path", metavar="FILE
 parser.add_argument("-jA", dest="jA",          help="in mV",       default=jA / mV,     type=float)
 parser.add_argument("-jG", dest="jG",          help="in mV",       default=jG / mV,     type=float)
 parser.add_argument("-jM", dest="jM",          help="in mV",       default=jM / mV,     type=float)
+parser.add_argument("-jE", dest="jE",          help="in mV",       default=jE / mV,     type=float)
 parser.add_argument("-r",  dest="r",           help="in Hz",       default=rate / Hz,   type=float)
 parser.add_argument("-tD", dest="tD",          help="in seconds",  default=tD / second, type=float)
 parser.add_argument("-s",  dest="seed",        help="rng",         default=117,         type=int)
@@ -153,6 +156,7 @@ numpy.random.seed(args.seed)
 jA = args.jA * mV
 jM = args.jM * mV
 jG = args.jG * mV
+jE = args.jE * mV
 tD = args.tD * second
 rate = args.r * Hz
 args.equil_duration *= second
@@ -193,17 +197,18 @@ num_n, a_ij_sparse, mod_ids = topo.load_topology(args.input_path)
 G = NeuronGroup(
     N=num_n,
     model="""
-        dv/dt = ( k*(v-vRef)*(v-vThr) -u +IA -IG          # [6] soma potential
+        dv/dt = ( k*(v-vRef)*(v-vThr) -u +IA -IG +Istim     # [6] soma potential
                   +xi*(jS/tV)**0.5      )/tV   : volt       # white noise term
         dIA/dt = -IA/tA                        : volt       # [9, 10]
         dIG/dt = -IG/tG                        : volt       # [9, 10]
-        du/dt = ( b*(v-vRef) -u )/tU         : volt       # [7] recovery variable
+        du/dt = ( b*(v-vRef) -u )/tU           : volt       # [7] recovery variable
         dD/dt = ( 1-D)/tD                      : 1          # [11] recovery to one
-        j     : volt  (constant)                 # neuron specific synaptic weight
+        j     : volt (constant)                             # neuron specific synaptic weight
+        Istim : volt (constant)
     """,
     threshold="v > vPeak",
     reset="""
-        v = vReset        # [8]
+        v = vReset       # [8]
         u = u + uIncr    # [8]
         D = D * beta     # [11] delta-function term on spike
     """,
@@ -243,7 +248,7 @@ G_exc = G[t2b[excit_ids]]
 G_bridge = G[t2b[bridge_ids]]
 
 # initalize according to neuron type
-G.v = "vReset + 5*mV*rand()"
+G.v = "vRef + 5*mV*(rand()-0.5)"
 G.j = 0  # the lines below should overwrite this, sanity check
 G_inh.j = jG
 G_exc.j = jA
@@ -298,26 +303,18 @@ for n_id in excit_ids:
 # ------------------------------------------------------------------------------ #
 
 if args.stimulation_type == "hideaki":
-
-    stimulus_indices, stimulus_times = stim.stimulation_pattern(
-        interval=400 * ms,
-        duration=args.equil_duration + args.sim_duration,
-        target_modules=args.stimulation_module,
-        mod_ids=mod_ids,
-        min_dt=defaultclock.dt * 1.001,
+    # get 5 candidates per stimulated module
+    stim_ids = stim._draw_candidates(
+        mod_ids=mod_ids, n_per_mod=5, mod_targets=args.stimulation_module
     )
-    stim_ids = np.sort(np.unique(stimulus_indices))
-
-    stim_g = SpikeGeneratorGroup(
-        N=num_n,
-        indices=t2b[stimulus_indices],
-        times=stimulus_times,
-        name="create_stimulation",
-    )
-    # because we project via artificial synapses, we get a delay of
-    # approx (!) one timestep between the stimulation and the spike
-    stim_s = Synapses(stim_g, G, on_pre="v_post = 2*vPeak", name="apply_stimulation",)
-    stim_s.connect(condition="i == j")
+    stim_ids = t2b[stim_ids]
+    # every 400ms, each candidate has a chance 0.4 to receive the stimulus
+    for sid in stim_ids:
+        G[sid].run_regularly("""
+            stim_on = int(rand() < 0.4)
+            Istim = stim_on * jE
+        """,
+        dt = 400*ms)
 
 elif args.stimulation_type == "poisson":
     # to target birde neurons only, assume bridge_ids are consecutive
@@ -352,13 +349,10 @@ if record_state:
     else:
         # list
         rec = t2b[record_state_idxs]
-    stat_m = StateMonitor(G, record_state_vars, record=rec, dt = 25*ms)
+    stat_m = StateMonitor(G, record_state_vars, record=rec, dt=25 * ms)
 
 if record_rates:
     rate_m = PopulationRateMonitor(G)
-
-if args.stimulation_type != "off":
-    stim_m = SpikeMonitor(stim_g)
 
 log.info("Recording data")
 run(args.sim_duration, report="stdout", report_period=60 * 60 * second)
@@ -422,14 +416,13 @@ else:
 
         if args.stimulation_type != "off":
             # stimultation timestamps in two different formats
-            stim, stim_as_list = convert_brian_spikes_to_pauls(stim_m)
-
-            dset = f.create_dataset(
-                "/data/stimulation_times_as_list", compression="gzip", data=stim_as_list
-            )
-            dset.attrs[
-                "description"
-            ] = "two-column list of stimulation times. first col is target-neuron id, second col the stimulation time. Beware: we have approximateley one timestep delay between stimulation and spike."
+            # stim, stim_as_list = convert_brian_spikes_to_pauls(stim_m)
+            # dset = f.create_dataset(
+            #     "/data/stimulation_times_as_list", compression="gzip", data=stim_as_list
+            # )
+            # dset.attrs[
+            #     "description"
+            # ] = "two-column list of stimulation times. first col is target-neuron id, second col the stimulation time. Beware: we have approximateley one timestep delay between stimulation and spike."
 
             dset = f.create_dataset("/data/neuron_stimulation_ids", data=stim_ids)
             dset.attrs[
@@ -510,6 +503,9 @@ else:
 
         dset = f.create_dataset("/meta/dynamics_jM", data=jM / mV)
         dset.attrs["description"] = "shot noise (minis) strength, in mV"
+
+        dset = f.create_dataset("/meta/dynamics_jE", data=jE / mV)
+        dset.attrs["description"] = "constant current strength from optogenetic simtulation, in mV"
 
         dset = f.create_dataset("/meta/dynamics_tD", data=tD / second)
         dset.attrs["description"] = "characteristic decay time, in seconds"
