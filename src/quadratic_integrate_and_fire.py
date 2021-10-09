@@ -79,7 +79,7 @@ jM   = 15 * mV     # shot noise (minis) strength, between 10 - 50 mV
                    # (sum of minis arriving at target neuron)
 jS = 300 * mV * mV * ms * ms  # white noise strength, via xi = dt**.5 * randn()
 
-jE = 50 * mV       # strength of external, constant current that is turned on when
+jE = 20 * mV       # strength of external, constant current that is turned on when
                    # stimulating optogenetically
 
 # ------------------------------------------------------------------------------ #
