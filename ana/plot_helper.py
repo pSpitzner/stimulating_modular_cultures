@@ -511,6 +511,7 @@ def plot_parameter_info(h5f, ax=None, apply_formatting=True, add=[]):
         dat.append(["", ""])
         dat.append(["AMPA [mV]", h5f["meta.dynamics_jA"]])
         dat.append(["GABA [mV]", h5f["meta.dynamics_jG"]])
+        dat.append(["Noise [mV]", h5f["meta.dynamics_jM"]])
         dat.append(["Noise Rate [Hz]", h5f["meta.dynamics_rate"]])
     except:
         pass

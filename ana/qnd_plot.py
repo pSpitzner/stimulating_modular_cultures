@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-08-09 09:38:12
+# @Last Modified: 2021-09-16 20:11:59
 #
 # plot a merged down, multidimensional hdf5 file (from individual simulations)
 # and select which dims to show where
@@ -41,7 +41,9 @@ def full_path(path):
 
 def o_labels(short):
     label = ""
-    if "num_b" in short:
+    if "ratio_num_b" in short:
+        label += "Fraction of bursts"
+    elif "num_b" in short:
         label += "Number of bursts"
     elif "blen" in short:
         label += "Burst duration"
@@ -71,7 +73,7 @@ def o_labels(short):
         label += "\n(system-wide)"
     elif "any" in short:
         label += "\n(anywhere)"
-    elif "mod" in short:
+    elif "mod" in short or "ratio" in short:
         label += "\n("
         label += short[-1]
         label += " modules)"
@@ -235,9 +237,23 @@ for obs in hidden_vals.keys():
     val_idx.append(np.where(d_axes[obs] == hidden_vals[obs])[0][0])
 
 
+l_obs_candidates.append("ratio_num_b_1")
+l_obs_candidates.append("ratio_num_b_2")
+l_obs_candidates.append("ratio_num_b_4")
+
 for odx, obs_to_plot in enumerate(l_obs_candidates):
     # reduce the data, back to front, starting with last axis
-    data_nd = h5.load(input_path, f"/data/{obs_to_plot}", silent=True)
+    if "ratio_num_b" in obs_to_plot:
+        try:
+            data_nd_1 = h5.load(input_path, f"/data/any_num_b", silent=True)
+            blen = obs_to_plot[-1]
+            data_nd_2 = h5.load(input_path, f"/data/mod_num_b_{blen}", silent=True)
+            data_nd = data_nd_2 / data_nd_1
+        except:
+            continue
+    else:
+        data_nd = h5.load(input_path, f"/data/{obs_to_plot}", silent=True)
+
     data_3d = data_nd
     for k in sorted(ax_idx, reverse=True):
         i = np.where(ax_idx == k)[0][0]
@@ -308,7 +324,10 @@ for odx, obs_to_plot in enumerate(l_obs_candidates):
     ax.set_xlabel(a_labels(x_obs))
     ax.set_ylabel(o_labels(obs_to_plot))
     ax.legend()
-    ax.xaxis.set_major_locator(MultipleLocator(10))
+    ax.xaxis.set_major_locator(MultipleLocator(20))
     ax.xaxis.set_minor_locator(MultipleLocator(5))
+
+    if "ratio" in obs_to_plot:
+        ax.set_ylim(0, 1)
 
     fig.tight_layout()

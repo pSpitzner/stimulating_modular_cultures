@@ -122,8 +122,9 @@ def _draw_candidates(mod_ids, n_per_mod=5, mod_targets=[0]):
         Parameters
         ----------
         mod_ids : 1d array
-            ids of the modules. index is the id of the neuron, the value at the
-            index is the id of the module
+            id of the module each neuron of the system is in.
+            index is the id of the neuron,
+            the value at the index is the id of the module
 
         n_per_mod : int
             number of candidates to draw per module
