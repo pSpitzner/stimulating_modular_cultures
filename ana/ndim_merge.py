@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-10-11 10:36:19
+# @Last Modified: 2021-10-13 12:12:28
 #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into an ndim array
@@ -18,8 +18,10 @@ import argparse
 import logging
 import warnings
 import functools
+import itertools
 import tempfile
 import psutil
+import re
 
 # import matplotlib as mpl
 # import matplotlib.pyplot as plt
@@ -86,11 +88,22 @@ def all_in_one(candidate=None):
         res["sys_participating_fraction_complexity"] = 1
         res["any_num_spikes_in_bursts"] = 1
 
-        # histograms
-        res["sys_hbins_participating_fraction"] = 21
-        res["sys_hvals_participating_fraction"] = 20
-        res["sys_hbins_functional_complexity"] = 21
-        res["sys_hvals_functional_complexity"] = 20
+        # histograms, use "vec" prefix to indicate that higher dimensional data
+        res["vec_sys_hbins_participating_fraction"] = 21
+        res["vec_sys_hvals_participating_fraction"] = 20
+        res["vec_sys_hbins_functional_complexity"] = 21
+        res["vec_sys_hvals_functional_complexity"] = 20
+
+        # correlation coefficients, within
+        for mod in [0, 1, 2, 3]:
+            # 40 neurons per module, count pairs only once, exclude 20 self-to-self
+            # 40^2 / 2 - 20
+            res[f"vec_rij_within_{mod}"] = 780
+
+        # correlation coefficients, across
+        for pair in itertools.combinations("0123", 2):
+            # here just 40^2, since in different modules
+            res[f"vec_rij_across_{pair[0]}_{pair[1]}"] = 1600
 
         return res
 
@@ -98,7 +111,7 @@ def all_in_one(candidate=None):
     h5f = ah.prepare_file(
         candidate, hot=False, skip=["connectivity_matrix", "connectivity_matrix_sparse"]
     )
-    ah.find_bursts_from_rates(h5f, rate_threshold = 5.0)
+    ah.find_bursts_from_rates(h5f, rate_threshold=5.0)
     ah.find_ibis(h5f)
 
     # number of bursts and duration
@@ -133,23 +146,46 @@ def all_in_one(candidate=None):
         res["any_ibis"] = np.nanmean(ibis_module)
         res["sys_ibis"] = np.nanmean(h5f["ana.ibi.system_level.all_modules"])
         res["any_ibis_cv"] = np.nanmean(h5f["ana.ibi.system_level.cv_any_module"])
-        res["sys_ibis_cv"] = np.nanmean(
-            h5f["ana.ibi.system_level.cv_across_modules"]
-        )
+        res["sys_ibis_cv"] = np.nanmean(h5f["ana.ibi.system_level.cv_across_modules"])
     except KeyError as e:
         log.error(h5f.keypaths())
         raise e
 
+    # correlation coefficients
+    try:
+        rij_matrix = ah.find_rij(h5f, which="neurons", time_bin_size=40 / 1000)
+    except:
+        log.error("Failed to find correlation coefficients")
+
+    for mod in [0, 1, 2, 3]:
+        try:
+            res[f"vec_rij_within_{mod}"] = ah.find_rij_pairs(
+                h5f, rij_matrix, pairing=f"within_group_{mod}"
+            )
+        except Exception as e:
+            log.error(e)
+            res[f"vec_rij_within_{mod}"] = np.ones(780) * np.nan
+
+    # correlation coefficients, across
+    for pair in itertools.combinations("0123", 2):
+        # here just 40^2, since in different modules
+        try:
+            res[f"vec_rij_across_{pair[0]}_{pair[1]}"] = ah.find_rij_pairs(
+                h5f, rij_matrix, pairing=f"across_groups_{pair[0]}_{pair[1]}"
+            )
+        except Exception as e:
+            log.error(e)
+            res[f"vec_rij_across_{pair[0]}_{pair[1]}"] = np.ones(1600) * np.nan
+
     # functional complexity
     bw = 1.0 / 20
     bins = np.arange(0, 1 + 0.1 * bw, bw)
-    res["sys_hbins_functional_complexity"] = bins.copy()
-    res["sys_hbins_participating_fraction"] = bins.copy()
+    res["vec_sys_hbins_functional_complexity"] = bins.copy()
+    res["vec_sys_hbins_participating_fraction"] = bins.copy()
 
     try:
-        C, rij =  ah.find_functional_complexity(
-            h5f, which="neurons", return_res=True, write_to_h5f=False,
-            bins = bins
+        C, rij = ah.find_functional_complexity(
+            h5f, rij=rij_matrix, return_res=True, write_to_h5f=False, bins=bins
         )
         # this is not the place to do this, but ok
         np.fill_diagonal(rij, np.nan)
@@ -160,12 +196,12 @@ def all_in_one(candidate=None):
         rij = np.ones(21) * np.nan
 
     res["sys_functional_complexity"] = C
-    res["sys_hvals_functional_complexity"] = rij.copy()
+    res["vec_sys_hvals_functional_complexity"] = rij.copy()
 
+    # complexity on module level
     try:
-        C, _ =  ah.find_functional_complexity(
-            h5f, which="modules", return_res=True, write_to_h5f=False,
-            bins = bins
+        C, _ = ah.find_functional_complexity(
+            h5f, which="modules", return_res=True, write_to_h5f=False, bins=bins
         )
     except Exception as e:
         log.debug(e)
@@ -183,7 +219,7 @@ def all_in_one(candidate=None):
         C = np.nan
         rij = np.ones(21) * np.nan
     res["sys_participating_fraction"] = C
-    res["sys_hvals_participating_fraction"] = rij.copy()
+    res["vec_sys_hvals_participating_fraction"] = rij.copy()
 
     try:
         fractions = h5f["ana.bursts.system_level.participating_fraction"]
@@ -207,11 +243,11 @@ def all_in_one(candidate=None):
         C = np.nan
     res["mod_num_spikes_in_bursts_1"] = C
 
-
     h5.close_hot(h5f)
     h5f.clear()
 
     return res
+
 
 # ------------------------------------------------------------------------------ #
 # arguments
@@ -231,8 +267,12 @@ def parse_arguments():
         "-o", dest="output_path", help="output path", metavar="FILE", required=True
     )
     parser.add_argument(
-        "-c", "--cores", dest="num_cores", help="number of dask cores",
-        default=256, type=int,
+        "-c",
+        "--cores",
+        dest="num_cores",
+        help="number of dask cores",
+        default=256,
+        type=int,
     )
     return parser.parse_args()
 
@@ -343,9 +383,12 @@ def main(args):
     # dict of key -> needed space
     res_dict = all_in_one(None)
     for key in res_dict.keys():
-        # keep repetitions always as the last axes for scalars, else the hist content
-        if "hbins" in key or "hvals" in key:
-            res_ndim[key] = np.ones(shape=axes_shape + (num_rep, res_dict[key])) * np.nan
+        # keep repetitions always as the last axes for scalars,
+        # but for vectors (inconsistent length across observables), keep data-dim last
+        if key[0:3] == "vec":
+            res_ndim[key] = (
+                np.ones(shape=axes_shape + (num_rep, res_dict[key])) * np.nan
+            )
         else:
             res_ndim[key] = np.ones(shape=axes_shape + (num_rep,)) * np.nan
 
@@ -355,12 +398,25 @@ def main(args):
     # dispatch
     futures = dh.client.map(f, candidates)
 
+    # for some analysis, we need repetitions to be indexed consistently
+    # but we have to find them from filename since I usually do not save rep to meta
+    reps_from_files = True
+
+    # check first file, if we cannot infer there, skip ordering everywhere
+    if find_rep(candidates[0]) is None:
+        reps_from_files = False
+
     # gather
     for future in tqdm(dh.as_completed(futures), total=len(futures)):
-        index, res = future.result()
+        index, rep, res = future.result()
+
+        if reps_from_files:
+            assert rep is not None, "Could not infer repetition from all file names"
+        else:
+            # get rep from already counted repetitions
+            rep = sampled[index]
 
         # consider repetitions for each data point and stack values
-        rep = sampled[index]
         if rep <= num_rep:
             sampled[index] += 1
             index += (rep,)
@@ -398,9 +454,13 @@ def main(args):
     for key in res_ndim.keys():
         dset = f_tar.create_dataset(f"/data/{key}", data=res_ndim[key])
         if "hbins" in key:
-            dset.attrs["description"] = "like scalars, but last dim are histogram bin edges"
+            dset.attrs[
+                "description"
+            ] = "like scalars, but last dim are histogram bin edges"
         elif "weights" in key:
-            dset.attrs["description"] = "like scalars, but last dim are histogram weights"
+            dset.attrs[
+                "description"
+            ] = "like scalars, but last dim are histogram weights"
         else:
             dset.attrs["description"] = desc_axes
 
@@ -416,8 +476,14 @@ def main(args):
 # helper
 # ------------------------------------------------------------------------------ #
 
+# Find the repetition from the file name
+def find_rep(candidate):
+    search = re.search('((rep=*)|(_r=*))(\d+)', candidate, re.IGNORECASE)
+    if search is not None and len(search.groups()) != 0:
+        return search.groups()[-1]
+
 # we have to pass global variables so that they are available in each worker.
-# simple set them as default arguments so only `candidate` varies between workers
+# simple set them via frunctools.partial so only `candidate` varies between workers
 def analyse_candidate(candidate, d_axes, d_obs):
     # for candidate in tqdm(l_valid, desc="Files"):
     index = ()
@@ -431,8 +497,13 @@ def analyse_candidate(candidate, d_axes, d_obs):
         # psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024
 
     res = all_in_one(candidate)
+    rep = find_rep(candidate)
+    try:
+        rep = int(rep)
+    except:
+        rep = None
 
-    return index, res
+    return index, rep, res
 
 
 def check_candidate(candidate, d_obs):
