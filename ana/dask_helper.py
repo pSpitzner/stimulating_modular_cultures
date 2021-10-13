@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-06-24 18:23:02
-# @Last Modified: 2021-08-06 11:10:19
+# @Last Modified: 2021-10-12 13:57:20
 # ------------------------------------------------------------------------------ #
 
 import os
@@ -84,7 +84,14 @@ def init_dask(n_workers = 256):
         cluster = LocalCluster(local_directory=f"{tempfile.gettempdir()}/dask/")
 
     client = Client(cluster)
-    log.info(cluster)
-    log.info(client)
+    log.debug(cluster)
+    log.debug(client)
 
+def close():
+    # cluster and client get closed automatically, when the python session terminates,
+    # but sometimes we want to do it manually
+    global cluster
+    global client
 
+    client.close()
+    cluster.close()

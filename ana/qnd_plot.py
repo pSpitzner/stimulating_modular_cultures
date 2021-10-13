@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-09-16 20:11:59
+# @Last Modified: 2021-10-11 19:37:41
 #
 # plot a merged down, multidimensional hdf5 file (from individual simulations)
 # and select which dims to show where
@@ -87,6 +87,8 @@ def a_labels(short):
         return "GABA strength jG (inhibition)"
     elif "jA" in short:
         return "AMPA strength jA (excitation)"
+    elif "jE" in short:
+        return "External current strength jE"
     elif "k_frac" in short:
         return "Fraction of Connections"
 
@@ -323,6 +325,7 @@ for odx, obs_to_plot in enumerate(l_obs_candidates):
         )
     ax.set_xlabel(a_labels(x_obs))
     ax.set_ylabel(o_labels(obs_to_plot))
+    fig.canvas.manager.set_window_title(o_labels(obs_to_plot).replace('\n', ' '))
     ax.legend()
     ax.xaxis.set_major_locator(MultipleLocator(20))
     ax.xaxis.set_minor_locator(MultipleLocator(5))

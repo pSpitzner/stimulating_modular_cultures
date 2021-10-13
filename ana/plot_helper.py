@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-09-16 18:21:36
+# @Last Modified: 2021-10-13 09:43:31
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -20,6 +20,7 @@ import glob
 import h5py
 import argparse
 import logging
+import functools
 
 import matplotlib
 # matplotlib.rcParams['font.sans-serif'] = "Arial"
@@ -50,6 +51,7 @@ from tqdm import tqdm
 from brian2.units.allunits import *
 
 log = logging.getLogger(__name__)
+log.setLevel("DEBUG")
 sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/../ana/"))
 
 # import logisi as logisi
@@ -347,9 +349,7 @@ def plot_state_variable(h5f, ax=None, apply_formatting=True, variable="D"):
 
     log.info(f"Plotting state variable '{variable}'")
     assert f"data.state_vars_{variable}" in h5f.keypaths()
-    stat_vals = h5f[f"data.state_vars_{variable}"] # avoid loading this with [:]!
-
-
+    stat_vals = h5f[f"data.state_vars_{variable}"]  # avoid loading this with [:]!
 
     if ax is None:
         fig, ax = plt.subplots()
@@ -364,8 +364,8 @@ def plot_state_variable(h5f, ax=None, apply_formatting=True, variable="D"):
         ax.plot(
             h5f[f"data.state_vars_time"][:],
             np.nanmean(stat_vals[selects, :], axis=0),
-            color = h5f["ana.mod_colors"][m_id],
-            zorder = 1,
+            color=h5f["ana.mod_colors"][m_id],
+            zorder=1,
         )
 
         # show some faint lines for individual neurons from each module
@@ -376,10 +376,10 @@ def plot_state_variable(h5f, ax=None, apply_formatting=True, variable="D"):
             ax.plot(
                 h5f[f"data.state_vars_time"][:],
                 stat_vals[s],
-                lw = 0.5,
-                color = h5f["ana.mod_colors"][m_id],
-                zorder = 0,
-                alpha = 0.5,
+                lw=0.5,
+                color=h5f["ana.mod_colors"][m_id],
+                zorder=0,
+                alpha=0.5,
             )
 
     if apply_formatting:
@@ -444,7 +444,8 @@ def plot_bursts_into_timeseries(h5f, ax=None, apply_formatting=True):
     beg_times = np.array(h5f["ana.bursts.system_level.beg_times"])
     end_times = np.array(h5f["ana.bursts.system_level.end_times"])
     l = [len(seq) for seq in h5f["ana.bursts.system_level.module_sequences"]]
-    idx = np.where(np.array(l) >= len(h5f["ana.mods"]))
+    # idx = np.where(np.array(l) >= len(h5f["ana.mods"]))
+    idx = np.where(np.array(l) >= 0)
     beg_times = beg_times[idx]
     end_times = end_times[idx]
 
@@ -974,40 +975,186 @@ def _stimulation_color_palette():
     return palette
 
 
-def plot_comparison_rij_between_conditions(fname_1, fname_2, label_1="f1", label_2="f2"):
+def plot_comparison_rij_between_conditions_serial(
+    h5f_1=None,
+    h5f_2=None,
+    fname_1=None,
+    fname_2=None,
+    label_1="f1",
+    label_2="f2",
+    which="modules",
+    plot_matrix=False,
+):
     """
         Plot a rij for every neuron pair between conditions.
         Assumes that fname_1 and fname_2 lead to h5files with the same neuron positions
         under different dynamic conditions.
+
+        #Parameters
+        which : str, "modules" or "stim" to compare within/across modules or groups
+            of stimulated vs non-stimulated modules. stimulated mods are hardcoded to 02
     """
 
+    assert which in ["modules", "stim"]
+
     fig, ax = plt.subplots()
+    fig.canvas.manager.set_window_title(f"rij_{which}_{label_1}_{label_2}")
 
-    h5f_1 = ah.prepare_file(fname_1)
-    h5f_2 = ah.prepare_file(fname_2)
+    if h5f_1 is None:
+        assert fname_1 is not None
+        h5f_1 = ah.prepare_file(fname_1)
+    if h5f_2 is None:
+        assert fname_2 is not None
+        h5f_2 = ah.prepare_file(fname_2)
 
+    rij_1 = ah.find_rij(h5f_1, which="neurons", time_bin_size=40 / 1000)
+    rij_2 = ah.find_rij(h5f_2, which="neurons", time_bin_size=40 / 1000)
 
-    rij_mat_1, rij_within_1, rij_across_1 = ah.find_rij_within_across(h5f_1)
-    rij_mat_2, rij_within_2, rij_across_2 = ah.find_rij_within_across(h5f_2)
+    log.debug(fname_1)
+    log.debug(fname_2)
 
-    temp_ax = _plot_matrix(rij_mat_1, vmin=0, vmax=1)
-    temp_ax.set_title(label_1)
-    temp_ax.get_figure().tight_layout()
-    temp_ax = _plot_matrix(rij_mat_2, vmin=0, vmax=1)
-    temp_ax.set_title(label_2)
-    temp_ax.get_figure().tight_layout()
+    if plot_matrix:
+        temp_ax = _plot_matrix(rij_1, vmin=0, vmax=1)
+        temp_ax.set_title(label_1)
+        temp_ax.get_figure().tight_layout()
+        temp_ax.get_figure().canvas.manager.set_window_title(f"rij_{label_1}")
 
+        temp_ax = _plot_matrix(rij_2, vmin=0, vmax=1)
+        temp_ax.set_title(label_2)
+        temp_ax.get_figure().tight_layout()
+        temp_ax.get_figure().canvas.manager.set_window_title(f"rij_{label_2}")
 
-    ax.plot(rij_within_1, rij_within_2, ".", color="C0", markersize=1.5, markeredgewidth=0, label="within modules", alpha=1, zorder=1)
-    ax.plot(rij_across_1, rij_across_2, ".", color="C1", markersize=1.5, markeredgewidth=0, label="across modules", alpha=1, zorder=0)
+    if which == "modules":
+        pairings = ["within_modules", "across_modules"]
+    elif which == "stim":
+        # pairings = ["within_modules", "across_groups_02_13"]
+        pairings = [
+            "within_group_0",
+            # "within_group_1",
+            # "within_group_2",
+            # "within_group_3",
+        ]
+        # pairings = [ "across_groups_0_1", "across_groups_2_3", "across_groups_1_3", "across_groups_0_2"]
+
+    for idx, p in enumerate(pairings):
+        ax.plot(
+            ah.find_rij_pairs(h5f_1, rij=rij_1, pairing=p),
+            ah.find_rij_pairs(h5f_2, rij=rij_2, pairing=p),
+            ".",
+            color=f"C{idx}",
+            markersize=1.5,
+            markeredgewidth=0,
+            label=p,
+            alpha=1,
+            zorder=10 - idx,
+        )
 
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
-    ax.plot([0, 1], [0, 1], zorder = -2, color="gray")
+    ax.plot([0, 1], [0, 1], zorder=-2, color="gray")
 
     ax.set_xlabel(label_1)
     ax.set_ylabel(label_2)
-    ax.legend()
+    ax.legend(
+        labelcolor="linecolor",
+        markerscale=5,
+        handlelength=0,
+    )
+
+    fig.tight_layout()
+
+    ah.h5.close_hot(h5f_1)
+    ah.h5.close_hot(h5f_2)
+
+    # return rij_within_1, rij_within_2
+    # return rij_1, rij_2
+    return ax
+
+def plot_comparison_rij_between_conditions_batch(
+    h5f,
+    fname_1,
+    fname_2,
+    label_1="f1",
+    label_2="f2",
+    which="modules",
+    plot_matrix=False,
+):
+    """
+        not sure if this guy works
+    """
+
+    assert which in ["modules", "stim"]
+
+    fig, ax = plt.subplots()
+    fig.canvas.manager.set_window_title(f"rij_{which}_{label_1}_{label_2}")
+
+
+    def ana_func(filename):
+        h5f = ah.prepare_file(filename)
+        rij = ah.find_rij(h5f, which="neurons", time_bin_size=40 / 1000)
+        check = h5f["data.neuron_module_id"][:]
+        h5.close_hot(h5f["h5.filename"])
+        return rij, check, filename
+
+    global rij_1
+    rij_1, check = ah.batch_across_filenames(fname_1, ana_function=ana_func)
+    rij_2, check = ah.batch_across_filenames(fname_2, ana_function=ana_func)
+
+    if plot_matrix:
+        temp_ax = _plot_matrix(rij_1[0], vmin=0, vmax=1)
+        temp_ax.set_title(label_1)
+        temp_ax.get_figure().tight_layout()
+        temp_ax.get_figure().canvas.manager.set_window_title(f"rij_{label_1}")
+
+        temp_ax = _plot_matrix(rij_2[0], vmin=0, vmax=1)
+        temp_ax.set_title(label_2)
+        temp_ax.get_figure().tight_layout()
+        temp_ax.get_figure().canvas.manager.set_window_title(f"rij_{label_2}")
+
+    if which == "modules":
+        pairings = ["within_modules", "across_modules"]
+    elif which == "stim":
+        # pairings = ["within_modules", "across_groups_02_13"]
+        pairings = [
+            "within_group_0",
+            "within_group_1",
+            "within_group_2",
+            "within_group_3",
+        ]
+        # pairings = [ "across_groups_0_1", "across_groups_2_3", "across_groups_1_3", "across_groups_0_2"]
+
+    for idx, p in enumerate(tqdm(pairings, desc="Pairings")):
+        rij_1_pairs = []
+        for rij in rij_1:
+            rij_1_pairs.extend(ah.find_rij_pairs(h5f, rij=rij, pairing=p))
+
+        rij_2_pairs = []
+        for rij in rij_2:
+            rij_2_pairs.extend(ah.find_rij_pairs(h5f, rij=rij, pairing=p))
+
+        ax.plot(
+            rij_1_pairs,
+            rij_2_pairs,
+            ".",
+            color=f"C{idx}",
+            markersize=1.5,
+            markeredgewidth=0,
+            label=p,
+            alpha=1,
+            zorder=10 - idx,
+        )
+
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.plot([0, 1], [0, 1], zorder=-2, color="gray")
+
+    ax.set_xlabel(label_1)
+    ax.set_ylabel(label_2)
+    ax.legend(
+        labelcolor="linecolor",
+        markerscale=5,
+        handlelength=0,
+    )
 
     fig.tight_layout()
 
@@ -1019,10 +1166,10 @@ def plot_comparison_rij_between_conditions(fname_1, fname_2, label_1="f1", label
     return ax
 
 
-
 # ------------------------------------------------------------------------------ #
 # distributions
 # ------------------------------------------------------------------------------ #
+
 
 def _plot_matrix(c, **kwargs):
     fig, ax = plt.subplots()
@@ -1495,11 +1642,12 @@ def plot_distribution_degree_for_neuron_distance(
                 ) ** 2
                 k_dists[row] = np.sqrt(dist_sq)
 
-
             if len(pos_x) > 5000:
                 log.info("Large population, using random sample")
                 # for large populations, we cant fit N^2 distances to ram
-                selects = np.sort(np.random.choice(len(pos_x), size=5000, replace=False))
+                selects = np.sort(
+                    np.random.choice(len(pos_x), size=5000, replace=False)
+                )
             else:
                 selects = slice(None)
 
@@ -1523,7 +1671,7 @@ def plot_distribution_degree_for_neuron_distance(
 
     n_h, bins = np.histogram(n_dists, bins=50)
     n_k, _ = np.histogram(k_dists, bins=bins)
-    bin_centers = (bins[0:-1] + bins[1:])/2
+    bin_centers = (bins[0:-1] + bins[1:]) / 2
 
     if ax is None:
         fig, ax = plt.subplots()
@@ -1541,23 +1689,28 @@ def plot_distribution_degree_for_neuron_distance(
     }
 
     sns.histplot(
-        x = bin_centers,
-        weights = n_k / n_h,
-        label=r"$k/h$", color=matplotlib.cm.get_cmap("tab10").colors[0], **kwargs,
+        x=bin_centers,
+        weights=n_k / n_h,
+        label=r"$k/h$",
+        color=matplotlib.cm.get_cmap("tab10").colors[0],
+        **kwargs,
     )
 
     sns.histplot(
-        x = bin_centers,
-        weights = n_k,
-        label=r"$k$", color=matplotlib.cm.get_cmap("tab10").colors[1], **kwargs,
+        x=bin_centers,
+        weights=n_k,
+        label=r"$k$",
+        color=matplotlib.cm.get_cmap("tab10").colors[1],
+        **kwargs,
     )
 
     sns.histplot(
-        x = bin_centers,
-        weights = n_h,
-        label=r"$h$", color=matplotlib.cm.get_cmap("tab10").colors[2], **kwargs,
+        x=bin_centers,
+        weights=n_h,
+        label=r"$h$",
+        color=matplotlib.cm.get_cmap("tab10").colors[2],
+        **kwargs,
     )
-
 
     if apply_formatting:
         ax.set_xlabel(f"Distance between neurons")

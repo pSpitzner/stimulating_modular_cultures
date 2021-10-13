@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-09-16 18:39:16
+# @Last Modified: 2021-10-12 13:46:15
 # ------------------------------------------------------------------------------ #
 
 
@@ -500,31 +500,16 @@ def find_participating_fraction_in_bursts(h5f, write_to_h5f=True, return_res=Fal
         return bursts
 
 
-# todo: implement convention write_to_h5f
-def find_functional_complexity(
-    h5f,
-    write_to_h5f=True,
-    return_res=False,
-    which="neurons",
-    time_bin_size=None,
-    num_bins=20,
-    bins=None,
-):
+def find_rij(h5f, which="neurons", time_bin_size=40 / 1000):
     """
-    Find functional complexity, either from module rates or neurons.
-
     # Paramters
     which : str, "neurons" or "modules", if "modules", mod rates have to be in h5f
-    time_bin_size : float, if "neurons" select the bin size for `binned_spike_count`
-    num_bins : int, number of bins for the correlation coefficients (m)
-    bins :     use these bins to pass to np.histogram and ignore `num_bins`
-
+    time_bin_size : float, if "neurons" selected this is the bin size for
+        `binned_spike_count` in seconds
 
     # Returns
-    C : float, functional complexity
     rij : 2d array, correlation coefficients, with nans along the diagonal
     """
-
     assert which in ["neurons", "modules"]
 
     if which == "neurons":
@@ -548,6 +533,96 @@ def find_functional_complexity(
             series[mdx, :] = h5f[f"ana.rates.module_level.{m_dc}"][:]
 
     rij = np.corrcoef(series)
+    return rij
+
+
+def find_rij_pairs(h5f, rij=None, pairing="within_modules", **kwargs):
+    """
+        get a flat list of the rij values for pairs of neurons matching a criterium,
+        e.g. all neuron pairs within the same module.
+
+        # Parameters
+        rij : 2d array, if already calculated, skip rij computation
+        pairing : str,
+            "within_modules" : only neuron pairs within the same module
+            "across_modules" : pairs spanning modules
+            "within_group_02" : instead of modules, use all pairs in this group of modules
+            "across_groups_02_13" : compare across the two sepcified groups
+        kwargs : passed to `find_rij()`
+    """
+
+    if rij is None:
+        rij = find_rij(h5f, which="neurons", time_bin_size=40 / 1000)
+
+    if "group" in pairing:
+
+        mods_a = [int(mod) for mod in pairing.split("_")[-1]]
+        if "across" in pairing:
+            mods_b = [int(mod) for mod in pairing.split("_")[-2]]
+
+    res = []
+    n = len(h5f["data.neuron_module_id"][:])
+    for i in range(0, n):
+        for j in range(0, n):
+            if j >= i:
+                # skip upper diagonal
+                continue
+
+            if pairing == "within_modules":
+                if h5f["data.neuron_module_id"][i] == h5f["data.neuron_module_id"][j]:
+                    res.append(rij[i, j])
+
+            elif pairing == "across_modules":
+                if h5f["data.neuron_module_id"][i] != h5f["data.neuron_module_id"][j]:
+                    res.append(rij[i, j])
+
+            elif "within_group" in pairing:
+                if (
+                    h5f["data.neuron_module_id"][i] in mods_a
+                    and h5f["data.neuron_module_id"][j] in mods_a
+                ):
+                    res.append(rij[i, j])
+
+            elif "across_groups" in pairing:
+                if (
+                    h5f["data.neuron_module_id"][i] in mods_a
+                    and h5f["data.neuron_module_id"][j] in mods_b
+                ) or (
+                    h5f["data.neuron_module_id"][i] in mods_b
+                    and h5f["data.neuron_module_id"][j] in mods_a
+                ):
+                    res.append(rij[i, j])
+
+    return res
+
+
+# todo: implement convention write_to_h5f
+def find_functional_complexity(
+    h5f,
+    rij=None,
+    write_to_h5f=True,
+    return_res=False,
+    num_bins=20,
+    bins=None,
+    **kwargs,
+):
+    """
+    Find functional complexity, either from module rates or neurons.
+
+    # Paramters
+    rij : if you already comuted the rij matrix, you can provide it.
+    num_bins : int, number of bins for the correlation coefficients (m)
+    bins :     use these bins to pass to np.histogram and ignore `num_bins`
+    kwargs passed to `find_rij`
+
+
+    # Returns
+    C : float, functional complexity
+    rij : 2d array, correlation coefficients, with nans along the diagonal
+    """
+
+    if rij is None:
+        rij = find_rij(h5f, **kwargs)
 
     if return_res:
         return _functional_complexity(rij, num_bins, bins), rij
@@ -595,7 +670,7 @@ def find_state_variable(h5f, variable, write_to_h5f=True, return_res=False):
 def find_rij_within_across(h5f):
     """
         We already have a nice way to get the rij in `find_functional_complexity`.
-        Lets use that and do the sorting afterwards.
+        Lets use that and do the sorting according to modules afterwards.
     """
 
     # this gives us rij as a matrix, 2d np array
@@ -631,6 +706,95 @@ def find_rij_within_across(h5f):
 # ------------------------------------------------------------------------------ #
 # batch processing across realization
 # ------------------------------------------------------------------------------ #
+
+
+def batch_across_filenames(
+    filenames, ana_function, merge="append", res=None, parallel=True
+):
+    """
+        function to generalize some analysis parts across multiple files.
+
+        Takes a list of `filenames` and applies `ana_function` on every one of them.
+
+        # Parameters
+        filenames : str or list of strings, wildcards will be globbed
+        ana_function : function that needs to return
+            * the result
+            * for consistency, a check value that should be the same for every filename
+            * the filename
+        merge : default "append"  or function.
+            if not "append", merge(res, this_res) is called to combine results across
+            files, otherwise we append to a list
+        res : per default (None) we create a list and append to it. when `merge=np.add`
+            we want to provide res to be an empty zero array, e.g. `np.array([0])`
+
+        # Returns
+        res : list or dtype that was provided to `res`
+        check : the value of the consistency check that was provided by the first file
+
+
+    """
+
+    if isinstance(filenames, str):
+        filenames = [filenames]
+
+    candidates = [glob.glob(f) for f in filenames]
+    candidates = [item for sublist in candidates for item in sublist]  # flatten
+
+    assert len(candidates) > 0, f"Are the filenames correct?"
+
+    if res is None:
+        # default, just append to a list
+        res = list()
+
+    check = None
+
+    if not parallel or len(candidates) == 1:
+        for idx in range(0, len(candidates)):
+            this_candidate = candidates[idx]
+            this_res, this_check, _ = ana_function(this_candidate)
+
+            if idx == 0:
+                check = this_check
+            if this_res is None or not np.all(check == this_check):
+                log.warning(f"file seems invalid, skipping: {this_candidate}")
+            else:
+                if merge == "append":
+                    res.append(this_res)
+                else:
+                    merge(res, this_res)
+
+    else:
+        import dask_helper as dh
+
+        dh.init_dask()
+
+        # import functools
+        # set arguments for variables needed by every worker
+        # f = functools.partial(ana_function, candidates)
+
+        # dispatch, reading in parallel may be faster
+        futures = dh.client.map(ana_function, candidates)
+
+        # next, we gather
+        for idx, future in enumerate(
+            tqdm(dh.as_completed(futures), total=len(futures), desc="Files")
+        ):
+            this_res, this_check, this_candidate = future.result()
+
+            if idx == 0:
+                check = this_check
+            if this_res is None or not np.all(check == this_check):
+                log.warning(f"file seems invalid, skipping: {this_candidate}")
+            else:
+                if merge == "append":
+                    res.append(this_res)
+                else:
+                    merge(res, this_res)
+
+        dh.close()
+
+    return res, check
 
 
 def batch_pd_sequence_length_probabilities(list_of_filenames):
@@ -915,7 +1079,7 @@ def batch_candidates_burst_times_and_isi(input_path, hot=False):
             # was opened in the meantime
             # h5.close_hot(which=-1)
             try:
-                h5f.h5_file.close()
+                h5.close_hot(h5f["h5.filename"])
             except:
                 log.debug("Failed to close file")
 
