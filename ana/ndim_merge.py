@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-10-13 12:12:28
+# @Last Modified: 2021-10-14 10:38:58
 #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into an ndim array
@@ -70,12 +70,14 @@ def all_in_one(candidate=None):
         res["any_num_b"] = 1
         res["mod_num_b_1"] = 1
         res["mod_num_b_2"] = 1
+        res["mod_num_b_3"] = 1
         res["mod_num_b_4"] = 1
         res["sys_rate_cv"] = 1
         res["sys_mean_rate"] = 1
         res["sys_blen"] = 1
         res["mod_blen_1"] = 1
         res["mod_blen_2"] = 1
+        res["mod_blen_3"] = 1
         res["mod_blen_4"] = 1
         res["mod_num_spikes_in_bursts_1"] = 1
         res["sys_ibis"] = 1
@@ -123,6 +125,9 @@ def all_in_one(candidate=None):
     res["mod_num_b_2"] = len(
         [x for x in h5f["ana.bursts.system_level.module_sequences"] if len(x) == 2]
     )
+    res["mod_num_b_3"] = len(
+        [x for x in h5f["ana.bursts.system_level.module_sequences"] if len(x) == 3]
+    )
     res["mod_num_b_4"] = len(
         [x for x in h5f["ana.bursts.system_level.module_sequences"] if len(x) == 4]
     )
@@ -135,7 +140,8 @@ def all_in_one(candidate=None):
     )
     res["sys_blen"] = np.nanmean(blen)
     res["mod_blen_1"] = np.nanmean(blen[np.where(slen == 1)[0]])
-    res["mod_blen_2"] = np.nanmean(blen[np.where(slen >= 2)[0]])
+    res["mod_blen_2"] = np.nanmean(blen[np.where(slen == 2)[0]])
+    res["mod_blen_3"] = np.nanmean(blen[np.where(slen == 3)[0]])
     res["mod_blen_4"] = np.nanmean(blen[np.where(slen == 4)[0]])
 
     # ibis
