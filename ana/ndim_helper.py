@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-10-19 18:20:20
-# @Last Modified: 2021-10-20 14:05:03
+# @Last Modified: 2021-10-20 15:55:15
 # ------------------------------------------------------------------------------ #
 
 
@@ -83,21 +83,25 @@ def h5f_to_xarray(h5f, obs):
 
         coords[dim] = dim_vals
 
+    print(dims)
+    print(obs)
+    print(h5f["data"][f"{obs}"].shape)
     # ideally, we have a repetition axis, else, for older files, we need to infer
-    if not "rep" in coords.keys():
-        dims.append("rep")
+    if not "repetition" in coords.keys():
+        dims.append("repetition")
 
     # if vector quantity, repetitions are not the last dimension. for the vector
     # observables, we do not have a known axis
     if obs[0:3] == "vec":
         dims.append("vector_observable")
 
-    log.info(obs)
+    log.debug(obs)
 
     return xr.DataArray(h5f["data"][f"{obs}"], dims=dims, coords=coords)
 
 
-def choose(options, prompt=None, min=1, max=1, via_int=False, default="all"):
+def choose(options, prompt=None, min=1, max=np.inf, via_int=False, default="all",
+    always_return_list=False):
 
     if prompt is None:
         prompt = f"Choose an option:"
@@ -110,13 +114,18 @@ def choose(options, prompt=None, min=1, max=1, via_int=False, default="all"):
     else:
         maxlen = np.max([len(str(opt)) for opt in options])
         if maxlen < 5:
-            prompt += f"\n{options}\n"
+            prompt += f" {options}\n"
         else:
             prompt += "\n"
             for idx, opt in enumerate(options):
                 prompt += f"{opt}\n"
 
-    options = np.array(options)
+    if isinstance(options, np.ndarray):
+        pass
+    elif isinstance(options, list):
+        options = np.array(options)
+    else:
+        options = np.array(list(options))
 
     while True:
         txt = input(prompt)
@@ -151,8 +160,11 @@ def choose(options, prompt=None, min=1, max=1, via_int=False, default="all"):
             and len(selection) <= max
             and np.all([i in options for i in selection])
         ):
-            print(f"Using {selection}")
+            log.debug(f"Using {selection}")
             break
+
+    if len(selection) == 1 and not always_return_list:
+        return selection[0]
     return selection
 
 
