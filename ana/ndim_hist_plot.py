@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-08-06 18:18:49
+# @Last Modified: 2021-10-15 10:55:48
 #
 # plot a merged down, multidimensional hdf5 file (from individual simulations)
 # and select which dims to show where
@@ -180,7 +180,7 @@ for k in sorted(ax_idx, reverse=True):
 
 # data_3d now has shape (repetition, hist_vals)
 # or (1, 1, x, 1, rep, hist_vals) if multiple values were selected for one axis
-assert np.sum(np.array(data_3d.shape) > 1) <= 2, "Only select multiple values along one axis!"
+assert np.sum(np.array(data_3d.shape) > 1) <= 3, "Only select multiple values along one axis!"
 
 squeeze_ax = np.where(np.array(data_3d.shape)[0:-2] == 1)[0]
 data_3d = np.squeeze(data_3d, axis=tuple(squeeze_ax))
@@ -231,10 +231,11 @@ elif len(data_3d.shape) == 3:
             color = f"C{idx}",
             alpha=0.25,
         )
-        ax.legend()
+        # ax.legend()
 
 else:
     raise ValueError
 
+# ax.legend("upper left")
 ax.set_xlabel(obs_to_plot.replace("hvals_", ""))
 fig.tight_layout()

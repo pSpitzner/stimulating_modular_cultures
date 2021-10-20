@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-10-11 19:37:41
+# @Last Modified: 2021-10-15 10:38:04
 #
 # plot a merged down, multidimensional hdf5 file (from individual simulations)
 # and select which dims to show where
@@ -244,6 +244,8 @@ l_obs_candidates.append("ratio_num_b_2")
 l_obs_candidates.append("ratio_num_b_4")
 
 for odx, obs_to_plot in enumerate(l_obs_candidates):
+    if "vec" in obs_to_plot:
+        continue
     # reduce the data, back to front, starting with last axis
     if "ratio_num_b" in obs_to_plot:
         try:
