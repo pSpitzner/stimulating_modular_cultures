@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-10-13 09:43:31
+# @Last Modified: 2021-10-20 15:16:54
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -30,6 +30,14 @@ matplotlib.rcParams["axes.labelcolor"] = "black"
 matplotlib.rcParams["axes.edgecolor"] = "black"
 matplotlib.rcParams["xtick.color"] = "black"
 matplotlib.rcParams["ytick.color"] = "black"
+matplotlib.rcParams["xtick.labelsize"]=8
+matplotlib.rcParams["ytick.labelsize"]=8
+matplotlib.rcParams["axes.titlesize"]= 8
+matplotlib.rcParams["axes.labelsize"]= 8
+matplotlib.rcParams["legend.fontsize"] = 6
+matplotlib.rcParams["legend.facecolor"] = "#D4D4D4"
+matplotlib.rcParams["legend.framealpha"] = 0.8
+matplotlib.rcParams["legend.frameon"] = True
 # matplotlib.rcParams["axes.spines.right"] = False
 # matplotlib.rcParams["axes.spines.top"] = False
 # matplotlib.rcParams["axes.spines.left"] = False
@@ -105,7 +113,7 @@ def overview_topology(h5f, filenames=None, skip_graph=False):
     return fig
 
 
-def overview_dynamic(h5f, filenames=None, threshold=None, states=True):
+def overview_dynamic(h5f, filenames=None, threshold=None, states=True, skip=[]):
 
     # if we have recorded depletion, let's plot that, too
     depletion = False
@@ -135,19 +143,23 @@ def overview_dynamic(h5f, filenames=None, threshold=None, states=True):
         ah.find_ibis(h5f)
 
     plot_parameter_info(h5f, axes[0])
-    plot_raster(h5f, axes[1])
-    plot_module_rates(h5f, axes[2])
-    plot_system_rate(h5f, axes[2])
-    ax = plot_bursts_into_timeseries(h5f, axes[3])
-    _style_legend(ax.legend(loc=1))
-    ax = plot_initiation_site(h5f, axes[4])
-    ax.xaxis.set_major_locator(plt.NullLocator())
-    ax.xaxis.set_minor_locator(plt.NullLocator())
+    if not "raster" in skip:
+        plot_raster(h5f, axes[1])
+    if not "rates" in skip:
+        plot_module_rates(h5f, axes[2])
+        plot_system_rate(h5f, axes[2])
+    if not "bursts" in skip:
+        ax = plot_bursts_into_timeseries(h5f, axes[3])
+        _style_legend(ax.legend(loc=1))
+    if not "init" in skip:
+        ax = plot_initiation_site(h5f, axes[4])
+        ax.xaxis.set_major_locator(plt.NullLocator())
+        ax.xaxis.set_minor_locator(plt.NullLocator())
 
     axes[1].set_xlabel("")
     axes[2].set_xlabel("")
 
-    if depletion:
+    if depletion and not "depletion" in skip:
         axes[3].set_xlabel("")
         ax = plot_state_variable(h5f, axes[5], variable="D")
         ax.set_ylim(0.0, 1)
@@ -185,7 +197,7 @@ def overview_burst_duration_and_isi(h5f, filenames=None, which="all"):
 # ------------------------------------------------------------------------------ #
 
 
-def plot_raster(h5f, ax=None, apply_formatting=True, sort_by_module=True):
+def plot_raster(h5f, ax=None, apply_formatting=True, sort_by_module=True, **kwargs):
     """
         Plot a raster plot
 
@@ -202,9 +214,8 @@ def plot_raster(h5f, ax=None, apply_formatting=True, sort_by_module=True):
     assert "ana" in h5f.keypaths(), "`prepare_file(h5f)` before plotting!"
 
     log.info("Plotting Raster")
-
     if ax is None:
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=(2.4, 1.3))
     else:
         fig = ax.get_figure()
 
@@ -212,11 +223,14 @@ def plot_raster(h5f, ax=None, apply_formatting=True, sort_by_module=True):
 
     if len(h5f["ana.neuron_ids"]) > 500:
         marker = "."
-        kwargs = dict(alpha=1, markersize=1.5, markeredgewidth=0)
+        kwargs.setdefault("alpha", 1)
+        kwargs.setdefault("markersize", 1.5)
+        kwargs.setdefault("markeredgewidth", 0)
     else:
-        # marker = "|"
         marker = "."
-        kwargs = dict(alpha=0.75, markersize=2.0, markeredgewidth=0)
+        kwargs.setdefault("alpha", .75)
+        kwargs.setdefault("markersize", 2.0)
+        kwargs.setdefault("markeredgewidth", 0)
 
     for n_id in h5f["ana.neuron_ids"]:
         # if n_id > 1000:
@@ -235,14 +249,21 @@ def plot_raster(h5f, ax=None, apply_formatting=True, sort_by_module=True):
             n_id_sorted * np.ones(len(spikes)),
             marker,
             color=h5f["ana.mod_colors"][m_id],
-            # zorder=-2,
             **kwargs,
         )
 
     if apply_formatting:
         ax.margins(x=0, y=0)
+        ax.set_xlim(0, None)
         ax.set_ylabel("Raster")
         ax.set_xlabel("Time [seconds]")
+        try:
+            if len(h5f["ana.mods"]) == 4 and len(h5f["ana.neuron_ids"]) == 160:
+                    ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(40))
+                    ax.yaxis.set_minor_locator(matplotlib.ticker.NullLocator())
+                    ax.set_ylim(0,160)
+        except:
+            pass
         fig.tight_layout()
 
     return ax
@@ -422,20 +443,10 @@ def plot_bursts_into_timeseries(h5f, ax=None, apply_formatting=True):
         except:
             ibi = np.nan
 
-        ax.plot(
-            beg_times,
-            np.ones(len(beg_times)) * (pad + 1 + m_id),
-            marker="4",
+        _plot_bursts_into_timeseries(ax, beg_times, end_times,
+            y_offset=pad + 1 + m_id,
             color=h5f["ana.mod_colors"][m_id],
-            lw=0,
             label=f"{num_b} bursts, ~{ibi:.1f} s",
-        )
-        ax.plot(
-            end_times,
-            np.ones(len(end_times)) * (pad + 1 + m_id),
-            marker="3",
-            color=h5f["ana.mod_colors"][m_id],
-            lw=0,
         )
 
     log.info(f"Found {total_num_b} bursts across modules")
@@ -444,8 +455,8 @@ def plot_bursts_into_timeseries(h5f, ax=None, apply_formatting=True):
     beg_times = np.array(h5f["ana.bursts.system_level.beg_times"])
     end_times = np.array(h5f["ana.bursts.system_level.end_times"])
     l = [len(seq) for seq in h5f["ana.bursts.system_level.module_sequences"]]
-    # idx = np.where(np.array(l) >= len(h5f["ana.mods"]))
-    idx = np.where(np.array(l) >= 0)
+    idx = np.where(np.array(l) >= len(h5f["ana.mods"])) # swap these lines to show all
+    # idx = np.where(np.array(l) >= 0) # or only system wide bursts in black
     beg_times = beg_times[idx]
     end_times = end_times[idx]
 
@@ -457,15 +468,9 @@ def plot_bursts_into_timeseries(h5f, ax=None, apply_formatting=True):
     log.info(f"Found {num_b} bursts system-wide")
     log.info(f"System-wide IBI: {ibi:.2f} seconds")
 
-    ax.plot(
-        beg_times,
-        np.ones(len(beg_times)) * (pad),
-        marker="4",
-        color="black",
-        lw=0,
-        label=f"{num_b} bursts, ~{ibi:.1f} s",
-    )
-    ax.plot(end_times, np.ones(len(end_times)) * (pad), marker="3", color="black", lw=0)
+    _plot_bursts_into_timeseries(ax, beg_times, end_times,
+        y_offset=pad, color="black",
+        label=f"{num_b} bursts, ~{ibi:.1f} s")
 
     ax.set_ylim(0, len(h5f["ana.mods"]) + 2 * pad)
 
@@ -478,6 +483,33 @@ def plot_bursts_into_timeseries(h5f, ax=None, apply_formatting=True):
 
     return ax
 
+def _plot_bursts_into_timeseries(ax, beg_times, end_times, y_offset=3, **kwargs):
+    """
+    lower level helper to plot beginning and end times of bursts
+    """
+
+    kwargs.setdefault("color", "black")
+
+    ax.plot(
+        beg_times,
+        np.ones(len(beg_times)) * y_offset,
+        marker="4",
+        lw=0,
+        **kwargs
+    )
+
+    try:
+        kwargs.pop("label")
+    except KeyError:
+        pass
+
+    ax.plot(
+        end_times,
+        np.ones(len(end_times)) * y_offset,
+        marker="3",
+        lw=0,
+        **kwargs
+    )
 
 def plot_parameter_info(h5f, ax=None, apply_formatting=True, add=[]):
 
@@ -514,6 +546,11 @@ def plot_parameter_info(h5f, ax=None, apply_formatting=True, add=[]):
         dat.append(["GABA [mV]", h5f["meta.dynamics_jG"]])
         dat.append(["Noise [mV]", h5f["meta.dynamics_jM"]])
         dat.append(["Noise Rate [Hz]", h5f["meta.dynamics_rate"]])
+    except:
+        pass
+
+    try:
+        dat.append(["Stim [mV]", h5f["meta.dynamics_jE"]])
     except:
         pass
 
@@ -1916,11 +1953,13 @@ def _plot_axons(h5f, ax):
 # helper
 # ------------------------------------------------------------------------------ #
 
-
 def _style_legend(leg):
-    leg.get_frame().set_linewidth(0.0)
-    leg.get_frame().set_facecolor("#e4e5e6")
-    leg.get_frame().set_alpha(0.9)
+    try:
+        leg.get_frame().set_linewidth(0.0)
+        leg.get_frame().set_facecolor("#e4e5e6")
+        leg.get_frame().set_alpha(0.9)
+    except:
+        log.warning("Failed to style legend")
 
 
 def _ticklabels_lin_to_log10(x, pos):
