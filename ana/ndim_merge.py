@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-10-14 10:38:58
+# @Last Modified: 2021-10-20 13:46:34
 #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into an ndim array
@@ -447,15 +447,22 @@ def main(args):
     # workaround to store a list of strings (via object array) to hdf5
     dset = f_tar.create_dataset(
         "/meta/axis_overview",
-        data=np.array(list(d_axes.keys()), dtype=object),
+        data=np.array(list(d_axes.keys()) + ["repetition"], dtype=object),
         dtype=h5py.special_dtype(vlen=str),
+    )
+    dset.attrs["description"] = (
+        "ordered list of all coordinates (axis) spanning data."
+        + "if observable name starts with `vec`, another dim follows the repetitions."
     )
 
     desc_axes = f"{len(axes_shape)+1}-dim array with axis: "
     for obs in d_axes.keys():
-        dset = f_tar.create_dataset("/data/axis_" + obs, data=d_axes[obs])
+        dset = f_tar.create_dataset("/meta/axis_" + obs, data=d_axes[obs])
         desc_axes += obs + ", "
-    desc_axes += "repetition"
+
+    # desc_axes += "repetition"
+    dset = f_tar.create_dataset("/meta/axis_repetition",
+        data=np.arange(0, num_rep), dtype="int")
 
     for key in res_ndim.keys():
         dset = f_tar.create_dataset(f"/data/{key}", data=res_ndim[key])
@@ -470,8 +477,8 @@ def main(args):
         else:
             dset.attrs["description"] = desc_axes
 
-    dset = f_tar.create_dataset("/data/num_samples", data=sampled)
-    dset.attrs["description"] = "number of repetitions in /data/ibi, same shape"
+    dset = f_tar.create_dataset("/meta/num_samples", data=sampled)
+    dset.attrs["description"] = "measured number of repetitions"
 
     f_tar.close()
 
@@ -484,9 +491,10 @@ def main(args):
 
 # Find the repetition from the file name
 def find_rep(candidate):
-    search = re.search('((rep=*)|(_r=*))(\d+)', candidate, re.IGNORECASE)
+    search = re.search("((rep=*)|(_r=*))(\d+)", candidate, re.IGNORECASE)
     if search is not None and len(search.groups()) != 0:
         return search.groups()[-1]
+
 
 # we have to pass global variables so that they are available in each worker.
 # simple set them via frunctools.partial so only `candidate` varies between workers
