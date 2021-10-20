@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2021-08-30 16:24:03
+# @Last Modified: 2021-10-18 15:43:11
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 and runs the simulations in brian.
@@ -79,7 +79,7 @@ jM   = 15 * mV     # shot noise (minis) strength, between 10 - 50 mV
                    # (sum of minis arriving at target neuron)
 jS = 300 * mV * mV * ms * ms  # white noise strength, via xi = dt**.5 * randn()
 
-jE = 20 * mV       # strength of external, constant current that is turned on when
+jE = 0 * mV        # strength of external, constant current that is turned on when
                    # stimulating optogenetically
 
 # ------------------------------------------------------------------------------ #
