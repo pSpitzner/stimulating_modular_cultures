@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-10-21 14:47:25
+# @Last Modified: 2021-10-21 16:11:45
 # ------------------------------------------------------------------------------ #
 
 
@@ -1735,12 +1735,14 @@ def system_burst_from_module_burst(beg_times, end_times, threshold, modules=None
 
         # first time occurences of follower
         jdx = idx + 1
-        while jdx <= idx_ends[pos]:
+        while all_ends[jdx] <= all_ends[idx_ends[pos]]:
             # get module id of bursts that were in the system burst, add to sequence
             m = all_mods[jdx]
             if m not in seq:
                 seq += (m,)
             if len(seq) == len(modules):
+                break
+            if jdx == len(all_ends)-1:
                 break
             jdx += 1
 
