@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-10-21 16:11:45
+# @Last Modified: 2021-10-21 18:11:22
 # ------------------------------------------------------------------------------ #
 
 
@@ -1728,14 +1728,20 @@ def system_burst_from_module_burst(beg_times, end_times, threshold, modules=None
 
     sequences = []
 
-    # do sequence sorting next
+    # do sequence sorting next, for every burst
     for pos, idx in enumerate(idx_begs):
         # first module, save sequence as tuple
         seq = (all_mods[idx],)
 
+        if pos < len(idx_begs) - 1:
+            # if more bursts detected, we need to finish before it starts
+            this_end_time = all_begs[idx_begs[pos+1]]
+        else:
+            this_end_time = np.inf
+
         # first time occurences of follower
         jdx = idx + 1
-        while all_ends[jdx] <= all_ends[idx_ends[pos]]:
+        while all_ends[jdx] < this_end_time:
             # get module id of bursts that were in the system burst, add to sequence
             m = all_mods[jdx]
             if m not in seq:
