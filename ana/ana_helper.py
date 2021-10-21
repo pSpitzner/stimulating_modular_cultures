@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-10-12 13:46:15
+# @Last Modified: 2021-10-21 14:47:25
 # ------------------------------------------------------------------------------ #
 
 
@@ -212,6 +212,63 @@ def prepare_file(
     return h5f
 
 
+def load_experimental_files(path_prefix):
+    """
+        helper to import experimental csv files from jordi into a compatible
+        h5f
+
+        # Parameters
+        folderpath: str
+
+        # Returns
+        h5f: benedict with our needed strucuter
+    """
+
+    # assert os.path.isdir(folderpath)
+
+    h5f = benedict()
+
+    # ROIs as neuron centers
+    rois = np.loadtxt(f"{path_prefix}ROI_centers_everything.csv",
+            delimiter=",", skiprows=1)
+
+    h5f["data.neuron_pos_x"] = rois[:, 1].copy()
+    h5f["data.neuron_pos_y"] = rois[:, 2].copy()
+
+    spikes = np.loadtxt(f"{path_prefix}spikesData.csv",
+            delimiter=",", skiprows=1)
+
+    # convert one to zero indexing
+    spikes[:,0] -= 1
+
+    h5f["data.spiketimes_as_list"] = spikes.copy()
+    h5f["data.spiketimes"] = _spikes_as_list_to_spikes_2d(spikes)
+
+    # add some more stuff that is usually already in the meta data
+    num_n = len(h5f["data.neuron_pos_x"])
+    h5f["meta.topology_num_neur"] = num_n
+
+    # approximate module ids from position
+    # 0 lower left, 1 upper left, 2 lower right, 3 upper right
+    h5f["data.neuron_module_id"] = np.ones(num_n, dtype=int) * -1
+    for nid in range(0, num_n):
+        x = h5f["data.neuron_pos_x"][nid]
+        y = h5f["data.neuron_pos_y"][nid]
+
+        if x < 300 and y < 300:
+            h5f["data.neuron_module_id"][nid] = 0
+        elif x < 300 and y >= 300:
+            h5f["data.neuron_module_id"][nid] = 1
+        elif x >= 300 and y < 300:
+            h5f["data.neuron_module_id"][nid] = 2
+        elif x >= 300 and y >= 300:
+            h5f["data.neuron_module_id"][nid] = 3
+
+    h5f["meta.dynamics_simulation_duration"] = 600.0
+
+    return prepare_file(h5f)
+
+
 def find_bursts_from_rates(
     h5f,
     bs_large=0.02,  # seconds, time bin size to smooth over (gaussian kernel)
@@ -254,6 +311,11 @@ def find_bursts_from_rates(
     beg_times = []  # lists of length num_modules
     end_times = []
 
+    try:
+        duration = h5f["meta.dynamics_simulation_duration"]
+    except KeyError:
+        duration = np.nanmax(h5f["data.spiketimes"]) + 15
+
     for mdx, m_id in enumerate(h5f["ana.mod_ids"]):
         # for keys, use readable description of the module
         m_dc = h5f["ana.mods"][mdx]
@@ -264,7 +326,7 @@ def find_bursts_from_rates(
             spikes[selects],
             bin_size=bs_small,
             smooth_width=bs_large,
-            length=h5f["meta.dynamics_simulation_duration"],
+            length=duration,
         )
         # pop_rate = population_rate(
         #     spikes[selects],
@@ -296,7 +358,7 @@ def find_bursts_from_rates(
         spikes[:],
         bin_size=bs_small,
         smooth_width=bs_large,
-        length=h5f["meta.dynamics_simulation_duration"],
+        length=duration,
     )
     rates["system_level"] = pop_rate
     rates["cv.system_level"] = np.nanstd(pop_rate) / np.nanmean(pop_rate)
@@ -1150,6 +1212,29 @@ def batch_conditions():
 # ------------------------------------------------------------------------------ #
 # lower level
 # ------------------------------------------------------------------------------ #
+
+def _spikes_as_list_to_spikes_2d(spikes_as_list, num_n = None):
+    """
+        convert a list of spiketimes to the 2d matrix representation
+        if num_n is not None, we will use 0 to num_n neurons
+    """
+
+    unique, counts = np.unique(spikes_as_list[:, 0], return_counts=True)
+
+    if num_n is None:
+        num_n = int(np.max(unique)) + 1
+
+    assert(np.all(unique >= 0))
+
+    max_num_spikes = np.max(counts)
+
+    spikes_2d = np.ones(shape=(num_n, max_num_spikes)) * np.nan
+
+    for nid in unique.astype(int):
+        selected = spikes_as_list[spikes_as_list[:, 0] == nid][:, 1]
+        spikes_2d[nid, 0:len(selected)] = selected
+
+    return spikes_2d
 
 # turns out this is faster without numba
 def _inter_spike_intervals(spikes_2d, beg_times=None, end_times=None):

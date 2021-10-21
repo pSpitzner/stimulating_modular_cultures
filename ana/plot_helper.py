@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-10-20 15:16:54
+# @Last Modified: 2021-10-21 15:23:29
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -196,6 +196,15 @@ def overview_burst_duration_and_isi(h5f, filenames=None, which="all"):
 # main plot level functions
 # ------------------------------------------------------------------------------ #
 
+# decorator for lower level plot functions to continue if subplot fails
+def warntry(func):
+    def wrapper(*args, **kwargs):
+        try:
+            func(*args, **kwargs)
+        except Exception as e:
+            log.exception(f"{func.__name__}: {e}")
+
+    return wrapper
 
 def plot_raster(h5f, ax=None, apply_formatting=True, sort_by_module=True, **kwargs):
     """
@@ -269,7 +278,7 @@ def plot_raster(h5f, ax=None, apply_formatting=True, sort_by_module=True, **kwar
     return ax
 
 
-def plot_module_rates(h5f, ax=None, apply_formatting=True, mark_bursts=True):
+def plot_module_rates(h5f, ax=None, apply_formatting=True, mark_burst_threshold=True):
 
     assert "ana" in h5f.keypaths(), "`prepare_file(h5f)` before plotting!"
 
@@ -298,13 +307,14 @@ def plot_module_rates(h5f, ax=None, apply_formatting=True, mark_bursts=True):
             color=h5f[f"ana.mod_colors"][m_id],
         )
 
-    if mark_bursts:
-        try:
-            ax.axhline(
-                y=h5f["ana.bursts.module_level"][0].rate_threshold, ls=":", color="gray"
-            )
-        except:
-            pass
+        if mark_burst_threshold:
+            try:
+                ax.axhline(
+                    y=h5f["ana.bursts.module_level.mod_0.rate_threshold"], ls=":",
+                    color=h5f[f"ana.mod_colors"][m_id],
+                )
+            except Exception as e:
+                log.debug(e)
 
     leg = ax.legend(loc=1)
 
@@ -315,6 +325,7 @@ def plot_module_rates(h5f, ax=None, apply_formatting=True, mark_bursts=True):
         leg.get_frame().set_alpha(0.95)
 
         ax.margins(x=0, y=0)
+        ax.set_xlim(0, len(pop_rate) * dt)
         ax.set_ylabel("Rates [Hz]")
         ax.set_xlabel("Time [seconds]")
 
@@ -1524,7 +1535,7 @@ def plot_distribution_participating_fraction(
 
     return ax
 
-
+@warntry
 def plot_distribution_sequence_length(h5f, ax=None, apply_formatting=True):
     """
         Plot the distribution of sequence lengths' during bursts
@@ -1576,7 +1587,7 @@ def plot_distribution_sequence_length(h5f, ax=None, apply_formatting=True):
 
     return ax
 
-
+@warntry
 def plot_distribution_degree_k(h5f, ax=None, apply_formatting=True, filenames=None):
     """
         Plot the distribution of the in-and out degree for `h5f`.
@@ -1648,7 +1659,7 @@ def plot_distribution_degree_k(h5f, ax=None, apply_formatting=True, filenames=No
 
     return ax
 
-
+@warntry
 def plot_distribution_degree_for_neuron_distance(
     h5f, ax=None, apply_formatting=True, filenames=None
 ):
@@ -1757,7 +1768,7 @@ def plot_distribution_degree_for_neuron_distance(
 
     return ax
 
-
+@warntry
 def plot_distribution_axon_length(h5f, ax=None, apply_formatting=True, filenames=None):
     """
         Plot the distribution of the axon length for `h5f`.
@@ -1807,7 +1818,7 @@ def plot_distribution_axon_length(h5f, ax=None, apply_formatting=True, filenames
 
     return ax
 
-
+@warntry
 def plot_distribution_dendritic_tree_size(
     h5f, ax=None, apply_formatting=True, filenames=None
 ):
@@ -1852,7 +1863,7 @@ def plot_distribution_dendritic_tree_size(
 # topology
 # ------------------------------------------------------------------------------ #
 
-
+@warntry
 def plot_axon_layout(h5f, ax=None, apply_formatting=True):
     if ax is None:
         fig, ax = plt.subplots()
@@ -1871,7 +1882,7 @@ def plot_axon_layout(h5f, ax=None, apply_formatting=True):
         ax.set_xlabel(f"Position $l\,[\mu m]$")
         fig.tight_layout()
 
-
+@warntry
 def plot_connectivity_layout(h5f, ax=None, apply_formatting=True):
     if ax is None:
         fig, ax = plt.subplots()
