@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-10-21 18:11:22
+# @Last Modified: 2021-10-22 23:41:25
 # ------------------------------------------------------------------------------ #
 
 
@@ -275,6 +275,7 @@ def find_bursts_from_rates(
     bs_small=0.0005,  # seconds, small bin size
     rate_threshold=None,  # default 7.5 Hz
     merge_threshold=0.1,  # seconds, merge bursts if separated by less than this
+    system_bursts_from_modules = False,
     write_to_h5f=True,
     return_res=False,
 ):
@@ -284,14 +285,26 @@ def find_bursts_from_rates(
         returns two benedicts, `bursts` and `rates`,
         modifies `h5f`
 
-        Note on smoothing: at the moment, we time-bin the activity on the module level
-        and convolute this series with a gaussian kernel to smooth.
-        More precise way would be to convolute the spike-train of each neuron with
+        # Parameters
+        h5f : benedict, with our usual structure
+        bs_large : float, seconds, time bin size to smooth over (gaussian kernel)
+        bs_small : float, seconds, small bin size at which the rate is sampled
+        rate_threshold : float, Hz, above which we start detecting bursts
+        merge_threshold : float, seconds merge bursts if separated by less than this
+        system_bursts_from_modules : bool, whether the system-level bursts are
+            "stitched together" from individual modules or detected independently
+            from the system wide rate, using `rate_threshold`
+
+
+        Note on smoothing: previously, we time-binned the activity on the module level
+        and convolve this series with a gaussian kernel to smooth.
+        Current, precise way is to convolve the spike-train of each neuron with
         the kernel (thus, keeping the high precision of each spike time).
     """
 
     assert h5f["ana"] is not None, "`prepare_file(h5f)` first!"
     assert write_to_h5f or return_res
+
 
     if rate_threshold is None:
         rate_threshold = 7.5
@@ -301,12 +314,6 @@ def find_bursts_from_rates(
     bursts = benedict()
     rates = benedict()
     rates["dt"] = bs_small
-    # bursts.module_level = benedict()
-    # rates.module_level = benedict()
-    # rates.system_level = None # just create the dict entry at the nice position
-    # rates.cv = benedict()
-    # rates.cv.module_level = benedict()
-    # rates.cv.system_level = None
 
     beg_times = []  # lists of length num_modules
     end_times = []
@@ -328,6 +335,8 @@ def find_bursts_from_rates(
             smooth_width=bs_large,
             length=duration,
         )
+
+        # old, less exact version
         # pop_rate = population_rate(
         #     spikes[selects],
         #     bin_size=bs_small,
@@ -363,13 +372,37 @@ def find_bursts_from_rates(
     rates["system_level"] = pop_rate
     rates["cv.system_level"] = np.nanstd(pop_rate) / np.nanmean(pop_rate)
 
-    all_begs, all_ends, all_seqs = system_burst_from_module_burst(
-        beg_times, end_times, threshold=merge_threshold,
-    )
+    if system_bursts_from_modules:
+        sys_begs, sys_ends, sys_seqs = system_burst_from_module_burst(
+            beg_times, end_times, threshold=merge_threshold,
+        )
+    else:
+        sys_begs, sys_ends = burst_detection_pop_rate(
+            rate=pop_rate, bin_size=bs_small, rate_threshold=rate_threshold,
+        )
+        # in this case, we dont get sequences for free. lets check the first spike
+        # in each modules
+        sys_seqs = []
+        for idx in range(0, len(sys_begs)):
+            beg = sys_begs[idx]
+            end = sys_ends[idx]
+            firsts = np.ones(len(h5f["ana.mods"])) * np.nan
+            for mdx, m_id in enumerate(h5f["ana.mod_ids"]):
+                m_dc = h5f["ana.mods"][mdx]
+                selects = np.where(h5f["data.neuron_module_id"][:] == m_id)[0]
+                selects = selects[np.isin(selects, h5f["ana.neuron_ids"])]
+                s = spikes[selects]
+                s = s[(s >= beg) & (s <= end)]
+                if len(s) > 0:
+                    firsts[mdx] = np.nanmin(s)
+            num_valid = len(firsts[np.isfinite(firsts)])
+            mdx_order = np.argsort(firsts)[0:num_valid]
+            seq = tuple(np.array(h5f["ana.mod_ids"])[mdx_order])
+            sys_seqs.append(seq)
 
-    bursts["system_level.beg_times"] = all_begs.copy()
-    bursts["system_level.end_times"] = all_ends.copy()
-    bursts["system_level.module_sequences"] = all_seqs
+    bursts["system_level.beg_times"] = sys_begs.copy()
+    bursts["system_level.end_times"] = sys_ends.copy()
+    bursts["system_level.module_sequences"] = sys_seqs
 
     if write_to_h5f:
         # if isinstance(h5f["ana.bursts"], benedict):
