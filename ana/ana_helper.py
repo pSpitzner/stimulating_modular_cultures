@@ -1741,14 +1741,12 @@ def system_burst_from_module_burst(beg_times, end_times, threshold, modules=None
 
         # first time occurences of follower
         jdx = idx + 1
-        while all_ends[jdx] < this_end_time:
+        while jdx < len(all_ends) and all_ends[jdx] < this_end_time:
             # get module id of bursts that were in the system burst, add to sequence
             m = all_mods[jdx]
             if m not in seq:
                 seq += (m,)
             if len(seq) == len(modules):
-                break
-            if jdx == len(all_ends)-1:
                 break
             jdx += 1
 
