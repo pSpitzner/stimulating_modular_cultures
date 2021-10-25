@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-10-20 13:46:34
+# @Last Modified: 2021-10-25 11:58:21
 #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into an ndim array
@@ -93,8 +93,8 @@ def all_in_one(candidate=None):
         # histograms, use "vec" prefix to indicate that higher dimensional data
         res["vec_sys_hbins_participating_fraction"] = 21
         res["vec_sys_hvals_participating_fraction"] = 20
-        res["vec_sys_hbins_functional_complexity"] = 21
-        res["vec_sys_hvals_functional_complexity"] = 20
+        res["vec_sys_hbins_correlation_coefficients"] = 21
+        res["vec_sys_hvals_correlation_coefficients"] = 20
 
         # correlation coefficients, within
         for mod in [0, 1, 2, 3]:
@@ -186,7 +186,7 @@ def all_in_one(candidate=None):
     # functional complexity
     bw = 1.0 / 20
     bins = np.arange(0, 1 + 0.1 * bw, bw)
-    res["vec_sys_hbins_functional_complexity"] = bins.copy()
+    res["vec_sys_hbins_correlation_coefficients"] = bins.copy()
     res["vec_sys_hbins_participating_fraction"] = bins.copy()
 
     try:
@@ -202,7 +202,7 @@ def all_in_one(candidate=None):
         rij = np.ones(21) * np.nan
 
     res["sys_functional_complexity"] = C
-    res["vec_sys_hvals_functional_complexity"] = rij.copy()
+    res["vec_sys_hvals_correlation_coefficients"] = rij.copy()
 
     # complexity on module level
     try:
