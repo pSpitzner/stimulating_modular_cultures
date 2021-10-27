@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-10-21 15:23:29
+# @Last Modified: 2021-10-27 11:41:52
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -11,7 +11,6 @@
 # * target an mpl ax element with normal functions and
 # * provide higher level ones that combine those to `overview` panels
 # ------------------------------------------------------------------------------ #
-
 
 # fmt: off
 import os
@@ -57,6 +56,7 @@ import pandas as pd
 import networkx as nx
 from tqdm import tqdm
 from brian2.units.allunits import *
+
 
 log = logging.getLogger(__name__)
 log.setLevel("DEBUG")
@@ -137,9 +137,20 @@ def overview_dynamic(h5f, filenames=None, threshold=None, states=True, skip=[]):
     if not "ana" in h5f.keypaths():
         ah.prepare_file(h5f)
 
+    if not "ana.rates" in h5f.keypaths():
+        ah.find_rates(h5f)
+
     if threshold is not None:
         # (re) do the detection so that we do not have default values
-        ah.find_bursts_from_rates(h5f, rate_threshold=threshold)
+        # ah.find_bursts_from_rates(h5f, rate_threshold=threshold)
+        if threshold == "max":
+            rate_threshold = 0.1 * np.nanmax(h5f["ana.rates.system_level"])
+        else:
+            rate_threshold = threshold
+
+        ah.find_system_bursts_from_global_rate(
+            h5f, rate_threshold=rate_threshold, merge_threshold=0.1
+        )
         ah.find_ibis(h5f)
 
     plot_parameter_info(h5f, axes[0])
@@ -206,6 +217,7 @@ def warntry(func):
 
     return wrapper
 
+
 def plot_raster(h5f, ax=None, apply_formatting=True, sort_by_module=True, **kwargs):
     """
         Plot a raster plot
@@ -237,7 +249,7 @@ def plot_raster(h5f, ax=None, apply_formatting=True, sort_by_module=True, **kwar
         kwargs.setdefault("markeredgewidth", 0)
     else:
         marker = "."
-        kwargs.setdefault("alpha", .75)
+        kwargs.setdefault("alpha", 0.75)
         kwargs.setdefault("markersize", 2.0)
         kwargs.setdefault("markeredgewidth", 0)
 
@@ -268,9 +280,9 @@ def plot_raster(h5f, ax=None, apply_formatting=True, sort_by_module=True, **kwar
         ax.set_xlabel("Time [seconds]")
         try:
             if len(h5f["ana.mods"]) == 4 and len(h5f["ana.neuron_ids"]) == 160:
-                    ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(40))
-                    ax.yaxis.set_minor_locator(matplotlib.ticker.NullLocator())
-                    ax.set_ylim(0,160)
+                ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(40))
+                ax.yaxis.set_minor_locator(matplotlib.ticker.NullLocator())
+                ax.set_ylim(0, 160)
         except:
             pass
         fig.tight_layout()
@@ -278,7 +290,7 @@ def plot_raster(h5f, ax=None, apply_formatting=True, sort_by_module=True, **kwar
     return ax
 
 
-def plot_module_rates(h5f, ax=None, apply_formatting=True, mark_burst_threshold=True):
+def plot_module_rates(h5f, ax=None, apply_formatting=True, mark_burst_threshold=False):
 
     assert "ana" in h5f.keypaths(), "`prepare_file(h5f)` before plotting!"
 
@@ -290,7 +302,7 @@ def plot_module_rates(h5f, ax=None, apply_formatting=True, mark_burst_threshold=
         fig = ax.get_figure()
 
     if not "ana.rates" in h5f.keypaths():
-        ah.find_bursts_from_rates(h5f)
+        ah.find_rates(h5f)
 
     dt = h5f["ana.rates.dt"]
 
@@ -305,12 +317,14 @@ def plot_module_rates(h5f, ax=None, apply_formatting=True, mark_burst_threshold=
             pop_rate,
             label=f"{m_id:d}: {mean_rate:.2f} Hz",
             color=h5f[f"ana.mod_colors"][m_id],
+            alpha=0.5,
         )
 
         if mark_burst_threshold:
             try:
                 ax.axhline(
-                    y=h5f["ana.bursts.module_level.mod_0.rate_threshold"], ls=":",
+                    y=h5f["ana.bursts.module_level.mod_0.rate_threshold"],
+                    ls=":",
                     color=h5f[f"ana.mod_colors"][m_id],
                 )
             except Exception as e:
@@ -334,7 +348,7 @@ def plot_module_rates(h5f, ax=None, apply_formatting=True, mark_burst_threshold=
     return ax
 
 
-def plot_system_rate(h5f, ax=None, apply_formatting=True):
+def plot_system_rate(h5f, ax=None, apply_formatting=True, mark_burst_threshold=True):
     assert "ana" in h5f.keypaths(), "`prepare_file(h5f)` before plotting!"
 
     log.info("Plotting System Rate")
@@ -345,7 +359,7 @@ def plot_system_rate(h5f, ax=None, apply_formatting=True):
         fig = ax.get_figure()
 
     if not "ana.rates" in h5f.keypaths():
-        ah.find_bursts_from_rates(h5f)
+        ah.find_rates(h5f)
 
     dt = h5f["ana.rates.dt"]
 
@@ -360,6 +374,14 @@ def plot_system_rate(h5f, ax=None, apply_formatting=True):
     log.info(f'CV system rate: {h5f["ana.rates.cv.system_level"]:.3f}')
 
     _style_legend(ax.legend(loc=1))
+
+    if mark_burst_threshold:
+        try:
+            ax.axhline(
+                y=h5f["ana.bursts.system_level.rate_threshold"], ls=":", color="black",
+            )
+        except Exception as e:
+            log.debug(e)
 
     if apply_formatting:
         ax.margins(x=0, y=0)
@@ -444,8 +466,12 @@ def plot_bursts_into_timeseries(h5f, ax=None, apply_formatting=True):
     pad = 3
     for mdx, m_id in enumerate(h5f["ana.mod_ids"]):
         m_dc = h5f["ana.mods"][mdx]
-        beg_times = h5f[f"ana.bursts.module_level.{m_dc}.beg_times"]
-        end_times = h5f[f"ana.bursts.module_level.{m_dc}.end_times"]
+        try:
+            beg_times = h5f[f"ana.bursts.module_level.{m_dc}.beg_times"]
+            end_times = h5f[f"ana.bursts.module_level.{m_dc}.end_times"]
+        except KeyError:
+            log.debug("No module-level burst in h5f. Cannot plot those burst times")
+            continue
 
         num_b = len(beg_times)
         total_num_b += num_b
@@ -454,7 +480,10 @@ def plot_bursts_into_timeseries(h5f, ax=None, apply_formatting=True):
         except:
             ibi = np.nan
 
-        _plot_bursts_into_timeseries(ax, beg_times, end_times,
+        _plot_bursts_into_timeseries(
+            ax,
+            beg_times,
+            end_times,
             y_offset=pad + 1 + m_id,
             color=h5f["ana.mod_colors"][m_id],
             label=f"{num_b} bursts, ~{ibi:.1f} s",
@@ -466,8 +495,8 @@ def plot_bursts_into_timeseries(h5f, ax=None, apply_formatting=True):
     beg_times = np.array(h5f["ana.bursts.system_level.beg_times"])
     end_times = np.array(h5f["ana.bursts.system_level.end_times"])
     l = [len(seq) for seq in h5f["ana.bursts.system_level.module_sequences"]]
-    idx = np.where(np.array(l) >= len(h5f["ana.mods"])) # swap these lines to show all
-    # idx = np.where(np.array(l) >= 0) # or only system wide bursts in black
+    # idx = np.where(np.array(l) >= len(h5f["ana.mods"])) # swap these lines to show all
+    idx = np.where(np.array(l) >= 0)  # or only system wide bursts in black
     beg_times = beg_times[idx]
     end_times = end_times[idx]
 
@@ -479,9 +508,14 @@ def plot_bursts_into_timeseries(h5f, ax=None, apply_formatting=True):
     log.info(f"Found {num_b} bursts system-wide")
     log.info(f"System-wide IBI: {ibi:.2f} seconds")
 
-    _plot_bursts_into_timeseries(ax, beg_times, end_times,
-        y_offset=pad, color="black",
-        label=f"{num_b} bursts, ~{ibi:.1f} s")
+    _plot_bursts_into_timeseries(
+        ax,
+        beg_times,
+        end_times,
+        y_offset=pad,
+        color="black",
+        label=f"{num_b} bursts, ~{ibi:.1f} s",
+    )
 
     ax.set_ylim(0, len(h5f["ana.mods"]) + 2 * pad)
 
@@ -494,6 +528,7 @@ def plot_bursts_into_timeseries(h5f, ax=None, apply_formatting=True):
 
     return ax
 
+
 def _plot_bursts_into_timeseries(ax, beg_times, end_times, y_offset=3, **kwargs):
     """
     lower level helper to plot beginning and end times of bursts
@@ -501,26 +536,15 @@ def _plot_bursts_into_timeseries(ax, beg_times, end_times, y_offset=3, **kwargs)
 
     kwargs.setdefault("color", "black")
 
-    ax.plot(
-        beg_times,
-        np.ones(len(beg_times)) * y_offset,
-        marker="4",
-        lw=0,
-        **kwargs
-    )
+    ax.plot(beg_times, np.ones(len(beg_times)) * y_offset, marker="4", lw=0, **kwargs)
 
     try:
         kwargs.pop("label")
     except KeyError:
         pass
 
-    ax.plot(
-        end_times,
-        np.ones(len(end_times)) * y_offset,
-        marker="3",
-        lw=0,
-        **kwargs
-    )
+    ax.plot(end_times, np.ones(len(end_times)) * y_offset, marker="3", lw=0, **kwargs)
+
 
 def plot_parameter_info(h5f, ax=None, apply_formatting=True, add=[]):
 
@@ -638,16 +662,18 @@ def plot_initiation_site(h5f, ax=None, apply_formatting=True):
     ax.set_ylabel("Histogram")
     ax.set_xlabel("Initiation module")
 
-    if not "ana.bursts" in h5f.keypaths():
-        ah.find_bursts_from_rates(h5f)
+    assert "ana.bursts" in h5f.keypaths()
 
     sequences = h5f["ana.bursts.system_level.module_sequences"]
     if len(sequences) == 0:
         return ax
 
-    first_mod = np.ones(len(sequences), dtype=int) - 1
+    # first_mod = np.ones(len(sequences), dtype=int) - 1
+    first_mod = []
     for idx, seq in enumerate(sequences):
-        first_mod[idx] = seq[0]
+        if len(seq) > 0:
+            first_mod.append(seq[0])
+    first_mod = np.array(first_mod, dtype=int)
 
     # unique = np.sort(np.unique(first_mod))
     unique = np.array([0, 1, 2, 3])
@@ -1104,9 +1130,7 @@ def plot_comparison_rij_between_conditions_serial(
     ax.set_xlabel(label_1)
     ax.set_ylabel(label_2)
     ax.legend(
-        labelcolor="linecolor",
-        markerscale=5,
-        handlelength=0,
+        labelcolor="linecolor", markerscale=5, handlelength=0,
     )
 
     fig.tight_layout()
@@ -1117,6 +1141,7 @@ def plot_comparison_rij_between_conditions_serial(
     # return rij_within_1, rij_within_2
     # return rij_1, rij_2
     return ax
+
 
 def plot_comparison_rij_between_conditions_batch(
     h5f,
@@ -1135,7 +1160,6 @@ def plot_comparison_rij_between_conditions_batch(
 
     fig, ax = plt.subplots()
     fig.canvas.manager.set_window_title(f"rij_{which}_{label_1}_{label_2}")
-
 
     def ana_func(filename):
         h5f = ah.prepare_file(filename)
@@ -1199,9 +1223,7 @@ def plot_comparison_rij_between_conditions_batch(
     ax.set_xlabel(label_1)
     ax.set_ylabel(label_2)
     ax.legend(
-        labelcolor="linecolor",
-        markerscale=5,
-        handlelength=0,
+        labelcolor="linecolor", markerscale=5, handlelength=0,
     )
 
     fig.tight_layout()
@@ -1388,8 +1410,7 @@ def plot_distribution_isi(
     if "ana.isi" not in h5f.keypaths():
         log.info("Finding ISIS")
         assert which == "all", "`find_bursts` before plotting isis other than `all`"
-        if not "ana.bursts" in h5f.keypaths():
-            ah.find_bursts_from_rates(h5f)
+        assert "ana.bursts" in h5f.keypaths()
         ah.find_isis(h5f)
 
     if filenames is None:
@@ -1535,6 +1556,7 @@ def plot_distribution_participating_fraction(
 
     return ax
 
+
 @warntry
 def plot_distribution_sequence_length(h5f, ax=None, apply_formatting=True):
     """
@@ -1586,6 +1608,7 @@ def plot_distribution_sequence_length(h5f, ax=None, apply_formatting=True):
         fig.tight_layout()
 
     return ax
+
 
 @warntry
 def plot_distribution_degree_k(h5f, ax=None, apply_formatting=True, filenames=None):
@@ -1658,6 +1681,7 @@ def plot_distribution_degree_k(h5f, ax=None, apply_formatting=True, filenames=No
         )
 
     return ax
+
 
 @warntry
 def plot_distribution_degree_for_neuron_distance(
@@ -1768,6 +1792,7 @@ def plot_distribution_degree_for_neuron_distance(
 
     return ax
 
+
 @warntry
 def plot_distribution_axon_length(h5f, ax=None, apply_formatting=True, filenames=None):
     """
@@ -1818,6 +1843,7 @@ def plot_distribution_axon_length(h5f, ax=None, apply_formatting=True, filenames
 
     return ax
 
+
 @warntry
 def plot_distribution_dendritic_tree_size(
     h5f, ax=None, apply_formatting=True, filenames=None
@@ -1863,6 +1889,7 @@ def plot_distribution_dendritic_tree_size(
 # topology
 # ------------------------------------------------------------------------------ #
 
+
 @warntry
 def plot_axon_layout(h5f, ax=None, apply_formatting=True):
     if ax is None:
@@ -1881,6 +1908,7 @@ def plot_axon_layout(h5f, ax=None, apply_formatting=True):
         ax.set_aspect(1)
         ax.set_xlabel(f"Position $l\,[\mu m]$")
         fig.tight_layout()
+
 
 @warntry
 def plot_connectivity_layout(h5f, ax=None, apply_formatting=True):
@@ -1963,6 +1991,7 @@ def _plot_axons(h5f, ax):
 # ------------------------------------------------------------------------------ #
 # helper
 # ------------------------------------------------------------------------------ #
+
 
 def _style_legend(leg):
     try:

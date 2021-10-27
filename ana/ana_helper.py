@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-10-22 23:41:25
+# @Last Modified: 2021-10-27 11:41:43
 # ------------------------------------------------------------------------------ #
 
 
@@ -211,35 +211,37 @@ def prepare_file(
 
     return h5f
 
-
-def load_experimental_files(path_prefix):
+# depricating
+def _unused_load_experimental_files(path_prefix):
     """
+        This data version had only the first burst detected.
+
         helper to import experimental csv files from jordi into a compatible
         h5f
 
         # Parameters
-        folderpath: str
+        path_prefix: str
 
         # Returns
         h5f: benedict with our needed strucuter
     """
 
-    # assert os.path.isdir(folderpath)
+    # assert os.path.isdir(path_prefix)
 
     h5f = benedict()
 
     # ROIs as neuron centers
-    rois = np.loadtxt(f"{path_prefix}ROI_centers_everything.csv",
-            delimiter=",", skiprows=1)
+    rois = np.loadtxt(
+        f"{path_prefix}ROI_centers_everything.csv", delimiter=",", skiprows=1
+    )
 
     h5f["data.neuron_pos_x"] = rois[:, 1].copy()
     h5f["data.neuron_pos_y"] = rois[:, 2].copy()
 
-    spikes = np.loadtxt(f"{path_prefix}spikesData.csv",
-            delimiter=",", skiprows=1)
+    spikes = np.loadtxt(f"{path_prefix}spikesData.csv", delimiter=",", skiprows=1)
 
     # convert one to zero indexing
-    spikes[:,0] -= 1
+    spikes[:, 0] -= 1
 
     h5f["data.spiketimes_as_list"] = spikes.copy()
     h5f["data.spiketimes"] = _spikes_as_list_to_spikes_2d(spikes)
@@ -269,13 +271,70 @@ def load_experimental_files(path_prefix):
     return prepare_file(h5f)
 
 
-def find_bursts_from_rates(
+def load_experimental_files(path_prefix, condition="1_spont_"):
+    """
+        helper to import experimental csv files from jordi into a compatible
+        h5f
+
+        # Parameters
+        path_prefix: str
+        condition: str
+
+        # Returns
+        h5f: benedict with our needed strucuter
+    """
+
+    # assert os.path.isdir(path_prefix)
+
+    h5f = benedict()
+
+    # ROIs as neuron centers
+    rois = np.loadtxt(f"{path_prefix}RoiSet_Cartesian.txt", delimiter=",", skiprows=1)
+
+    h5f["data.neuron_pos_x"] = rois[:, 1].copy()
+    h5f["data.neuron_pos_y"] = rois[:, 2].copy()
+
+    # add some more stuff that is usually already in the meta data
+    num_n = len(h5f["data.neuron_pos_x"])
+    h5f["meta.topology_num_neur"] = num_n
+
+    # in this format, we have a 50 ms timestep, the column is the neuron id
+    # and the row is whether a neuron fired in this time step.
+    spikes_as_sparse = np.loadtxt(
+        f"{path_prefix}{condition}raster.csv", delimiter=",", skiprows=0
+    )
+
+    spikes_as_list = _spikes_as_sparse_to_spikes_as_list(spikes_as_sparse, dt=50 / 1000)
+    h5f["data.spiketimes_as_list"] = spikes_as_list
+    h5f["data.spiketimes"] = _spikes_as_list_to_spikes_2d(spikes_as_list, num_n=num_n)
+
+    # approximate module ids from position
+    # 0 lower left, 1 upper left, 2 lower right, 3 upper right
+    h5f["data.neuron_module_id"] = np.ones(num_n, dtype=int) * -1
+    for nid in range(0, num_n):
+        x = h5f["data.neuron_pos_x"][nid]
+        y = h5f["data.neuron_pos_y"][nid]
+
+        if x < 300 and y < 300:
+            h5f["data.neuron_module_id"][nid] = 0
+        elif x < 300 and y >= 300:
+            h5f["data.neuron_module_id"][nid] = 1
+        elif x >= 300 and y < 300:
+            h5f["data.neuron_module_id"][nid] = 2
+        elif x >= 300 and y >= 300:
+            h5f["data.neuron_module_id"][nid] = 3
+
+    h5f["meta.dynamics_simulation_duration"] = 600.0
+
+    return prepare_file(h5f)
+
+
+# depricating, do this more explicitly
+def __find_bursts_from_rates(
     h5f,
-    bs_large=0.02,  # seconds, time bin size to smooth over (gaussian kernel)
-    bs_small=0.0005,  # seconds, small bin size
     rate_threshold=None,  # default 7.5 Hz
     merge_threshold=0.1,  # seconds, merge bursts if separated by less than this
-    system_bursts_from_modules = False,
+    system_bursts_from_modules=True,
     write_to_h5f=True,
     return_res=False,
 ):
@@ -305,7 +364,6 @@ def find_bursts_from_rates(
     assert h5f["ana"] is not None, "`prepare_file(h5f)` first!"
     assert write_to_h5f or return_res
 
-
     if rate_threshold is None:
         rate_threshold = 7.5
 
@@ -330,20 +388,8 @@ def find_bursts_from_rates(
         # if sensor is specified, we might get more neuron_module_id than were recorded
         selects = selects[np.isin(selects, h5f["ana.neuron_ids"])]
         pop_rate = population_rate_exact_smoothing(
-            spikes[selects],
-            bin_size=bs_small,
-            smooth_width=bs_large,
-            length=duration,
+            spikes[selects], bin_size=bs_small, smooth_width=bs_large, length=duration,
         )
-
-        # old, less exact version
-        # pop_rate = population_rate(
-        #     spikes[selects],
-        #     bin_size=bs_small,
-        #     length=h5f["meta.dynamics_simulation_duration"],
-        # )
-        # pop_rate = smooth_rate(pop_rate, clock_dt=bs_small, width=bs_large)
-        # pop_rate = pop_rate / bs_small
 
         beg_time, end_time = burst_detection_pop_rate(
             rate=pop_rate, bin_size=bs_small, rate_threshold=rate_threshold,
@@ -364,10 +410,7 @@ def find_bursts_from_rates(
         bursts[f"module_level.{m_dc}.rate_threshold"] = rate_threshold
 
     pop_rate = population_rate_exact_smoothing(
-        spikes[:],
-        bin_size=bs_small,
-        smooth_width=bs_large,
-        length=duration,
+        spikes[:], bin_size=bs_small, smooth_width=bs_large, length=duration,
     )
     rates["system_level"] = pop_rate
     rates["cv.system_level"] = np.nanstd(pop_rate) / np.nanmean(pop_rate)
@@ -425,6 +468,205 @@ def find_bursts_from_rates(
         return bursts, rates
 
 
+def find_rates(
+    h5f,
+    bs_large=0.02,  # seconds, time bin size to smooth over (gaussian kernel)
+    bs_small=0.0005,  # seconds, small bin size
+    write_to_h5f=True,
+    return_res=False,
+):
+    """
+        Uses `population_rate_exact_smoothing` to find global system rate
+        and the rates within modules
+
+        Note on smoothing: previously, we time-binned the activity on the module level
+        and convolve this series with a gaussian kernel to smooth.
+        Current, precise way is to convolve the spike-train of each neuron with
+        the kernel (thus, keeping the high precision of each spike time).
+    """
+    assert h5f["ana"] is not None, "`prepare_file(h5f)` first!"
+    assert write_to_h5f or return_res
+
+    spikes = h5f["data.spiketimes"]
+
+    rates = benedict()
+    rates["dt"] = bs_small
+
+    beg_times = []  # lists of length num_modules
+    end_times = []
+
+    try:
+        duration = h5f["meta.dynamics_simulation_duration"]
+    except KeyError:
+        duration = np.nanmax(h5f["data.spiketimes"]) + 15
+
+    for mdx, m_id in enumerate(h5f["ana.mod_ids"]):
+        m_dc = h5f["ana.mods"][mdx]
+        selects = np.where(h5f["data.neuron_module_id"][:] == m_id)[0]
+        selects = selects[np.isin(selects, h5f["ana.neuron_ids"])]
+        pop_rate = population_rate_exact_smoothing(
+            spikes[selects], bin_size=bs_small, smooth_width=bs_large, length=duration,
+        )
+
+        rates[f"module_level.{m_dc}"] = pop_rate
+        rates[f"cv.module_level.{m_dc}"] = np.nanstd(pop_rate) / np.nanmean(pop_rate)
+
+    pop_rate = population_rate_exact_smoothing(
+        spikes[:], bin_size=bs_small, smooth_width=bs_large, length=duration,
+    )
+    rates["system_level"] = pop_rate
+    rates["cv.system_level"] = np.nanstd(pop_rate) / np.nanmean(pop_rate)
+
+    if write_to_h5f:
+        try:
+            h5f["ana.rates"].clear()
+        except Exception as e:
+            log.debug(e)
+        # so, overwriting keys with dicts (nesting) can cause memory leaks.
+        # to avoid this, call .clear() before assigning the new dict
+        # testwise I made this the default for setting keys of benedict
+        h5f["ana.rates"] = rates
+
+    if return_res:
+        return rates
+
+
+def find_system_bursts_from_module_bursts(
+    h5f,
+    rate_threshold,  # Hz
+    merge_threshold,  # seconds, merge bursts if separated by less than this
+    write_to_h5f=True,
+    return_res=False,
+):
+    """
+        Based on module-level firing rates, find bursting events.
+
+        optionally returns `bursts`
+        optionally modifies `h5f`
+
+        # Parameters
+        h5f : benedict, with our usual structure
+        rate_threshold : float in Hz, above which we start detecting bursts
+        merge_threshold : float, seconds merge bursts if separated by less than this
+
+        # Adds to h5f if `write_to_h5f`:
+            h5f["ana.bursts.module_level.{m_dc}.beg_times"]
+            h5f["ana.bursts.module_level.{m_dc}.end_times"]
+            h5f["ana.bursts.module_level.{m_dc}.rate_threshold"]
+            h5f["ana.system_level.beg_times"]
+            h5f["ana.system_level.end_times"]
+            h5f["ana.system_level.module_sequences"]
+
+    """
+
+    rate_dt = h5f["ana.rates.dt"]
+    bursts = benedict()
+    beg_times = []
+    end_times = []
+
+    for mdx, m_id in enumerate(h5f["ana.mod_ids"]):
+        m_dc = h5f["ana.mods"][mdx]
+        rate = h5f[f"ana.rates.module_level.{m_dc}"]
+        beg_time, end_time = burst_detection_pop_rate(
+            rate=rate, bin_size=rate_dt, rate_threshold=rate_threshold,
+        )
+        beg_time, end_time = merge_if_below_separation_threshold(
+            beg_time, end_time, threshold=merge_threshold
+        )
+        beg_times.append(beg_time)
+        end_times.append(end_time)
+
+        bursts[f"module_level.{m_dc}.beg_times"] = beg_time.copy()
+        bursts[f"module_level.{m_dc}.end_times"] = end_time.copy()
+        bursts[f"module_level.{m_dc}.rate_threshold"] = rate_threshold
+
+    sys_begs, sys_ends, sys_seqs = system_burst_from_module_burst(
+        beg_times, end_times, threshold=merge_threshold,
+    )
+
+    bursts["system_level.beg_times"] = sys_begs.copy()
+    bursts["system_level.end_times"] = sys_ends.copy()
+    bursts["system_level.module_sequences"] = sys_seqs
+    bursts["system_level.algorithm"] = "from_module_bursts"
+
+    if write_to_h5f:
+        try:
+            h5f["ana.bursts"].clear()
+        except Exception as e:
+            log.debug(e)
+        h5f["ana.bursts"] = bursts
+
+    if return_res:
+        return bursts
+
+
+def find_system_bursts_from_global_rate(
+    h5f,
+    rate_threshold,  # Hz
+    merge_threshold,  # seconds, merge bursts if separated by less than this
+    write_to_h5f=True,
+    return_res=False,
+    **sequence_kwargs,
+):
+    """
+        Find global bursting events only based on the merged down rate.
+        To get sequences, uses `sequences_from_module_contribution` and
+        passes `sequence_kwargs`.
+
+        optionally returns `bursts`
+        optionally modifies `h5f`
+
+        Note: does not provide the
+        h5f["ana.bursts.module_level.{m_dc}"]
+
+        # Parameters
+        h5f : benedict, with our usual structure
+        rate_threshold : float, Hz, above which we start detecting bursts
+        merge_threshold : float, seconds merge bursts if separated by less than this
+
+        # Adds to h5f if `write_to_h5f`:
+            h5f["ana.system_level.beg_times"]
+            h5f["ana.system_level.end_times"]
+    """
+
+    bursts = benedict()
+    rate = h5f[f"ana.rates.system_level"]
+    rate_dt = h5f["ana.rates.dt"]
+
+    beg_times, end_times = burst_detection_pop_rate(
+        rate=rate, bin_size=rate_dt, rate_threshold=rate_threshold,
+    )
+    beg_times, end_times = merge_if_below_separation_threshold(
+        beg_times, end_times, threshold=merge_threshold
+    )
+
+    sequence_kwargs.setdefault("min_spikes", 1)
+    # 25% of a modules neurons
+    npm = h5f["meta.topology_num_neur"] / len(h5f["ana.mod_ids"])
+    min_neurons = np.nanmax([1, int(0.25 * npm)])
+    sequence_kwargs.setdefault("min_neurons", min_neurons)
+
+    sys_seqs = sequences_from_module_contribution(
+        h5f, beg_times, end_times, **sequence_kwargs
+    )
+
+    bursts["beg_times"] = beg_times.copy()
+    bursts["end_times"] = end_times.copy()
+    bursts["module_sequences"] = sys_seqs
+    bursts["rate_threshold"] = rate_threshold
+    bursts["algorithm"] = "from_global_rate"
+
+    if write_to_h5f:
+        try:
+            h5f["ana.bursts.system_level"].clear()
+        except Exception as e:
+            log.debug(e)
+        h5f["ana.bursts.system_level"] = bursts
+
+    if return_res:
+        return bursts
+
+
 def find_isis(h5f, write_to_h5f=True, return_res=False):
     """
         What are the the inter-spike-intervals within and out of bursts?
@@ -477,10 +719,11 @@ def find_ibis(h5f, write_to_h5f=True, return_res=False):
             b = np.array(h5f[f"ana.bursts.module_level.{m_dc}.beg_times"])
             e = np.array(h5f[f"ana.bursts.module_level.{m_dc}.end_times"])
         except Exception as e:
-            log.error(
-                "Bursts were not detected before searching IBI. Try `find_bursts_from_rates()`"
+            log.warning(
+                "Module-level bursts were not detected before searching IBI."
             )
-            raise e
+            break
+            # raise e
 
         if len(b) < 2:
             l_ibi = np.array([])
@@ -497,7 +740,7 @@ def find_ibis(h5f, write_to_h5f=True, return_res=False):
         e = np.array(h5f["ana.bursts.system_level.end_times"])
     except Exception as e:
         log.error(
-            "Bursts were not detected before searching IBI. Try `find_bursts_from_rates()`"
+            "System-level bursts were not detected before searching IBI."
         )
         raise e
 
@@ -563,8 +806,12 @@ def find_participating_fraction_in_bursts(h5f, write_to_h5f=True, return_res=Fal
         m_dc = h5f["ana.mods"][mdx]
         selects = np.where(h5f["data.neuron_module_id"][:] == m_id)[0]
         selects = selects[np.isin(selects, h5f["ana.neuron_ids"])]  # sensor
-        bt = bursts[f"module_level.{m_dc}.beg_times"]
-        et = bursts[f"module_level.{m_dc}.end_times"]
+        try:
+            bt = bursts[f"module_level.{m_dc}.beg_times"]
+            et = bursts[f"module_level.{m_dc}.end_times"]
+        except KeyError:
+            log.debug("No module bursts for participating fraction. Skipping")
+            break
         fraction = np.zeros(len(bt))
         num_spks = np.zeros(len(bt))
         for bdx in range(0, len(bt)):
@@ -1246,10 +1493,36 @@ def batch_conditions():
 # lower level
 # ------------------------------------------------------------------------------ #
 
-def _spikes_as_list_to_spikes_2d(spikes_as_list, num_n = None):
+
+def _spikes_as_sparse_to_spikes_as_list(spikes_as_sparse, dt):
+    """
+        # Parameters
+        spikes_as_sparse : 2d array with shape (num_timesteps, num_neurons)
+            columns correspond to neurons, rows to time bins of size dt.
+            each row has a 0 (no spike in that time bin) or 1 (if spiked).
+
+        # Returns
+        spikes_as_list : 2d array with shape: (num_spikes, 2)
+            first column is the neuron id, second column the spike time
+    """
+
+    times, neuron_ids = np.where(spikes_as_sparse)
+
+    return np.array([neuron_ids, times * dt]).T
+
+
+def _spikes_as_list_to_spikes_2d(spikes_as_list, num_n=None):
     """
         convert a list of spiketimes to the 2d matrix representation
         if num_n is not None, we will use 0 to num_n neurons
+
+        # Parameters
+        spikes_as_list : 2d array with shape: (num_spikes, 2)
+            first column is the neuron id, second column the spike time
+
+        # Returns
+        spikes_nan_padded : 2d array
+            with shape (num_neurons, max_number_spikes_for_single_neuron)
     """
 
     unique, counts = np.unique(spikes_as_list[:, 0], return_counts=True)
@@ -1257,7 +1530,7 @@ def _spikes_as_list_to_spikes_2d(spikes_as_list, num_n = None):
     if num_n is None:
         num_n = int(np.max(unique)) + 1
 
-    assert(np.all(unique >= 0))
+    assert np.all(unique >= 0)
 
     max_num_spikes = np.max(counts)
 
@@ -1265,9 +1538,10 @@ def _spikes_as_list_to_spikes_2d(spikes_as_list, num_n = None):
 
     for nid in unique.astype(int):
         selected = spikes_as_list[spikes_as_list[:, 0] == nid][:, 1]
-        spikes_2d[nid, 0:len(selected)] = selected
+        spikes_2d[nid, 0 : len(selected)] = selected
 
     return spikes_2d
+
 
 # turns out this is faster without numba
 def _inter_spike_intervals(spikes_2d, beg_times=None, end_times=None):
@@ -1768,7 +2042,7 @@ def system_burst_from_module_burst(beg_times, end_times, threshold, modules=None
 
         if pos < len(idx_begs) - 1:
             # if more bursts detected, we need to finish before it starts
-            this_end_time = all_begs[idx_begs[pos+1]]
+            this_end_time = all_begs[idx_begs[pos + 1]]
         else:
             this_end_time = np.inf
 
@@ -1866,6 +2140,49 @@ def smooth_rate(rate, clock_dt, window="gaussian", width=None):
     return np.convolve(rate, window * 1.0 / sum(window), mode="same")
 
 
+def get_threshold_from_snr_between_bursts(rate, rate_dt, merge_threshold, std_offset=3, itermax=1000):
+    """
+        Find an ideal threshold `theta = mean + std_offset*std`,
+        where mean and std are evaluated inbetween bursts.
+
+        Iterates burst detection at a given threshold with lowering the threshold.
+    """
+
+    # init
+    mean_orig = np.nanmean(rate)
+    std_orig = np.nanstd(rate)
+    theta_orig = mean_orig + std_offset*std_orig
+
+    mean_old = mean_orig
+    std_old = std_orig
+    theta_old = theta_orig
+
+
+    for iteration in range(0, 1000):
+        beg_times, end_times = burst_detection_pop_rate(
+            rate=rate, bin_size=rate_dt, rate_threshold=theta_old,
+        )
+        beg_times, end_times = merge_if_below_separation_threshold(
+            beg_times, end_times, threshold=merge_threshold
+        )
+        beg_times = np.array(beg_times) / rate_dt
+        end_times = np.array(end_times) / rate_dt
+
+        mask = np.ones(len(rate), dtype=bool)
+        for idx in range(0, len(beg_times)):
+            beg = int(beg_times[idx])
+            end = int(end_times[idx])
+            mask[beg:end] = False
+
+        mean_new = np.nanmean(rate[mask])
+        std_new = np.nanstd(rate[mask])
+        theta_new = mean_new + std_offset*std_new
+        print(theta_new, mean_new, std_new, np.sum(mask) / len(rate) )
+        # print(f"{theta_new:.2g} Hz, {}")
+
+        theta_old = theta_new
+
+
 def get_threshold_via_signal_to_noise_ratio(time_series, snr=5, iterations=1):
 
     mean_orig = np.nanmean(time_series)
@@ -1903,6 +2220,79 @@ def get_threshold_from_logisi_distribution(list_of_isi, area_fraction=0.3):
 # ------------------------------------------------------------------------------ #
 # sequences
 # ------------------------------------------------------------------------------ #
+
+
+def sequences_from_module_contribution(
+    h5f, sys_begs, sys_ends, min_spikes=1, min_neurons=1
+):
+    """
+        Another way to detect whether a module was involved in a burst is to check
+        how many spikes were contributed per neuron.
+
+        # Parameters
+        sys_begs, sys_ends: list or array
+            system-wide begin/end times
+        min_spikes: number
+            at least this many spikes must occur in a module during the system-wide
+            burst time to qualify as "contributing"
+        min_neurons: number
+            at least this many neurons from a module must fire at least `min_spikes`
+            during the system-wide burst time to qualify as "contributing"
+
+        # Returns
+        sequences : list of tuples
+            Note that we might get empty tuples, if no module met our requirements
+    """
+    spikes = h5f["data.spiketimes"]
+
+    selects = dict()
+    for mdx, m_id in enumerate(h5f["ana.mod_ids"]):
+        s = np.where(h5f["data.neuron_module_id"][:] == m_id)[0]
+        selects[mdx] = s[np.isin(s, h5f["ana.neuron_ids"])]
+
+    sys_seqs = []
+    for idx in tqdm(
+        range(0, len(sys_begs)), desc="Detecting Module Sequences", leave=False
+    ):
+        beg = sys_begs[idx]
+        end = sys_ends[idx]
+        firsts = np.ones(len(h5f["ana.mods"])) * np.nan
+
+        # for mdx, m_id in enumerate(h5f["ana.mod_ids"]):
+        #     s = spikes[selects[mdx]]
+        #     # filter away neurons that do not have enough spikes
+        #     nid_list, _ = np.where((s >= beg) & (s <= end))
+        #     nids, counts = np.unique(nid_list, return_counts=True)
+        #     s = s[nids[counts >= min_spikes], :]
+        #     if s.shape[0] < min_neurons:
+        #         continue
+        #     # collect the earliest start time in this module
+        #     s = s[(s >= beg) & (s <= end)]
+        #     if len(s) > 0:
+        #         firsts[mdx] = np.nanmin(s)
+        # num_valid = len(firsts[np.isfinite(firsts)])
+        # mdx_order = np.argsort(firsts)[0:num_valid]
+        # seq = tuple(np.array(h5f["ana.mod_ids"])[mdx_order])
+        # sys_seqs.append(seq)
+
+        # faster? simpler?
+        for mdx, m_id in enumerate(h5f["ana.mod_ids"]):
+            nids = []
+            first_times = []
+            for nid in selects[mdx]:
+                s = spikes[nid, :]
+                s = s[(s >= beg) & (s <= end)]
+                if len(s) >= min_spikes:
+                    nids.append(nid)
+                    first_times.append(s[0])
+            if len(nids) >= min_neurons:
+                firsts[mdx] = np.nanmin(first_times)
+        num_valid = len(firsts[np.isfinite(firsts)])
+        mdx_order = np.argsort(firsts)[0:num_valid]
+        seq = tuple(np.array(h5f["ana.mod_ids"])[mdx_order])
+        sys_seqs.append(seq)
+
+    return sys_seqs
 
 
 def sequence_histogram(ids, sequences=None):
