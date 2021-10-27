@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-10-27 11:41:43
+# @Last Modified: 2021-10-27 14:33:34
 # ------------------------------------------------------------------------------ #
 
 
@@ -840,6 +840,47 @@ def find_participating_fraction_in_bursts(h5f, write_to_h5f=True, return_res=Fal
 
     if return_res:
         return bursts
+
+
+def find_onset_durations(h5f, write_to_h5f=True, return_res=False):
+    """
+        Similar to the duration of a burst (start time to end time),
+        we can ask how long did it take from activating the first
+        to activating the last module
+    """
+
+    assert "ana.bursts.system_level" in h5f.keypaths()
+
+    spikes = h5f["data.spiketimes"]
+    beg_times = h5f["ana.bursts.system_level.beg_times"]
+    end_times = h5f["ana.bursts.system_level.end_times"]
+
+    onset_durations = []
+    for idx in range(0, len(beg_times)):
+        beg = beg_times[idx]
+        end = end_times[idx]
+        nids, tidx = np.where((spikes >= beg) & (spikes <= end))
+        onsets = []
+        for nid in np.unique(nids):
+            ndx = np.where(nids == nid)[0]
+            times = spikes[nid, tidx[ndx]]
+            onsets.append(np.nanmin(times))
+        if len(onsets) == 0:
+            # in rare situations when the threshold is _barely_ crossed,
+            # we might detect burst boundaries but all spikes
+            # are out of the detected interval, due to gaussian smoothing
+            onset_durations.append(np.nan)
+        else:
+            onset_durations.append(np.nanmax(onsets) - np.nanmin(onsets))
+
+    if write_to_h5f:
+        h5f["ana.bursts.system_level.onset_durations"] = onset_durations
+
+    if return_res:
+        return onset_durations
+
+
+
 
 
 def find_rij(h5f, which="neurons", time_bin_size=40 / 1000):
