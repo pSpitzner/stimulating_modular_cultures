@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-10-25 11:58:21
+# @Last Modified: 2021-10-27 16:33:41
 #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into an ndim array
@@ -52,12 +52,15 @@ d_obs = OrderedDict()
 d_obs["jA"] = "/meta/dynamics_jA"
 d_obs["jG"] = "/meta/dynamics_jG"
 # d_obs["jM"] = "/meta/dynamics_jM"
-d_obs["jE"] = "/meta/dynamics_jE"
+# d_obs["jE"] = "/meta/dynamics_jE"
 d_obs["rate"] = "/meta/dynamics_rate"
 # d_obs["tD"] = "/meta/dynamics_tD"
 # d_obs["alpha"] = "/meta/topology_alpha"
 # d_obs["k_inter"] = "/meta/topology_k_inter"
 # d_obs["k_frac"] = "/meta/dynamics_k_frac"
+
+threshold_factor = 0.2
+smoothing_width = 25 / 1000
 
 # functions for analysis. candidate is the file path (e.g. to a hdf5 file)
 # need to return a dict where the key becomes the hdf5 data set name
@@ -68,13 +71,16 @@ def all_in_one(candidate=None):
         res = dict()
         # scalars
         res["any_num_b"] = 1
+        res["mod_num_b_0"] = 1
         res["mod_num_b_1"] = 1
         res["mod_num_b_2"] = 1
         res["mod_num_b_3"] = 1
         res["mod_num_b_4"] = 1
         res["sys_rate_cv"] = 1
         res["sys_mean_rate"] = 1
+        res["sys_rate_threshold"] = 1
         res["sys_blen"] = 1
+        res["mod_blen_0"] = 1
         res["mod_blen_1"] = 1
         res["mod_blen_2"] = 1
         res["mod_blen_3"] = 1
@@ -113,12 +119,22 @@ def all_in_one(candidate=None):
     h5f = ah.prepare_file(
         candidate, hot=False, skip=["connectivity_matrix", "connectivity_matrix_sparse"]
     )
-    ah.find_bursts_from_rates(h5f, rate_threshold=5.0)
+    ah.find_rates(h5f, bs_large=smoothing_width)
+    threshold = threshold_factor * np.nanmax(h5f["ana.rates.system_level"])
+
+    # this also finds module sequences, currently when at least 20% of module neurons
+    # fired at least one spike.
+    ah.find_system_bursts_from_global_rate(h5f, rate_threshold=threshold, merge_threshold=0.1)
+    # ah.find_bursts_from_rates(h5f, rate_threshold=5.0)
     ah.find_ibis(h5f)
 
     # number of bursts and duration
     res = dict()
+    res["sys_rate_threshold"] = threshold
     res["any_num_b"] = len(h5f["ana.bursts.system_level.beg_times"])
+    res["mod_num_b_0"] = len(
+        [x for x in h5f["ana.bursts.system_level.module_sequences"] if len(x) == 0]
+    )
     res["mod_num_b_1"] = len(
         [x for x in h5f["ana.bursts.system_level.module_sequences"] if len(x) == 1]
     )
@@ -139,6 +155,7 @@ def all_in_one(candidate=None):
         h5f["ana.bursts.system_level.beg_times"]
     )
     res["sys_blen"] = np.nanmean(blen)
+    res["mod_blen_0"] = np.nanmean(blen[np.where(slen == 0)[0]])
     res["mod_blen_1"] = np.nanmean(blen[np.where(slen == 1)[0]])
     res["mod_blen_2"] = np.nanmean(blen[np.where(slen == 2)[0]])
     res["mod_blen_3"] = np.nanmean(blen[np.where(slen == 3)[0]])
@@ -146,16 +163,15 @@ def all_in_one(candidate=None):
 
     # ibis
     try:
+        res["sys_ibis"] = np.nanmean(h5f["ana.ibi.system_level.all_modules"])
+        res["any_ibis_cv"] = np.nanmean(h5f["ana.ibi.system_level.cv_any_module"])
+        res["sys_ibis_cv"] = np.nanmean(h5f["ana.ibi.system_level.cv_across_modules"])
         ibis_module = []
         for m_dc in h5f["ana.ibi.module_level"].keys():
             ibis_module.extend(h5f["ana.ibi.module_level"][m_dc])
         res["any_ibis"] = np.nanmean(ibis_module)
-        res["sys_ibis"] = np.nanmean(h5f["ana.ibi.system_level.all_modules"])
-        res["any_ibis_cv"] = np.nanmean(h5f["ana.ibi.system_level.cv_any_module"])
-        res["sys_ibis_cv"] = np.nanmean(h5f["ana.ibi.system_level.cv_across_modules"])
     except KeyError as e:
-        log.error(h5f.keypaths())
-        raise e
+        log.debug(e)
 
     # correlation coefficients
     try:
@@ -261,6 +277,12 @@ def all_in_one(candidate=None):
 
 
 def parse_arguments():
+
+    # we use global variables for the threshold so we dont have to pass them
+    # through a bunch of calls. not neat.
+    global threshold_factor
+    global smoothing_width
+
     parser = argparse.ArgumentParser(description="Merge Multidm")
     parser.add_argument(
         "-i",
@@ -280,7 +302,28 @@ def parse_arguments():
         default=256,
         type=int,
     )
-    return parser.parse_args()
+    parser.add_argument(
+        "-t",
+        dest="threshold_factor",
+        help="% of peak height to use for thresholding of burst detection",
+        default=threshold_factor,
+        type=float
+    )
+    parser.add_argument(
+        "-s",
+        dest="smoothing_width",
+        help="% of peak height to use for thresholding of burst detection",
+        default=smoothing_width,
+        type=float
+    )
+
+    args = parser.parse_args()
+    threshold_factor = args.threshold_factor
+    smoothing_width = args.smoothing_width
+
+    log.info(args)
+
+    return args
 
 
 # ------------------------------------------------------------------------------ #
@@ -479,6 +522,12 @@ def main(args):
 
     dset = f_tar.create_dataset("/meta/num_samples", data=sampled)
     dset.attrs["description"] = "measured number of repetitions"
+
+    # meta data
+    dset = f_tar.create_dataset("/meta/ana_par/threshold_factor",
+        data=threshold_factor)
+    dset = f_tar.create_dataset("/meta/ana_par/smoothing_width",
+        data=smoothing_width)
 
     f_tar.close()
 

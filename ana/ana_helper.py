@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-10-27 14:33:34
+# @Last Modified: 2021-10-27 17:00:11
 # ------------------------------------------------------------------------------ #
 
 
@@ -641,9 +641,9 @@ def find_system_bursts_from_global_rate(
     )
 
     sequence_kwargs.setdefault("min_spikes", 1)
-    # 25% of a modules neurons
+    # 20% of a modules neurons
     npm = h5f["meta.topology_num_neur"] / len(h5f["ana.mod_ids"])
-    min_neurons = np.nanmax([1, int(0.25 * npm)])
+    min_neurons = np.nanmax([1, int(0.20 * npm)])
     sequence_kwargs.setdefault("min_neurons", min_neurons)
 
     sys_seqs = sequences_from_module_contribution(
@@ -719,7 +719,7 @@ def find_ibis(h5f, write_to_h5f=True, return_res=False):
             b = np.array(h5f[f"ana.bursts.module_level.{m_dc}.beg_times"])
             e = np.array(h5f[f"ana.bursts.module_level.{m_dc}.end_times"])
         except Exception as e:
-            log.warning(
+            log.debug(
                 "Module-level bursts were not detected before searching IBI."
             )
             break
@@ -2262,7 +2262,6 @@ def get_threshold_from_logisi_distribution(list_of_isi, area_fraction=0.3):
 # sequences
 # ------------------------------------------------------------------------------ #
 
-
 def sequences_from_module_contribution(
     h5f, sys_begs, sys_ends, min_spikes=1, min_neurons=1
 ):
@@ -2286,48 +2285,29 @@ def sequences_from_module_contribution(
     """
     spikes = h5f["data.spiketimes"]
 
-    selects = dict()
-    for mdx, m_id in enumerate(h5f["ana.mod_ids"]):
+    selects = [[]]*len(h5f["ana.mod_ids"])
+    for m_id in h5f["ana.mod_ids"]:
         s = np.where(h5f["data.neuron_module_id"][:] == m_id)[0]
-        selects[mdx] = s[np.isin(s, h5f["ana.neuron_ids"])]
+        selects[m_id] = s[np.isin(s, h5f["ana.neuron_ids"])]
 
     sys_seqs = []
-    for idx in tqdm(
-        range(0, len(sys_begs)), desc="Detecting Module Sequences", leave=False
-    ):
+    for idx in range(0, len(sys_begs)):
         beg = sys_begs[idx]
         end = sys_ends[idx]
         firsts = np.ones(len(h5f["ana.mods"])) * np.nan
 
-        # for mdx, m_id in enumerate(h5f["ana.mod_ids"]):
-        #     s = spikes[selects[mdx]]
-        #     # filter away neurons that do not have enough spikes
-        #     nid_list, _ = np.where((s >= beg) & (s <= end))
-        #     nids, counts = np.unique(nid_list, return_counts=True)
-        #     s = s[nids[counts >= min_spikes], :]
-        #     if s.shape[0] < min_neurons:
-        #         continue
-        #     # collect the earliest start time in this module
-        #     s = s[(s >= beg) & (s <= end)]
-        #     if len(s) > 0:
-        #         firsts[mdx] = np.nanmin(s)
-        # num_valid = len(firsts[np.isfinite(firsts)])
-        # mdx_order = np.argsort(firsts)[0:num_valid]
-        # seq = tuple(np.array(h5f["ana.mod_ids"])[mdx_order])
-        # sys_seqs.append(seq)
-
         # faster? simpler?
-        for mdx, m_id in enumerate(h5f["ana.mod_ids"]):
+        for m_id in h5f["ana.mod_ids"]:
             nids = []
             first_times = []
-            for nid in selects[mdx]:
+            for nid in selects[m_id]:
                 s = spikes[nid, :]
                 s = s[(s >= beg) & (s <= end)]
                 if len(s) >= min_spikes:
                     nids.append(nid)
                     first_times.append(s[0])
             if len(nids) >= min_neurons:
-                firsts[mdx] = np.nanmin(first_times)
+                firsts[m_id] = np.nanmin(first_times)
         num_valid = len(firsts[np.isfinite(firsts)])
         mdx_order = np.argsort(firsts)[0:num_valid]
         seq = tuple(np.array(h5f["ana.mod_ids"])[mdx_order])
