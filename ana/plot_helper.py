@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-10-27 11:41:52
+# @Last Modified: 2021-10-28 12:34:56
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -144,7 +144,7 @@ def overview_dynamic(h5f, filenames=None, threshold=None, states=True, skip=[]):
         # (re) do the detection so that we do not have default values
         # ah.find_bursts_from_rates(h5f, rate_threshold=threshold)
         if threshold == "max":
-            rate_threshold = 0.1 * np.nanmax(h5f["ana.rates.system_level"])
+            rate_threshold = 0.025 * np.nanmax(h5f["ana.rates.system_level"])
         else:
             rate_threshold = threshold
 
@@ -160,8 +160,10 @@ def overview_dynamic(h5f, filenames=None, threshold=None, states=True, skip=[]):
         plot_module_rates(h5f, axes[2])
         plot_system_rate(h5f, axes[2])
     if not "bursts" in skip:
-        ax = plot_bursts_into_timeseries(h5f, axes[3])
+        ax = plot_bursts_into_timeseries(h5f, axes[3], style="markers")
         _style_legend(ax.legend(loc=1))
+        ax = plot_bursts_into_timeseries(h5f, axes[1], apply_formatting=False,
+            style="fill_between")
     if not "init" in skip:
         ax = plot_initiation_site(h5f, axes[4])
         ax.xaxis.set_major_locator(plt.NullLocator())
@@ -278,6 +280,7 @@ def plot_raster(h5f, ax=None, apply_formatting=True, sort_by_module=True, **kwar
         ax.set_xlim(0, None)
         ax.set_ylabel("Raster")
         ax.set_xlabel("Time [seconds]")
+        ax.set_ylim(0, len(h5f["ana.neuron_ids"]))
         try:
             if len(h5f["ana.mods"]) == 4 and len(h5f["ana.neuron_ids"]) == 160:
                 ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(40))
@@ -448,7 +451,7 @@ def plot_state_variable(h5f, ax=None, apply_formatting=True, variable="D"):
     return ax
 
 
-def plot_bursts_into_timeseries(h5f, ax=None, apply_formatting=True):
+def plot_bursts_into_timeseries(h5f, ax=None, apply_formatting=True, **kwargs):
 
     if ax is None:
         fig, ax = plt.subplots()
@@ -487,6 +490,7 @@ def plot_bursts_into_timeseries(h5f, ax=None, apply_formatting=True):
             y_offset=pad + 1 + m_id,
             color=h5f["ana.mod_colors"][m_id],
             label=f"{num_b} bursts, ~{ibi:.1f} s",
+            **kwargs
         )
 
     log.info(f"Found {total_num_b} bursts across modules")
@@ -515,11 +519,12 @@ def plot_bursts_into_timeseries(h5f, ax=None, apply_formatting=True):
         y_offset=pad,
         color="black",
         label=f"{num_b} bursts, ~{ibi:.1f} s",
+        **kwargs
     )
 
-    ax.set_ylim(0, len(h5f["ana.mods"]) + 2 * pad)
 
     if apply_formatting:
+        ax.set_ylim(0, len(h5f["ana.mods"]) + 2 * pad)
         ax.margins(x=0, y=0)
         ax.set_ylabel("Bursts")
         ax.set_xlabel("Time [seconds]")
@@ -529,21 +534,55 @@ def plot_bursts_into_timeseries(h5f, ax=None, apply_formatting=True):
     return ax
 
 
-def _plot_bursts_into_timeseries(ax, beg_times, end_times, y_offset=3, **kwargs):
+def _plot_bursts_into_timeseries(
+    ax, beg_times, end_times, y_offset=3, style="markers", **kwargs
+):
     """
-    lower level helper to plot beginning and end times of bursts
+        lower level helper to plot beginning and end times of bursts.
+
+        # Parameters
+        style : str
+            "markers" to show in and outs via small triangles
+            "fill" to highlight the the background with a `fill_between`
     """
 
-    kwargs.setdefault("color", "black")
+    if style == "markers":
+        kwargs.setdefault("color", "black")
+        ax.plot(beg_times, np.ones(len(beg_times)) * y_offset, marker="4", lw=0, **kwargs)
 
-    ax.plot(beg_times, np.ones(len(beg_times)) * y_offset, marker="4", lw=0, **kwargs)
+        try:
+            kwargs.pop("label")
+        except KeyError:
+            pass
 
-    try:
-        kwargs.pop("label")
-    except KeyError:
-        pass
+        ax.plot(end_times, np.ones(len(end_times)) * y_offset, marker="3", lw=0, **kwargs)
 
-    ax.plot(end_times, np.ones(len(end_times)) * y_offset, marker="3", lw=0, **kwargs)
+    elif style == "fill_between":
+        kwargs.setdefault("color", "black")
+        kwargs.setdefault("alpha", 0.1)
+        kwargs.setdefault("zorder", 0)
+
+        try:
+            kwargs.pop("label")
+        except KeyError:
+            pass
+
+        bot, top = ax.get_ylim()
+
+        for idx in range(0, len(beg_times)):
+            beg = beg_times[idx]
+            end = end_times[idx]
+
+            ax.fill_between(
+                x=[beg, end],
+                y1 = 0,
+                y2 = 1,
+                lw=0,
+                transform=ax.get_xaxis_transform(),
+                **kwargs
+            )
+
+
 
 
 def plot_parameter_info(h5f, ax=None, apply_formatting=True, add=[]):
