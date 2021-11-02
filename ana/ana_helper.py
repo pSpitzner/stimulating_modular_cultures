@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-10-27 17:00:11
+# @Last Modified: 2021-11-01 16:23:35
 # ------------------------------------------------------------------------------ #
 
 
@@ -271,7 +271,7 @@ def _unused_load_experimental_files(path_prefix):
     return prepare_file(h5f)
 
 
-def load_experimental_files(path_prefix, condition="1_spont_"):
+def load_experimental_files(path_prefix, condition="1_pre_"):
     """
         helper to import experimental csv files from jordi into a compatible
         h5f
@@ -289,7 +289,7 @@ def load_experimental_files(path_prefix, condition="1_spont_"):
     h5f = benedict()
 
     # ROIs as neuron centers
-    rois = np.loadtxt(f"{path_prefix}RoiSet_Cartesian.txt", delimiter=",", skiprows=1)
+    rois = np.loadtxt(f"{path_prefix}/RoiSet_Cartesian.txt", delimiter=",", skiprows=1)
 
     h5f["data.neuron_pos_x"] = rois[:, 1].copy()
     h5f["data.neuron_pos_y"] = rois[:, 2].copy()
@@ -301,8 +301,11 @@ def load_experimental_files(path_prefix, condition="1_spont_"):
     # in this format, we have a 50 ms timestep, the column is the neuron id
     # and the row is whether a neuron fired in this time step.
     spikes_as_sparse = np.loadtxt(
-        f"{path_prefix}{condition}raster.csv", delimiter=",", skiprows=0
+        f"{path_prefix}{condition}/raster.csv", delimiter=",", skiprows=0
     )
+
+    # drop first 60 seconds due to artifacts at the beginning of the recording
+    spikes_as_sparse = spikes_as_sparse[1200: , :]
 
     spikes_as_list = _spikes_as_sparse_to_spikes_as_list(spikes_as_sparse, dt=50 / 1000)
     h5f["data.spiketimes_as_list"] = spikes_as_list
@@ -311,20 +314,23 @@ def load_experimental_files(path_prefix, condition="1_spont_"):
     # approximate module ids from position
     # 0 lower left, 1 upper left, 2 lower right, 3 upper right
     h5f["data.neuron_module_id"] = np.ones(num_n, dtype=int) * -1
+    if "merged" in path_prefix:
+        lim = 200
+    else:
+        lim = 300
     for nid in range(0, num_n):
         x = h5f["data.neuron_pos_x"][nid]
         y = h5f["data.neuron_pos_y"][nid]
-
-        if x < 300 and y < 300:
+        if x < lim and y < lim:
             h5f["data.neuron_module_id"][nid] = 0
-        elif x < 300 and y >= 300:
+        elif x < lim and y >= lim:
             h5f["data.neuron_module_id"][nid] = 1
-        elif x >= 300 and y < 300:
+        elif x >= lim and y < lim:
             h5f["data.neuron_module_id"][nid] = 2
-        elif x >= 300 and y >= 300:
+        elif x >= lim and y >= lim:
             h5f["data.neuron_module_id"][nid] = 3
 
-    h5f["meta.dynamics_simulation_duration"] = 600.0
+    h5f["meta.dynamics_simulation_duration"] = 540.0
 
     return prepare_file(h5f)
 
@@ -606,6 +612,7 @@ def find_system_bursts_from_global_rate(
     merge_threshold,  # seconds, merge bursts if separated by less than this
     write_to_h5f=True,
     return_res=False,
+    skip_sequences=False,
     **sequence_kwargs,
 ):
     """
@@ -646,9 +653,12 @@ def find_system_bursts_from_global_rate(
     min_neurons = np.nanmax([1, int(0.20 * npm)])
     sequence_kwargs.setdefault("min_neurons", min_neurons)
 
-    sys_seqs = sequences_from_module_contribution(
-        h5f, beg_times, end_times, **sequence_kwargs
-    )
+    if skip_sequences:
+        sys_seqs = [tuple()] * len(beg_times)
+    else:
+        sys_seqs = sequences_from_module_contribution(
+            h5f, beg_times, end_times, **sequence_kwargs
+        )
 
     bursts["beg_times"] = beg_times.copy()
     bursts["end_times"] = end_times.copy()
@@ -686,8 +696,8 @@ def find_isis(h5f, write_to_h5f=True, return_res=False):
             e = h5f[f"ana.bursts.module_level.{m_dc}.end_times"]
         except:
             if mdx == 0:
-                log.info(
-                    "Bursts were not detected before searching ISI. Try `find_bursts_from_rates()`"
+                log.debug(
+                    "Module bursts were not detected before searching ISI."
                 )
             b = None
             e = None
