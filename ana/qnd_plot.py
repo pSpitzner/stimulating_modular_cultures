@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-10-15 10:38:04
+# @Last Modified: 2021-11-02 12:23:25
 #
 # plot a merged down, multidimensional hdf5 file (from individual simulations)
 # and select which dims to show where
@@ -51,6 +51,8 @@ def o_labels(short):
         label += "CV of the rate"
     elif "ibis_cv" in short:
         label += "CV of the IBI"
+    elif "rate_threshold" in short:
+        label += "Rate Threshold"
     elif "rate" in short:
         label += "Rate"
     elif "ibis" in short:
@@ -144,9 +146,10 @@ def isfloat(value):
 
 l_axis_candidates = h5.load(input_path, "/meta/axis_overview", silent=True)
 l_axis_candidates = l_axis_candidates.astype("str")
+l_axis_candidates = np.delete(l_axis_candidates, -1)
 d_axes = dict()
 for opt in l_axis_candidates:
-    d_axes[opt] = h5.load(input_path, "/data/axis_" + opt, silent=True)
+    d_axes[opt] = h5.load(input_path, "/meta/axis_" + opt, silent=True)
     if not isinstance(d_axes[opt], np.ndarray):
         d_axes[opt] = np.array([d_axes[opt]])
 
@@ -328,7 +331,7 @@ for odx, obs_to_plot in enumerate(l_obs_candidates):
     ax.set_xlabel(a_labels(x_obs))
     ax.set_ylabel(o_labels(obs_to_plot))
     fig.canvas.manager.set_window_title(o_labels(obs_to_plot).replace('\n', ' '))
-    ax.legend()
+    # ax.legend()
     ax.xaxis.set_major_locator(MultipleLocator(20))
     ax.xaxis.set_minor_locator(MultipleLocator(5))
 
