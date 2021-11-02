@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-10-27 16:33:41
+# @Last Modified: 2021-10-29 13:53:28
 #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into an ndim array
@@ -92,6 +92,7 @@ def all_in_one(candidate=None):
         res["any_ibis_cv"] = 1
         res["sys_functional_complexity"] = 1
         res["any_functional_complexity"] = 1
+        res["sys_mean_correlation"] = 1
         res["sys_participating_fraction"] = 1
         res["sys_participating_fraction_complexity"] = 1
         res["any_num_spikes_in_bursts"] = 1
@@ -219,6 +220,7 @@ def all_in_one(candidate=None):
 
     res["sys_functional_complexity"] = C
     res["vec_sys_hvals_correlation_coefficients"] = rij.copy()
+    res["sys_mean_correlation"] = np.nanmean(rij)
 
     # complexity on module level
     try:
