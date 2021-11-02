@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-10-19 18:20:20
-# @Last Modified: 2021-10-20 15:55:15
+# @Last Modified: 2021-11-02 18:43:27
 # ------------------------------------------------------------------------------ #
 
 
@@ -83,9 +83,6 @@ def h5f_to_xarray(h5f, obs):
 
         coords[dim] = dim_vals
 
-    print(dims)
-    print(obs)
-    print(h5f["data"][f"{obs}"].shape)
     # ideally, we have a repetition axis, else, for older files, we need to infer
     if not "repetition" in coords.keys():
         dims.append("repetition")
@@ -100,11 +97,21 @@ def h5f_to_xarray(h5f, obs):
     return xr.DataArray(h5f["data"][f"{obs}"], dims=dims, coords=coords)
 
 
-def choose(options, prompt=None, min=1, max=np.inf, via_int=False, default="all",
-    always_return_list=False):
+def choose(
+    options,
+    prompt=None,
+    min=1,
+    max=np.inf,
+    via_int=False,
+    default="all",
+    always_return_list=False,
+):
 
     if prompt is None:
-        prompt = f"Choose an option:"
+        prompt = f"Choose an option"
+        if via_int:
+            prompt += " (e.g. 0 1)"
+        prompt += ":"
 
     if via_int:
         prompt += "\n"
@@ -113,7 +120,7 @@ def choose(options, prompt=None, min=1, max=np.inf, via_int=False, default="all"
             prompt += f"{opt}\n"
     else:
         maxlen = np.max([len(str(opt)) for opt in options])
-        if maxlen < 5:
+        if maxlen < 8:
             prompt += f" {options}\n"
         else:
             prompt += "\n"
@@ -168,6 +175,77 @@ def choose(options, prompt=None, min=1, max=np.inf, via_int=False, default="all"
     return selection
 
 
+def load_and_choose_two_dims(filename, **kwargs):
+
+    data = load_ndim_h5f(filename, **kwargs)
+
+    # select one non-histogram observable to select dimensions
+    for obs in data.keys():
+        if obs[0:4] == "vec_":
+            break
+
+    possible_dims = [
+        dim
+        for dim in data[obs].dims
+        if (dim != "repetition" and dim != "vector_observable")
+    ]
+
+    selected_dims = choose(possible_dims, "Choose two dims:", via_int=True, min=2, max=2)
+
+    # optionally limit the coordinates of the second dim:
+    dim = selected_dims[-1]
+    possible_cutplanes = data[obs].coords[dim].to_numpy()
+    if len(possible_cutplanes) == 1:
+        cutplane = possible_cutplanes[0]
+    else:
+        cutplane = choose(
+            possible_cutplanes,
+            f"Choose at least one value for '{dim}', press enter for all:",
+            via_int=True,
+            min=1,
+        )
+    for o in data.keys():
+        data[o] = data[o].sel({dim : cutplane})
+
+
+    # let's already limit the xarray for the remaining dims
+    for dim in possible_dims:
+
+        if dim == "repetition" or dim == "vector_observable":
+            continue
+        if dim in selected_dims:
+            continue
+
+        possible_cutplanes = data[obs].coords[dim].to_numpy()
+        if len(possible_cutplanes) == 1:
+            cutplane = possible_cutplanes[0]
+        else:
+            cutplane = choose(
+                possible_cutplanes,
+                f"Choose one value for '{dim}':",
+                via_int=False,
+                min=1,
+                max=1,
+            )
+
+        for o in data.keys():
+            data[o] = data[o].sel({dim : cutplane})
+
+
+
+    return data, selected_dims
+
+    # selected_cs = dict()
+    # for dim in data[obs].dims:
+    #     if dim == "repetition" or dim == "vector_observable":
+    #         continue
+    #     options = data[obs].coords[dim].to_numpy()
+    #     if len(options) == 1:
+    #         selected_cs[dim] = options[0]
+    #     else:
+    #         selected_cs[dim] = choose(options, f"Choose coordinates for '{dim}':")
+    #     print(f"Using '{dim}' = {selected_cs[dim]}")
+
 def _isint(value):
     try:
         int(value)
@@ -182,3 +260,66 @@ def _isfloat(value):
         return True
     except ValueError:
         return False
+
+# ------------------------------------------------------------------------------ #
+# helpers to describe my custom variables
+# ------------------------------------------------------------------------------ #
+
+# map short observable labels to longer descriptions
+def obs_labels(short):
+    label = ""
+    if "ratio_num_b" in short:
+        label += "Fraction of bursts"
+    elif "num_b" in short:
+        label += "Number of bursts"
+    elif "blen" in short:
+        label += "Burst duration"
+    elif "rate_cv" in short:
+        label += "CV of the rate"
+    elif "ibis_cv" in short:
+        label += "CV of the IBI"
+    elif "rate_threshold" in short:
+        label += "Rate Threshold"
+    elif "rate" in short:
+        label += "Rate"
+    elif "ibis" in short:
+        label += "Inter-Burst-Interval"
+    elif "functional_complexity" in short:
+        label += "Functional complexity"
+    elif "participating_fraction_complexity" in short:
+        label += "Fraction complexity"
+    elif "participating_fraction" in short:
+        label += "Fraction of neurons in bursts"
+    elif "num_spikes_in_bursts" in short:
+        label += "Spikes per neuron per burst"
+    elif "correlation_coefficients" in short:
+        label += "Correlation coefficients"
+    else:
+        return short
+
+    # return label
+
+    if "sys" in short:
+        label += "\n(system-wide)"
+    elif "any" in short:
+        label += "\n(anywhere)"
+    elif "mod" in short or "ratio" in short:
+        label += "\n("
+        label += short[-1]
+        label += " modules)"
+
+    return label
+
+# map short dimension labels to longer descriptions
+def dim_labels(short):
+    if "rate" in short:
+        return "Noise rate (Hz)"
+    elif "jG" in short:
+        return "GABA strength jG (inhibition)"
+    elif "jA" in short:
+        return "AMPA strength jA (excitation)"
+    elif "jE" in short:
+        return "External current strength jE"
+    elif "k_frac" in short:
+        return "Fraction of Connections"
+
