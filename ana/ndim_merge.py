@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-10-29 13:53:28
+# @Last Modified: 2021-11-03 20:36:45
 #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into an ndim array
@@ -59,8 +59,8 @@ d_obs["rate"] = "/meta/dynamics_rate"
 # d_obs["k_inter"] = "/meta/topology_k_inter"
 # d_obs["k_frac"] = "/meta/dynamics_k_frac"
 
-threshold_factor = 0.2
-smoothing_width = 25 / 1000
+threshold_factor = 0.025
+smoothing_width = 20 / 1000
 
 # functions for analysis. candidate is the file path (e.g. to a hdf5 file)
 # need to return a dict where the key becomes the hdf5 data set name
@@ -86,14 +86,17 @@ def all_in_one(candidate=None):
         res["mod_blen_3"] = 1
         res["mod_blen_4"] = 1
         res["mod_num_spikes_in_bursts_1"] = 1
-        res["sys_ibis"] = 1
+        res["sys_mean_ibis"] = 1
+        res["sys_median_ibis"] = 1
         res["any_ibis"] = 1
         res["sys_ibis_cv"] = 1
         res["any_ibis_cv"] = 1
         res["sys_functional_complexity"] = 1
         res["any_functional_complexity"] = 1
         res["sys_mean_correlation"] = 1
-        res["sys_participating_fraction"] = 1
+        res["sys_median_correlation"] = 1
+        res["sys_mean_participating_fraction"] = 1
+        res["sys_median_participating_fraction"] = 1
         res["sys_participating_fraction_complexity"] = 1
         res["any_num_spikes_in_bursts"] = 1
 
@@ -164,7 +167,8 @@ def all_in_one(candidate=None):
 
     # ibis
     try:
-        res["sys_ibis"] = np.nanmean(h5f["ana.ibi.system_level.all_modules"])
+        res["sys_mean_ibis"] = np.nanmean(h5f["ana.ibi.system_level.all_modules"])
+        res["sys_median_ibis"] = np.nanmedian(h5f["ana.ibi.system_level.all_modules"])
         res["any_ibis_cv"] = np.nanmean(h5f["ana.ibi.system_level.cv_any_module"])
         res["sys_ibis_cv"] = np.nanmean(h5f["ana.ibi.system_level.cv_across_modules"])
         ibis_module = []
@@ -176,7 +180,7 @@ def all_in_one(candidate=None):
 
     # correlation coefficients
     try:
-        rij_matrix = ah.find_rij(h5f, which="neurons", time_bin_size=40 / 1000)
+        rij_matrix = ah.find_rij(h5f, which="neurons", time_bin_size=200 / 1000)
     except:
         log.error("Failed to find correlation coefficients")
 
@@ -221,6 +225,7 @@ def all_in_one(candidate=None):
     res["sys_functional_complexity"] = C
     res["vec_sys_hvals_correlation_coefficients"] = rij.copy()
     res["sys_mean_correlation"] = np.nanmean(rij)
+    res["sys_median_correlation"] = np.nanmedian(rij)
 
     # complexity on module level
     try:
@@ -236,13 +241,13 @@ def all_in_one(candidate=None):
     try:
         ah.find_participating_fraction_in_bursts(h5f)
         fracs = h5f["ana.bursts.system_level.participating_fraction"]
-        C = np.nanmean(fracs)
         rij, _ = np.histogram(fracs, bins=bins)
     except Exception as e:
         log.debug(e)
-        C = np.nan
+        fracs = np.array([np.nan])
         rij = np.ones(21) * np.nan
-    res["sys_participating_fraction"] = C
+    res["sys_mean_participating_fraction"] = np.nanmean(fracs)
+    res["sys_median_participating_fraction"] = np.nanmedian(fracs)
     res["vec_sys_hvals_participating_fraction"] = rij.copy()
 
     try:
