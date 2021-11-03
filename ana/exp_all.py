@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-10-25 17:28:21
-# @Last Modified: 2021-11-02 15:02:51
+# @Last Modified: 2021-11-03 20:32:16
 # ------------------------------------------------------------------------------ #
 # Hard coded script to analyse experimental data
 # ------------------------------------------------------------------------------ #
@@ -70,14 +70,14 @@ for layout in layouts:
             print(f"\n{layout} {experiment} {condition}\n")
 
             # if experiment in ["210405_C"]:
-            # continue
+                # continue
 
             h5f = ah.load_experimental_files(
                 path_prefix=f"{path}/", condition=condition
             )
 
             ah.find_rates(h5f, bs_large=200 / 1000)
-            threshold = 0.10 * np.nanmax(h5f["ana.rates.system_level"])
+            threshold = 0.05 * np.nanmax(h5f["ana.rates.system_level"])
             ah.find_system_bursts_from_global_rate(
                 h5f, rate_threshold=threshold, merge_threshold=0.1
             )
@@ -109,12 +109,19 @@ for layout in layouts:
             )
             olen = ah.find_onset_durations(h5f, return_res=True)
 
+            # we have num_bursts -1 inter-burst intervals, use time to next burst
+            # and last burst gets a nan.
+            ah.find_ibis(h5f)
+            ibis = h5f["ana.ibi.system_level.any_module"]
+            ibis.append(np.nan)
+
             df = pd.DataFrame(
                 {
                     "Duration": blen,
                     "Sequence length": slen,
                     "Fraction": fracs,
                     "Onset duration": olen,
+                    "Inter-burst-interval": ibis,
                     "Condition": condition[2:],
                     "Experiment": experiment,
                     "Stimulation": "On" if condition == "2_stim" else "Off",
@@ -163,6 +170,8 @@ for layout in layouts:
                 {
                     "Num Bursts": [len(blen)],
                     "Mean Correlation": [mean_rij],
+                    "Mean IBI": [np.nanmean(ibis)],
+                    "Median IBI": [np.nanmedian(ibis)],
                     "Functional Complexity": [fc],
                     "Condition": condition[2:],
                     "Experiment": experiment,
@@ -326,6 +335,12 @@ def cat_hist_plot(df, category, obs, bins, **kwargs):
     return fig
 
 
+ibi_stim = np.mean(df_exp.query("`Condition` == 'stim'")["Median IBI"])
+print(f"IBI, mean median stim: {ibi_stim}")
+
+ibi_pre = np.mean(df_exp.query("`Condition` == 'pre'")["Median IBI"])
+print(f"IBI, mean median pre: {ibi_pre}")
+
 if not violins:
     # Bursts
     fig = cat_hist_plot(df_bursts, "Condition", "Duration", bins=unit_bins(0, 3, 20) )
@@ -340,6 +355,9 @@ if not violins:
 
     fig = cat_hist_plot(df_bursts, "Condition", "Onset duration", bins=unit_bins(0, 2.5, 20) )
     fig.get_axes()[0].set_xlim(0, 2.5)
+
+    fig = cat_hist_plot(df_bursts, "Condition", "Inter-burst-interval", bins=unit_bins(0, 30, 30) )
+    fig.get_axes()[0].set_xlim(0, 30)
 
     # ISI
     fig = cat_hist_plot(df_isis, "Condition", "logISI", bins=unit_bins(-2, 3, 50) )
@@ -375,6 +393,11 @@ else:
     fig, ax = plt.subplots()
     sns.violinplot(x="Condition", y="Onset duration", data=df_bursts, **violin_kwargs)
     ax.set_ylim(-0.05, 2.25)
+    fig.tight_layout()
+
+    fig, ax = plt.subplots()
+    sns.violinplot(x="Condition", y="Inter-burst-interval", data=df_bursts, **violin_kwargs)
+    ax.set_ylim(-0.05, 45)
     fig.tight_layout()
 
     # ISI
@@ -434,5 +457,31 @@ sns.pointplot(
 )
 ax.get_legend().set_visible(False)
 ax.set_ylim(-0.05, 1.05)
+ax.set_title(f"{layout}")
+fig.tight_layout()
+
+fig, ax = plt.subplots()
+sns.pointplot(
+    x="Condition",
+    y="Median IBI",
+    hue="Experiment",
+    palette="YlGnBu_d",
+    data=df_exp,
+)
+ax.get_legend().set_visible(False)
+ax.set_ylim(-0.05, None)
+ax.set_title(f"{layout}")
+fig.tight_layout()
+
+fig, ax = plt.subplots()
+sns.pointplot(
+    x="Condition",
+    y="Mean IBI",
+    hue="Experiment",
+    palette="YlGnBu_d",
+    data=df_exp,
+)
+ax.get_legend().set_visible(False)
+ax.set_ylim(-0.05, None)
 ax.set_title(f"{layout}")
 fig.tight_layout()
