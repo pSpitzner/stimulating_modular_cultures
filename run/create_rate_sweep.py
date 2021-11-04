@@ -13,10 +13,11 @@ l_topo = ["2x2_fixed"]
 l_k_inter = np.array([5])
 l_mod = np.array(["off"])
 l_rep = np.arange(0, 25)
-l_jA = [45.0, 50.0]
+l_jA = [45.0]
 l_jG = [50.0]
 l_jM = [15.0]
-l_rate = np.arange(40.0, 142.0, 2.0)
+l_rate = np.arange(40.0, 142.0, 5.0)
+tD = 10
 
 print("l_jA  ", l_jA)
 print("l_jG  ", l_jG)
@@ -50,7 +51,7 @@ with open("./parameters_topo.tsv", "w") as f_topo:
 
             # same seeds for all rates so that topo matches
             for rate in l_rate:
-                f_base = f"k={k_inter:d}_jA={jA:.1f}_jG={jG:.1f}_jM={jM:.1f}_rate={rate:.1f}_rep={rep:03d}.hdf5"
+                f_base = f"k={k_inter:d}_jA={jA:.1f}_jG={jG:.1f}_jM={jM:.1f}_tD={tD:.1f}_rate={rate:.1f}_rep={rep:03d}.hdf5"
 
                 topo_path = f"/scratch03.local/pspitzner/inhib02/dat/inhibition_sweep_rate_160/topo/{f_base}"
                 f_topo.write(
@@ -75,7 +76,7 @@ with open("./parameters_topo.tsv", "w") as f_topo:
                     + f"-d 3600 -equil 300 -s {seed:d} "
                     + f"--bridge_weight {bridge_weight} "
                     + f"--inhibition {inh_frac} "
-                    + f"-jA {jA} -jG {jG} -jM {jM} -r {rate} "
+                    + f"-jA {jA} -jG {jG} -jM {jM} -r {rate} -tD {tD}"
                     + f"{stim_arg}\n"
                 )
 
