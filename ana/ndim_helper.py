@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-10-19 18:20:20
-# @Last Modified: 2021-11-02 18:43:27
+# @Last Modified: 2021-11-04 15:12:30
 # ------------------------------------------------------------------------------ #
 
 
@@ -174,6 +174,38 @@ def choose(
         return selection[0]
     return selection
 
+def choose_all_dims(data, skip = None):
+
+    # select one non-histogram observable to select dimensions
+    for obs in data.keys():
+        if obs[0:4] != "vec_":
+            break
+
+    possible_dims = [
+        dim
+        for dim in data[obs].dims
+        if (dim != "repetition" and dim != "vector_observable" and dim != skip)
+    ]
+
+    # limit the xarray for the remaining dims
+    for dim in possible_dims:
+
+        possible_cutplanes = data[obs].coords[dim].to_numpy()
+        if len(possible_cutplanes) == 1:
+            cutplane = possible_cutplanes[0]
+        else:
+            cutplane = choose(
+                possible_cutplanes,
+                f"Choose one value for '{dim}':",
+                via_int=False,
+                min=1,
+                max=1,
+            )
+
+        for o in data.keys():
+            data[o] = data[o].sel({dim : cutplane})
+
+    return data
 
 def load_and_choose_two_dims(filename, **kwargs):
 
@@ -181,7 +213,7 @@ def load_and_choose_two_dims(filename, **kwargs):
 
     # select one non-histogram observable to select dimensions
     for obs in data.keys():
-        if obs[0:4] == "vec_":
+        if obs[0:4] != "vec_":
             break
 
     possible_dims = [
@@ -268,6 +300,11 @@ def _isfloat(value):
 # map short observable labels to longer descriptions
 def obs_labels(short):
     label = ""
+    if "mean" in short:
+        label += "Mean "
+    elif "median" in short:
+        label += "Median "
+
     if "ratio_num_b" in short:
         label += "Fraction of bursts"
     elif "num_b" in short:
