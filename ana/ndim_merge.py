@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-11-03 20:36:45
+# @Last Modified: 2021-11-04 16:04:41
 #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into an ndim array
@@ -54,7 +54,7 @@ d_obs["jG"] = "/meta/dynamics_jG"
 # d_obs["jM"] = "/meta/dynamics_jM"
 # d_obs["jE"] = "/meta/dynamics_jE"
 d_obs["rate"] = "/meta/dynamics_rate"
-# d_obs["tD"] = "/meta/dynamics_tD"
+d_obs["tD"] = "/meta/dynamics_tD"
 # d_obs["alpha"] = "/meta/topology_alpha"
 # d_obs["k_inter"] = "/meta/topology_k_inter"
 # d_obs["k_frac"] = "/meta/dynamics_k_frac"

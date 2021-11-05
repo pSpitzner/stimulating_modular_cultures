@@ -16,18 +16,19 @@ l_rep = np.arange(0, 25)
 l_jA = [45.0]
 l_jG = [50.0]
 l_jM = [15.0]
+l_tD = [7.0, 8.0, 9.0]
 l_rate = np.arange(40.0, 142.0, 5.0)
-tD = 10
 
 print("l_jA  ", l_jA)
 print("l_jG  ", l_jG)
 print("l_jM  ", l_jM)
+print("l_tD  ", l_tD)
 print("l_rate", l_rate)
 
 bridge_weight = 1.0
 inh_frac = 0.20
 
-arg_list = product(l_topo, l_k_inter, l_jA, l_jG, l_jM, l_rep)
+arg_list = product(l_topo, l_k_inter, l_jA, l_jG, l_jM, l_tD, l_rep)
 
 count_dynamic = 0
 count_topo = 0
@@ -44,6 +45,7 @@ with open("./parameters_topo.tsv", "w") as f_topo:
             jA = args[2]
             jG = args[3]
             jM = args[4]
+            tD = args[5]
             rep = args[-1]
             mod = l_mod[0]
 
