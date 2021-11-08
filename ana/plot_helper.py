@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-10-28 12:34:56
+# @Last Modified: 2021-11-04 18:59:11
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -138,12 +138,12 @@ def overview_dynamic(h5f, filenames=None, threshold=None, states=True, skip=[]):
         ah.prepare_file(h5f)
 
     if not "ana.rates" in h5f.keypaths():
-        ah.find_rates(h5f)
+        ah.find_rates(h5f, bs_large = 20/1000)
 
-    if threshold is not None:
+    if threshold is not None or "ana.bursts" not in h5f.keypaths():
         # (re) do the detection so that we do not have default values
         # ah.find_bursts_from_rates(h5f, rate_threshold=threshold)
-        if threshold == "max":
+        if threshold == "max" or "ana.bursts" not in h5f.keypaths():
             rate_threshold = 0.025 * np.nanmax(h5f["ana.rates.system_level"])
         else:
             rate_threshold = threshold
@@ -213,7 +213,7 @@ def overview_burst_duration_and_isi(h5f, filenames=None, which="all"):
 def warntry(func):
     def wrapper(*args, **kwargs):
         try:
-            func(*args, **kwargs)
+            return func(*args, **kwargs)
         except Exception as e:
             log.exception(f"{func.__name__}: {e}")
 
@@ -233,7 +233,7 @@ def plot_raster(h5f, ax=None, apply_formatting=True, sort_by_module=True, **kwar
         apply_formatting : bool
             if false, no styling changes will be done to ax
     """
-
+    kwargs = kwargs.copy()
     assert "ana" in h5f.keypaths(), "`prepare_file(h5f)` before plotting!"
 
     log.info("Plotting Raster")
@@ -267,12 +267,14 @@ def plot_raster(h5f, ax=None, apply_formatting=True, sort_by_module=True, **kwar
         m_id = h5f["data.neuron_module_id"][n_id]
         spikes = h5f["data.spiketimes"][n_id]
 
+        plot_kws = kwargs.copy()
+        plot_kws.setdefault("color", h5f["ana.mod_colors"][m_id])
+
         ax.plot(
             spikes,
             n_id_sorted * np.ones(len(spikes)),
             marker,
-            color=h5f["ana.mod_colors"][m_id],
-            **kwargs,
+            **plot_kws,
         )
 
     if apply_formatting:
@@ -351,8 +353,10 @@ def plot_module_rates(h5f, ax=None, apply_formatting=True, mark_burst_threshold=
     return ax
 
 
-def plot_system_rate(h5f, ax=None, apply_formatting=True, mark_burst_threshold=True):
+def plot_system_rate(h5f, ax=None, apply_formatting=True, mark_burst_threshold=True, **kwargs):
     assert "ana" in h5f.keypaths(), "`prepare_file(h5f)` before plotting!"
+
+    kwargs = kwargs.copy()
 
     log.info("Plotting System Rate")
 
@@ -368,15 +372,17 @@ def plot_system_rate(h5f, ax=None, apply_formatting=True, mark_burst_threshold=T
 
     pop_rate = h5f["ana.rates.system_level"]
     mean_rate = np.nanmean(pop_rate)
+
+    kwargs.setdefault("color", "black")
+    kwargs.setdefault("label", f"system: {mean_rate:.2f} Hz")
+
     ax.plot(
         np.arange(0, len(pop_rate)) * dt,
         pop_rate,
-        label=f"system: {mean_rate:.2f} Hz",
-        color="black",
+        **kwargs
     )
     log.info(f'CV system rate: {h5f["ana.rates.cv.system_level"]:.3f}')
 
-    _style_legend(ax.legend(loc=1))
 
     if mark_burst_threshold:
         try:
@@ -387,6 +393,7 @@ def plot_system_rate(h5f, ax=None, apply_formatting=True, mark_burst_threshold=T
             log.debug(e)
 
     if apply_formatting:
+        _style_legend(ax.legend(loc=1))
         ax.margins(x=0, y=0)
         ax.set_ylabel("Rates [Hz]")
         ax.set_xlabel("Time [seconds]")
@@ -453,6 +460,8 @@ def plot_state_variable(h5f, ax=None, apply_formatting=True, variable="D"):
 
 def plot_bursts_into_timeseries(h5f, ax=None, apply_formatting=True, **kwargs):
 
+    kwargs = kwargs.copy()
+
     if ax is None:
         fig, ax = plt.subplots()
     else:
@@ -483,14 +492,16 @@ def plot_bursts_into_timeseries(h5f, ax=None, apply_formatting=True, **kwargs):
         except:
             ibi = np.nan
 
+        plot_kws = kwargs.copy()
+        plot_kws.setdefault("color", h5f["ana.mod_colors"][m_id])
+        plot_kws.setdefault("label", f"{num_b} bursts, ~{ibi:.1f} s")
+
         _plot_bursts_into_timeseries(
             ax,
             beg_times,
             end_times,
             y_offset=pad + 1 + m_id,
-            color=h5f["ana.mod_colors"][m_id],
-            label=f"{num_b} bursts, ~{ibi:.1f} s",
-            **kwargs
+            **plot_kws
         )
 
     log.info(f"Found {total_num_b} bursts across modules")
@@ -512,14 +523,16 @@ def plot_bursts_into_timeseries(h5f, ax=None, apply_formatting=True, **kwargs):
     log.info(f"Found {num_b} bursts system-wide")
     log.info(f"System-wide IBI: {ibi:.2f} seconds")
 
+    plot_kws = kwargs.copy()
+    plot_kws.setdefault("color", "black")
+    plot_kws.setdefault("label", f"{num_b} bursts, ~{ibi:.1f} s")
+
     _plot_bursts_into_timeseries(
         ax,
         beg_times,
         end_times,
         y_offset=pad,
-        color="black",
-        label=f"{num_b} bursts, ~{ibi:.1f} s",
-        **kwargs
+        **plot_kws
     )
 
 
@@ -546,6 +559,8 @@ def _plot_bursts_into_timeseries(
             "fill" to highlight the the background with a `fill_between`
     """
 
+    kwargs = kwargs.copy()
+
     if style == "markers":
         kwargs.setdefault("color", "black")
         ax.plot(beg_times, np.ones(len(beg_times)) * y_offset, marker="4", lw=0, **kwargs)
@@ -567,20 +582,28 @@ def _plot_bursts_into_timeseries(
         except KeyError:
             pass
 
-        bot, top = ax.get_ylim()
-
+        # simply doing a fill between for every burst causes glitches.
+        # construct the `where` array, of booleans matching x to fill
+        x = []
+        where = []
         for idx in range(0, len(beg_times)):
             beg = beg_times[idx]
             end = end_times[idx]
+            x.extend([beg, end, beg+(end-beg)/2])
+            where.extend([True, True, False])
 
-            ax.fill_between(
-                x=[beg, end],
-                y1 = 0,
-                y2 = 1,
-                lw=0,
-                transform=ax.get_xaxis_transform(),
-                **kwargs
-            )
+        trans = matplotlib.transforms.blended_transform_factory(ax.transData, ax.transAxes)
+
+        ax.fill_between(
+            x=x,
+            y1=0,
+            y2=1,
+            where=where,
+            interpolate=False,
+            lw=0,
+            transform=trans,
+            **kwargs
+        )
 
 
 
