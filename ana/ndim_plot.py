@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-10-27 18:10:11
-# @Last Modified: 2021-11-02 18:42:06
+# @Last Modified: 2021-11-08 17:55:49
 # ------------------------------------------------------------------------------ #
 # plot a merged down, multidimensional hdf5 file (from individual simulations)
 # and select which dims to show where
@@ -88,14 +88,14 @@ if np.any(["_hvals_" in obs for obs in observables]):
             always_return_list=False,
         )
     else:
-        h_dim_iter = dim1 if dim2 in data[obs].sizes.keys() else dim2
+        h_dim_iter = dim2 if dim2 in data[obs].sizes.keys() else dim1
     h_dim_noiter = dim1 if h_dim_iter == dim2 else dim2
 
     # if more than one value in the not-to-iterate dim, we need a cutplane
     if h_dim_noiter in data[obs].sizes.keys():
         h_cs_noiter = nh.choose(
             data[obs].coords[h_dim_noiter].to_numpy(),
-            prompt=f"Cutplane for '{h_dim_noiter}':",
+            prompt=f"For histograms, choose a cutplane for '{h_dim_noiter}':",
             min=1,
             max=1,
             default=0,
@@ -104,6 +104,15 @@ if np.any(["_hvals_" in obs for obs in observables]):
     else:
         # we wont need data.sel() later
         h_cs_noiter = None
+
+    # we may not want to show everything in the histograms
+    h_cs_iter = nh.choose(
+        data[obs].coords[h_dim_iter].to_numpy(),
+        prompt=f"For histograms, which '{h_dim_iter}' to show?",
+        min=1,
+        default="all",
+        always_return_list=True,
+    )
 
 
 
@@ -178,20 +187,23 @@ for obs in observables:
         centroids = (bins[1:] + bins[:-1]) / 2
 
         # iterate over selected `h_dim_iter`
-        iter_coords = dat_med.coords[h_dim_iter].to_numpy()
-        iter_coords = iter_coords.reshape(-1)
+        # iter_coords = dat_med.coords[h_dim_iter].to_numpy()
+        # iter_coords = iter_coords.reshape(-1)
 
-        for idx, cs in enumerate(iter_coords):
+        for idx, cs in enumerate(h_cs_iter):
             # use one base color, light to dark for multiple lines
-            alpha = np.fmin(1, 1 / (len(iter_coords) - idx))
+            alpha = np.fmin(1, 1 / (len(h_cs_iter) - idx))
             color = cc.alpha_to_solid_on_bg(base_color, alpha)
 
             hvals = dat_med
 
-            if h_dim_noiter is not None:
+            try:
                 hvals = hvals.sel({h_dim_noiter: h_cs_noiter})
+            except:
+                # this happens when we only have one coordinate along h_dim_noiter
+                pass
 
-            if len(iter_coords) > 1:
+            if len(h_cs_iter) > 1:
                 hvals = hvals.sel({h_dim_iter: cs})
 
             # this is a hack to use seaborn to plot a precomputed histogram
@@ -208,9 +220,9 @@ for obs in observables:
                 alpha=0.0,
             )
 
-        ax.set_xlabel(nh.dim_labels(h_dim_noiter))
-        ax.set_ylabel(nh.obs_labels(obs))
-        ax.legend()
+        ax.set_xlabel(nh.obs_labels(obs))
+        ax.set_ylabel("Probability")
+        ax.legend(loc='upper center')
 
 
     fig.canvas.manager.set_window_title(nh.obs_labels(obs).replace("\n", " "))
