@@ -2,6 +2,7 @@ dat/*
 mov/*
 exe/*
 log/*
+var/*
 run/*.tsv
 dask-worker-space
 __pycache__
