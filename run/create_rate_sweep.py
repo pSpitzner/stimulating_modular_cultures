@@ -16,8 +16,9 @@ l_rep = np.arange(0, 25)
 l_jA = [45.0]
 l_jG = [50.0]
 l_jM = [15.0]
-l_tD = [7.0, 8.0, 9.0]
-l_rate = np.arange(40.0, 142.0, 5.0)
+l_tD = [8.0]
+l_rate = np.arange(70.0, 111.0, 1.0)
+l_rate = np.delete(l_rate, np.arange(0, 41, 5, dtype=int))
 
 print("l_jA  ", l_jA)
 print("l_jG  ", l_jG)
