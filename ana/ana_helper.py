@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-11-01 16:23:35
+# @Last Modified: 2021-11-09 10:51:29
 # ------------------------------------------------------------------------------ #
 
 
@@ -676,7 +676,6 @@ def find_system_bursts_from_global_rate(
     if return_res:
         return bursts
 
-
 def find_isis(h5f, write_to_h5f=True, return_res=False):
     """
         What are the the inter-spike-intervals within and out of bursts?
@@ -888,9 +887,6 @@ def find_onset_durations(h5f, write_to_h5f=True, return_res=False):
 
     if return_res:
         return onset_durations
-
-
-
 
 
 def find_rij(h5f, which="neurons", time_bin_size=40 / 1000):
@@ -2271,6 +2267,25 @@ def get_threshold_from_logisi_distribution(list_of_isi, area_fraction=0.3):
 # ------------------------------------------------------------------------------ #
 # sequences
 # ------------------------------------------------------------------------------ #
+
+def remove_bursts_with_sequence_length_null(h5f):
+    """
+        modifies h5f!
+        redo ibi detection, afterwards!
+    """
+
+    assert "ana.bursts.system_level" in h5f.keypaths()
+
+    slens = np.array([len(s) for s in h5f["ana.bursts.system_level.module_sequences"]])
+    num_old = len(h5f["ana.bursts.system_level.module_sequences"])
+    idx_todel = np.where(slens == 0)[0]
+    for idx in sorted(idx_todel, reverse=True):
+        del h5f["ana.bursts.system_level.module_sequences"][idx]
+        del h5f["ana.bursts.system_level.beg_times"][idx]
+        del h5f["ana.bursts.system_level.end_times"][idx]
+
+    num_new = len(h5f["ana.bursts.system_level.module_sequences"])
+    log.debug(f"deleted {num_old - num_new} out of {num_old} bursts, due to sequence length 0")
 
 def sequences_from_module_contribution(
     h5f, sys_begs, sys_ends, min_spikes=1, min_neurons=1

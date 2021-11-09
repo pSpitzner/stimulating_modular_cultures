@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-11-04 16:04:41
+# @Last Modified: 2021-11-09 10:56:52
 #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into an ndim array
@@ -61,6 +61,7 @@ d_obs["tD"] = "/meta/dynamics_tD"
 
 threshold_factor = 0.025
 smoothing_width = 20 / 1000
+remove_null_sequences = False
 
 # functions for analysis. candidate is the file path (e.g. to a hdf5 file)
 # need to return a dict where the key becomes the hdf5 data set name
@@ -130,6 +131,8 @@ def all_in_one(candidate=None):
     # fired at least one spike.
     ah.find_system_bursts_from_global_rate(h5f, rate_threshold=threshold, merge_threshold=0.1)
     # ah.find_bursts_from_rates(h5f, rate_threshold=5.0)
+    if remove_null_sequences:
+        ah.remove_bursts_with_sequence_length_null(h5f)
     ah.find_ibis(h5f)
 
     # number of bursts and duration
