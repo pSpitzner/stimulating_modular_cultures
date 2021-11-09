@@ -12,13 +12,12 @@ seed = 6_000
 l_topo = ["2x2_fixed"]
 l_k_inter = np.array([5])
 l_mod = np.array(["off"])
-l_rep = np.arange(0, 25)
+l_rep = np.arange(0, 50)
 l_jA = [45.0]
 l_jG = [50.0]
 l_jM = [15.0]
 l_tD = [8.0]
-l_rate = np.arange(70.0, 111.0, 1.0)
-l_rate = np.delete(l_rate, np.arange(0, 41, 5, dtype=int))
+l_rate = np.hstack([np.arange(40, 70, 5), np.arange(70, 110, 1), np.arange(110, 130, 5)])
 
 print("l_jA  ", l_jA)
 print("l_jG  ", l_jG)
@@ -56,7 +55,7 @@ with open("./parameters_topo.tsv", "w") as f_topo:
             for rate in l_rate:
                 f_base = f"k={k_inter:d}_jA={jA:.1f}_jG={jG:.1f}_jM={jM:.1f}_tD={tD:.1f}_rate={rate:.1f}_rep={rep:03d}.hdf5"
 
-                topo_path = f"/scratch03.local/pspitzner/inhib02/dat/inhibition_sweep_rate_160/topo/{f_base}"
+                topo_path = f"/scratch03.local/pspitzner/inhib02/dat/the_last_one/topo/{f_base}"
                 f_topo.write(
                     # topology command
                     f"/data.nst/share/projects/paul_brian_modular_cultures/topology_orlandi_standalone/exe/orlandi_standalone "
@@ -65,7 +64,7 @@ with open("./parameters_topo.tsv", "w") as f_topo:
                 )
                 count_topo += 1
 
-                dyn_path = f"/scratch03.local/pspitzner/inhib02/dat/inhibition_sweep_rate_160/dyn/stim={mod}_{f_base}"
+                dyn_path = f"/scratch03.local/pspitzner/inhib02/dat/the_last_one/dyn/stim={mod}_{f_base}"
 
                 if mod == "off":
                     stim_arg = ""
@@ -76,10 +75,10 @@ with open("./parameters_topo.tsv", "w") as f_topo:
                     # dynamic command
                     f"python ./src/quadratic_integrate_and_fire.py -i {topo_path} "
                     + f"-o {dyn_path} "
-                    + f"-d 3600 -equil 300 -s {seed:d} "
+                    + f"-d 1800 -equil 300 -s {seed:d} "
                     + f"--bridge_weight {bridge_weight} "
                     + f"--inhibition {inh_frac} "
-                    + f"-jA {jA} -jG {jG} -jM {jM} -r {rate} -tD {tD}"
+                    + f"-jA {jA} -jG {jG} -jM {jM} -r {rate} -tD {tD} "
                     + f"{stim_arg}\n"
                 )
 
