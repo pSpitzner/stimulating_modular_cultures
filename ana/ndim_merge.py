@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-11-09 10:56:52
+# @Last Modified: 2021-11-09 14:48:06
 #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into an ndim array
@@ -493,6 +493,11 @@ def main(args):
     # ------------------------------------------------------------------------------ #
     # write to a new hdf5 file
     # ------------------------------------------------------------------------------ #
+
+    try:
+        os.makedirs(os.path.dirname(merge_path), exist_ok=True)
+    except:
+        pass
 
     f_tar = h5py.File(merge_path, "w")
 
