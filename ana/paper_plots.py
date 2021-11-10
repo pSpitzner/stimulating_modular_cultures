@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-11-08 17:51:24
-# @Last Modified: 2021-11-09 19:20:04
+# @Last Modified: 2021-11-10 18:30:58
 # ------------------------------------------------------------------------------ #
 # collect the functions to create figure panels here
 # ------------------------------------------------------------------------------ #
@@ -20,6 +20,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+
+from benedict import benedict
 
 import plot_helper as ph
 import ana_helper as ah
@@ -51,7 +53,7 @@ matplotlib.rcParams["legend.frameon"] = True
 matplotlib.rcParams["axes.spines.right"] = False
 matplotlib.rcParams["axes.spines.top"] = False
 matplotlib.rcParams["figure.figsize"] = [3.4, 2.7]  # APS single column
-matplotlib.rcParams["figure.dpi"] = 150
+matplotlib.rcParams["figure.dpi"] = 300
 
 
 colors = dict()
@@ -70,7 +72,7 @@ log = logging.getLogger(__name__)
 warnings.filterwarnings("ignore")  # suppress numpy warnings
 
 # Fig 1
-def experimental_raster_plots(
+def exp_raster_plots(
     bs_large=200 / 1000,  # width of the gaussian kernel for rate
     threshold_factor=10 / 100,  # fraction of max peak height for burst
 ):
@@ -156,27 +158,127 @@ def experimental_raster_plots(
         render_plots()
 
 
-def test(df):
-    obs = "Fraction"
+def exp_chemical_vs_opto(observable="Fraction"):
+    chem = load_pd_hdf5("./dat/exp_out/KCl_1b.hdf5")
+    opto = load_pd_hdf5("./dat/exp_out/1b.hdf5")
 
     fig, ax = plt.subplots()
 
+    custom_pointplot(
+        opto["bursts"].query("`Condition` in ['pre', 'stim']"),
+        category="Stimulation",
+        observable=observable,
+        ax=ax,
+        palette="Wistia",
+    )
+
+    custom_pointplot(
+        chem["bursts"],
+        category="Stimulation",
+        observable=observable,
+        ax=ax,
+        # palette="gist_yarg",
+        color="#999",
+        palette=None,
+        linestyles=":",
+    )
+    # draw chemical in front
+    from_last = len(chem["bursts"]["Experiment"].unique())
+    num_lines = len(ax.collections)
+    for idx in range(num_lines - from_last, num_lines):
+        ax.collections[idx].set_zorder(num_lines - from_last + idx + 1)
+        ax.lines[idx].set_zorder(num_lines - from_last + idx + 1)
+
+    # disable clipping
+    for idx in range(0, num_lines):
+        ax.collections[idx].set_clip_on(False)
+        ax.lines[idx].set_clip_on(False)
+
+    ax.set_ylim(0, 1.0)
+    sns.despine(ax=ax, bottom=True, left=False, trim=True, offset=-10)
+    ax.tick_params(bottom=False)
+
+    cc.set_size2(ax, 2.5, 3)
+
+    ax.get_figure().savefig(
+        "./fig/paper/exp_chem_vs_opto.pdf", dpi=300, transparent=True
+    )
+
+    return ax
+
+
+# Fig 2
+def exp_violins_for_layouts():
+
+    dfs = dict()
+    dfs["single-bond"] = load_pd_hdf5("./dat/exp_out/1b.hdf5")
+    dfs["triple-bond"] = load_pd_hdf5("./dat/exp_out/3b.hdf5")
+    dfs["merged"] = load_pd_hdf5("./dat/exp_out/merged.hdf5")
+
+    for layout in dfs.keys():
+        log.info(f"")
+        log.info(f"{layout}")
+        ax = custom_violins(
+            dfs[layout]["bursts"],
+            category="Condition",
+            observable="Fraction",
+            ylim=[0, 1],
+            num_swarm_points=2500,
+            bw=0.2,
+        )
+        ax.set_ylim(-0.05, 1.05)
+        sns.despine(ax=ax, bottom=True, left=False, trim=True)
+        ax.tick_params(bottom=False)
+        # reuse xlabel for title
+        ax.set_xlabel(f"{layout}")
+        cc.set_size2(ax, 3, 2.5)
+        ax.get_figure().savefig(f"./fig/paper/exp_violins_fraction_{layout}.pdf", dpi=300, transparent=True)
+
+    for layout in dfs.keys():
+        log.info(f"")
+        log.info(f"{layout}")
+        ax = custom_violins(
+            dfs[layout]["rij"],
+            category="Condition",
+            observable="Correlation Coefficient",
+            ylim=[0, 1],
+            num_swarm_points=2500,
+            bw=0.2,
+        )
+        ax.set_ylim(-0.05, 1.05)
+        sns.despine(ax=ax, bottom=True, left=False, trim=True)
+        ax.tick_params(bottom=False)
+        # reuse xlabel for title
+        ax.set_xlabel(f"{layout}")
+        cc.set_size2(ax, 3, 2.5)
+        ax.get_figure().savefig(f"./fig/paper/exp_violins_rij_{layout}.pdf", dpi=300, transparent=True)
+
+    return ax
 
 # Fig 3
-def ibi_simulation_vs_experiment(input_path):
+def sim_vs_exp_ibi(input_path, ax=None, **kwargs):
+
+    kwargs = kwargs.copy()
+
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.get_figure()
 
     data = nh.load_ndim_h5f(input_path)
-    obs = "sys_median_ibis"
+    obs = "sys_median_any_ibis"
     data[obs] = data[obs].sel(simulation_coordinates)
 
     num_reps = len(data[obs].coords["repetition"])
     dat_med = data[obs].mean(dim="repetition")
     dat_sem = data[obs].std(dim="repetition") / np.sqrt(num_reps)
 
-    fig, ax = plt.subplots()
     x = dat_med.coords["rate"]
     y = dat_med
     yerr = dat_sem
+
+    kwargs.setdefault("color", "#333")
+    kwargs.setdefault("label", "simulation")
 
     ax.errorbar(
         x=x,
@@ -184,16 +286,15 @@ def ibi_simulation_vs_experiment(input_path):
         yerr=yerr,
         fmt="o",
         markersize=1.5,
-        color="#333",
         elinewidth=1,
         capsize=0,
         zorder=2,
-        label=f"simulation",
+        **kwargs,
     )
 
-    ax.plot(
-        x, y, color=cc.alpha_to_solid_on_bg("#333", 0.3), zorder=1, label=f"simulation",
-    )
+    kwargs.pop("label")
+
+    ax.plot(x, y, zorder=1, **kwargs)
 
     ax.plot([0, 72, 72], [40, 40, 0], ls=":", color=colors["pre"], zorder=0)
     ax.plot([0, 100, 100], [10, 10, 0], ls=":", color=colors["stim"], zorder=0)
@@ -219,8 +320,8 @@ def ibi_simulation_vs_experiment(input_path):
         ax.legend()
     if show_legend_in_extra_panel:
         cc._legend_into_new_axes(ax)
-    if use_compact_size:
-        cc.set_size2(ax, 3.5, 2.5)
+    # if use_compact_size:
+    # cc.set_size2(ax, 3.5, 2.5)
 
     ax.get_figure().savefig(
         f"./fig/paper/ibi_sim_vs_exp.pdf", dpi=300, transparent=True
@@ -228,8 +329,20 @@ def ibi_simulation_vs_experiment(input_path):
 
     return ax
 
+def controls_sim_vs_exp_ibi():
+    fig, ax = plt.subplots()
 
-def fraction_of_ibi(input_path, ax = None):
+    p1 = "./dat/the_last_one/ndim_jM=15_tD=8_t2.5_k20.hdf5"
+    p2 = "./dat/the_last_one/ndim_jM=15_tD=8_t2.5_k20_remove_null.hdf5"
+
+    sim_vs_exp_ibi(p1, ax=ax, color="#333", label="all")
+    sim_vs_exp_ibi(p2, ax=ax, color="red", label="0 removed")
+
+    return ax
+
+def sim_participating_fraction(input_path, ax=None, **kwargs):
+
+    kwargs = kwargs.copy()
 
     data = nh.load_ndim_h5f(input_path)
     obs = "sys_mean_participating_fraction"
@@ -243,11 +356,12 @@ def fraction_of_ibi(input_path, ax = None):
     y = dat_med
     yerr = dat_sem
 
-
     if ax is None:
         fig, ax = plt.subplots()
     else:
         fig = ax.get_figure()
+
+    kwargs.setdefault("color", "#333")
 
     ax.errorbar(
         x=x,
@@ -255,16 +369,16 @@ def fraction_of_ibi(input_path, ax = None):
         yerr=yerr,
         fmt="o",
         markersize=1.5,
-        color="red",
         elinewidth=1,
         capsize=0,
         zorder=2,
         label=f"simulation",
+        **kwargs,
     )
 
-    ax.plot(
-        x, y, color=cc.alpha_to_solid_on_bg("red", 0.3), zorder=1, label=f"simulation",
-    )
+    kwargs["color"] = cc.alpha_to_solid_on_bg(kwargs["color"], 0.3)
+
+    ax.plot(x, y, zorder=1, label=f"simulation", **kwargs)
 
     ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(10))
     ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(2))
@@ -299,7 +413,7 @@ x = None
 nxt = None
 
 
-def fraction_of_sequence_length(input_path, drop_zero_len=True):
+def sim_modules_participating_in_bursts(input_path, drop_zero_len=True):
     data = nh.load_ndim_h5f(input_path)
     dim1 = "rate"
 
@@ -403,7 +517,20 @@ def fraction_of_sequence_length(input_path, drop_zero_len=True):
 # ------------------------------------------------------------------------------ #
 
 
-def custom_violins(df, category, observable, ax=None, **violin_kwargs):
+def load_pd_hdf5(input_path):
+    """
+        return a dict of data frames for experimental analysis
+    """
+    res = dict()
+    for key in ["bursts", "isis", "rij", "trials"]:
+        res[key] = pd.read_hdf(input_path, f"/data/df_{key}")
+
+    return res
+
+
+def custom_violins(
+    df, category, observable, ax=None, num_swarm_points=2500, **violin_kwargs
+):
 
     violin_kwargs = violin_kwargs.copy()
 
@@ -411,6 +538,8 @@ def custom_violins(df, category, observable, ax=None, **violin_kwargs):
         fig, ax = plt.subplots()
     else:
         fig = ax.get_figure()
+
+    ax.set_rasterization_zorder(-5)
 
     categories = df[category].unique()
 
@@ -421,7 +550,6 @@ def custom_violins(df, category, observable, ax=None, **violin_kwargs):
         dummy["fake_hue"] = 1
         dummy[category] = cat
         df = df.append(dummy, ignore_index=True)
-    log.info(df)
 
     # lets use that seaborn looks up the `hue` variable as the key in palette dict,
     # maybe matching our global colors
@@ -446,53 +574,138 @@ def custom_violins(df, category, observable, ax=None, **violin_kwargs):
 
     sns.violinplot(x=category, y=observable, data=df, **violin_kwargs)
 
+    ylim = ax.get_ylim()
+
+    # prequerry the data frames via category
+    sub_dfs = dict()
+    max_points = 0
+    for idx, cat in enumerate(categories):
+        df_for_cat = df.query(f"`{category}` == '{cat}'")
+        sub_dfs[cat] = df_for_cat
+
+        # for the swarm plot, fetch max height so we could tweak number of points and size
+        hist, bins = np.histogram(df_for_cat[observable], _unit_bins(ylim[0], ylim[1]))
+        max_points = np.max([max_points, np.max(hist)])
+
     for idx, cat in enumerate(categories):
         ax.collections[idx].set_color(light_palette[cat])
         ax.collections[idx].set_edgecolor(palette[cat])
         ax.collections[idx].set_linewidth(1.0)
 
         # custom error estimates
-        # df_for_cat = df.query(f"`{category}` == '{cat}'")
-        # try:
-        #     mid, error = ah.pd_nested_bootstrap(
-        #         df_for_cat,
-        #         grouping_col="Experiment",
-        #         obs=observable,
-        #         num_boot=500,
-        #         func=np.nanmedian,
-        #         resample_group_col=True,
-        #     )
-        # except:
-        #     log.warning("Nested bootstrap failed")
-        #     # this may happen when category variable is not defined.
-        #     mid, error = ah.pd_bootstrap(
-        #         df_for_cat, obs=observable, num_boot=500, func=np.nanmedian
-        #     )
+        df_for_cat = sub_dfs[cat]
+        try:
+            raise KeyError
+            mid, error, percentiles = ah.pd_nested_bootstrap(
+                df_for_cat,
+                grouping_col="Experiment",
+                obs=observable,
+                num_boot=500,
+                func=np.nanmedian,
+                resample_group_col=True,
+                percentiles=[2.5, 50, 97.5]
+            )
+        except:
+            log.warning("Nested bootstrap failed")
+            # this may happen when category variable is not defined.
+            mid, error, percentiles = ah.pd_bootstrap(
+                df_for_cat, obs=observable, num_boot=500, func=np.nanmedian,
+                percentiles=[2.5, 50, 97.5]
+            )
 
-        # _draw_error_stick(
-        #     ax,
-        #     center=idx,
-        #     mid=mid,
-        #     errors=[mid - error, mid + error],
-        #     orientation="v",
-        #     color=palette[cat],
+        log.info(f"{cat}: median {mid:.3g}, se {error:.3g}, percentiles: {percentiles}")
+
+        _draw_error_stick(
+            ax,
+            center=idx,
+            mid=percentiles[1],
+            errors=[percentiles[0], percentiles[2]],
+            orientation="v",
+            color=palette[cat],
+            zorder=2,
+        )
+
+        # cover the part where the violins are with a rectangle to hide swarm plots
+        # zorder of violins hard to change, probably it is 1
+        # note from future paul: not needed when removing the points from collection
+        # dy = ylim[1] - ylim[0]
+        # ax.add_patch(
+        #     matplotlib.patches.Rectangle(
+        #         (idx, ylim[0] - 0.1 * dy),
+        #         -0.5,
+        #         dy * 1.2,
+        #         linewidth=0,
+        #         facecolor=ax.get_facecolor(),
+        #         zorder=0,
+        #     )
         # )
 
     # swarms
     swarm_defaults = dict(
-        size=1.2,
-        palette = light_palette,
-        dodge=True,
-        order = categories,
-        zorder=0,
+        size=1.4,
+        palette=light_palette,
+        order=categories,
+        zorder=-1,
+        edgecolor=(1.0, 1.0, 1.0, 0.3),
+        linewidth=0.3,
     )
-    sns.swarmplot(x=category, y=observable, data=df.sample(n=2500, replace=True, ignore_index=True), **swarm_defaults)
+
+    # points_to_show = np.min([int(max_points*0.5), len(df)])
+    # log.info(f"Using {points_to_show} points for swarmplot")
+    sns.swarmplot(
+        x=category,
+        y=observable,
+        data=df.sample(
+            n=np.min([num_swarm_points, len(df)]), replace=False, ignore_index=True
+        ),
+        **swarm_defaults,
+    )
+
+    # move the swarms slightly to the right and throw away left half
+    for idx, cat in enumerate(categories):
+        c = ax.collections[-len(categories)+idx]
+        offsets = c.get_offsets()
+        odx = np.where(offsets[:, 0] >= idx)
+        offsets = offsets[odx]
+        offsets[:, 0] += .05
+        c.set_offsets(offsets)
+        log.debug(f"{cat}: {len(offsets)} points survived")
+
 
     ax.get_legend().set_visible(False)
 
-    cc.set_size2(ax, 3, 4)
+    return ax
+
+
+def custom_pointplot(
+    df, category, observable, hue="Experiment", ax=None, **point_kwargs
+):
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.get_figure()
+
+    point_kwargs = point_kwargs.copy()
+    point_kwargs.setdefault("palette", "YlGnBu_d")
+    # point_kwargs.setdefault("dodge", True)
+    point_kwargs.setdefault("scale", 0.5)
+    point_kwargs.setdefault("ci", None)
+    point_kwargs.setdefault("errwidth", 1)
+
+    sns.pointplot(
+        x=category, y=observable, hue=hue, data=df, **point_kwargs,
+    )
+
+    ax.get_legend().set_visible(False)
+    plt.setp(ax.collections, sizes=[2])
 
     return ax
+
+
+# defaul bins when using histograms
+def _unit_bins(low=0, high=1, num_bins=20):
+    bw = (high - low) / num_bins
+    return np.arange(low, high + 0.1 * bw, bw)
 
 
 def _draw_error_stick(
@@ -521,10 +734,6 @@ def _draw_error_stick(
     kwargs.setdefault("color", "black")
     kwargs.setdefault("zorder", 3)
     kwargs.setdefault("clip_on", False)
-    kwargs.setdefault(
-        "transform",
-        matplotlib.transforms.blended_transform_factory(ax.transData, ax.transAxes),
-    )
 
     if outliers is not None:
         assert len(outliers) == 2
