@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-11-09 10:51:29
+# @Last Modified: 2021-11-10 16:33:11
 # ------------------------------------------------------------------------------ #
 
 
@@ -211,6 +211,7 @@ def prepare_file(
 
     return h5f
 
+
 # depricating
 def _unused_load_experimental_files(path_prefix):
     """
@@ -305,7 +306,7 @@ def load_experimental_files(path_prefix, condition="1_pre_"):
     )
 
     # drop first 60 seconds due to artifacts at the beginning of the recording
-    spikes_as_sparse = spikes_as_sparse[1200: , :]
+    spikes_as_sparse = spikes_as_sparse[1200:, :]
 
     spikes_as_list = _spikes_as_sparse_to_spikes_as_list(spikes_as_sparse, dt=50 / 1000)
     h5f["data.spiketimes_as_list"] = spikes_as_list
@@ -676,6 +677,7 @@ def find_system_bursts_from_global_rate(
     if return_res:
         return bursts
 
+
 def find_isis(h5f, write_to_h5f=True, return_res=False):
     """
         What are the the inter-spike-intervals within and out of bursts?
@@ -695,9 +697,7 @@ def find_isis(h5f, write_to_h5f=True, return_res=False):
             e = h5f[f"ana.bursts.module_level.{m_dc}.end_times"]
         except:
             if mdx == 0:
-                log.debug(
-                    "Module bursts were not detected before searching ISI."
-                )
+                log.debug("Module bursts were not detected before searching ISI.")
             b = None
             e = None
 
@@ -728,9 +728,7 @@ def find_ibis(h5f, write_to_h5f=True, return_res=False):
             b = np.array(h5f[f"ana.bursts.module_level.{m_dc}.beg_times"])
             e = np.array(h5f[f"ana.bursts.module_level.{m_dc}.end_times"])
         except Exception as e:
-            log.debug(
-                "Module-level bursts were not detected before searching IBI."
-            )
+            log.debug("Module-level bursts were not detected before searching IBI.")
             break
             # raise e
 
@@ -748,9 +746,7 @@ def find_ibis(h5f, write_to_h5f=True, return_res=False):
         b = np.array(h5f["ana.bursts.system_level.beg_times"])
         e = np.array(h5f["ana.bursts.system_level.end_times"])
     except Exception as e:
-        log.error(
-            "System-level bursts were not detected before searching IBI."
-        )
+        log.error("System-level bursts were not detected before searching IBI.")
         raise e
 
     if len(b) < 2:
@@ -2187,7 +2183,9 @@ def smooth_rate(rate, clock_dt, window="gaussian", width=None):
     return np.convolve(rate, window * 1.0 / sum(window), mode="same")
 
 
-def get_threshold_from_snr_between_bursts(rate, rate_dt, merge_threshold, std_offset=3, itermax=1000):
+def get_threshold_from_snr_between_bursts(
+    rate, rate_dt, merge_threshold, std_offset=3, itermax=1000
+):
     """
         Find an ideal threshold `theta = mean + std_offset*std`,
         where mean and std are evaluated inbetween bursts.
@@ -2198,12 +2196,11 @@ def get_threshold_from_snr_between_bursts(rate, rate_dt, merge_threshold, std_of
     # init
     mean_orig = np.nanmean(rate)
     std_orig = np.nanstd(rate)
-    theta_orig = mean_orig + std_offset*std_orig
+    theta_orig = mean_orig + std_offset * std_orig
 
     mean_old = mean_orig
     std_old = std_orig
     theta_old = theta_orig
-
 
     for iteration in range(0, 1000):
         beg_times, end_times = burst_detection_pop_rate(
@@ -2223,8 +2220,8 @@ def get_threshold_from_snr_between_bursts(rate, rate_dt, merge_threshold, std_of
 
         mean_new = np.nanmean(rate[mask])
         std_new = np.nanstd(rate[mask])
-        theta_new = mean_new + std_offset*std_new
-        print(theta_new, mean_new, std_new, np.sum(mask) / len(rate) )
+        theta_new = mean_new + std_offset * std_new
+        print(theta_new, mean_new, std_new, np.sum(mask) / len(rate))
         # print(f"{theta_new:.2g} Hz, {}")
 
         theta_old = theta_new
@@ -2265,8 +2262,144 @@ def get_threshold_from_logisi_distribution(list_of_isi, area_fraction=0.3):
 
 
 # ------------------------------------------------------------------------------ #
+# pandas data frame operations
+# ------------------------------------------------------------------------------ #
+
+
+# this is jonas recommendation
+def pd_bootstrap(
+    df, obs, sample_size=None, num_boot=500, func=np.nanmean,
+    percentiles=None
+):
+    """
+        bootstrap across all rows of a dataframe to get the mean across
+        many samples and standard error of this estimate.
+        query the dataframe first to filter for the right conditions.
+
+        # Parameters:
+        obs : str, the column to estimate for
+        sample_size: int or None, default (None) for samples that are as large
+            as the original dataframe (number of rows)
+        num_boot : int, how many bootstrap samples to generate
+        func : function, default np.nanmean is used to calculate the estimate
+            for each sample
+        percentiles : list of floats
+            the percentiles to return. default is [2.5, 50, 97.5]
+
+        # Returns:
+        mean : mean across all drawn bootstrap samples
+        error : sem
+
+    """
+
+    if sample_size is None:
+        sample_size = len(df)
+
+    if percentiles is None:
+        percentiles = [2.5, 50, 97.5]
+
+
+    # drop nans, i.e. for ibis we have one nan-row at the end of every burst
+    df = df.query(f"`{obs}` == `{obs}`")
+
+    resampled_estimates = []
+    for idx in range(0, num_boot):
+        sample_df = df.sample(
+            n=sample_size, replace=True, ignore_index=True
+        )
+
+        resampled_estimates.append(
+            func(sample_df[obs])
+        )
+
+    mean = np.mean(resampled_estimates)
+    sem = np.std(resampled_estimates, ddof=1)
+    q = np.percentile(resampled_estimates, percentiles)
+
+    return mean, sem, q
+
+def pd_nested_bootstrap(df, grouping_col, obs, num_boot=500, func=np.nanmean, resample_group_col = False,
+    percentiles=None):
+
+    """
+        bootstrap across rows of a dataframe to get the mean across
+        many samples and standard error of this estimate.
+
+        uses `grouping_col` to filter the dataframe into subframes and permute
+        in those groups, see below.
+
+        # Parameters:
+        obs : str, the column to estimate for
+        grouping_col : str,
+            bootstrap samples are generated independantly for every unique entry
+            of this column.
+        resample_group_col : bool, default False.
+            Per default, we draw for each "experiment" in `grouping_col` as many
+            rows as in the original frame, and create one large list of rows from
+            all those experiments. on this list, the bs estimator is calculated.
+            When True, we also draw with replacement the experiments. This should
+            yield the most conservative error estimate.
+        num_boot : int, how many bootstrap samples to generate
+        func : function, default np.nanmean is used to calculate the estimate
+            for each sample
+
+        # Returns:
+        mean : mean across all drawn bootstrap samples
+        error : sem
+    """
+
+    if percentiles is None:
+        percentiles = [2.5, 50, 97.5]
+
+    candidates = df[grouping_col].unique()
+
+    resampled_estimates = []
+
+    sub_dfs = dict()
+    for candidate in candidates:
+        sub_df = df.query(f"`{grouping_col}` == '{candidate}'")
+        # this is a hacky way to remove rows where the observable is nan,
+        # such as could be for inter-burst-intervals at the end of the experiment
+        sub_df = sub_df.query(f"`{obs}` == `{obs}`")
+        sub_dfs[candidate] = sub_df
+
+    for idx in tqdm(range(0, num_boot), desc="Bootstrapping dataframe", leave=False):
+        merged_obs = []
+
+        if resample_group_col:
+            candidates_resampled = np.random.choice(candidates, size=len(candidates), replace=True)
+        else:
+            candidates_resampled = candidates
+
+        for candidate in candidates_resampled:
+            sub_df = sub_dfs[candidate]
+            sample_size = len(sub_df)
+
+            log.debug(f"{candidate}: {sample_size} entries for {obs}")
+
+            # make sure to use different seeds
+            sample_df = sub_df.sample(
+                n=sample_size, replace=True, ignore_index=True
+            )
+            merged_obs.extend(sample_df[obs])
+
+        estimate=func(merged_obs)
+        resampled_estimates.append(estimate)
+
+    log.debug(resampled_estimates)
+
+    mean = np.mean(resampled_estimates)
+    sem = np.std(resampled_estimates, ddof=1)
+    q = np.percentile(resampled_estimates, percentiles)
+
+    return mean, sem, q
+
+
+
+# ------------------------------------------------------------------------------ #
 # sequences
 # ------------------------------------------------------------------------------ #
+
 
 def remove_bursts_with_sequence_length_null(h5f):
     """
@@ -2285,7 +2418,10 @@ def remove_bursts_with_sequence_length_null(h5f):
         del h5f["ana.bursts.system_level.end_times"][idx]
 
     num_new = len(h5f["ana.bursts.system_level.module_sequences"])
-    log.debug(f"deleted {num_old - num_new} out of {num_old} bursts, due to sequence length 0")
+    log.debug(
+        f"deleted {num_old - num_new} out of {num_old} bursts, due to sequence length 0"
+    )
+
 
 def sequences_from_module_contribution(
     h5f, sys_begs, sys_ends, min_spikes=1, min_neurons=1
@@ -2310,7 +2446,7 @@ def sequences_from_module_contribution(
     """
     spikes = h5f["data.spiketimes"]
 
-    selects = [[]]*len(h5f["ana.mod_ids"])
+    selects = [[]] * len(h5f["ana.mod_ids"])
     for m_id in h5f["ana.mod_ids"]:
         s = np.where(h5f["data.neuron_module_id"][:] == m_id)[0]
         selects[m_id] = s[np.isin(s, h5f["ana.neuron_ids"])]
