@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-10-20 15:20:02
+# @Last Modified: 2021-10-23 00:06:23
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -21,6 +21,7 @@ import h5py
 import argparse
 import logging
 import functools
+import numpy as np
 
 import matplotlib
 # matplotlib.rcParams['font.sans-serif'] = "Arial"
@@ -68,12 +69,12 @@ path_on = [
 
 res_off = []
 for path in path_off:
-    res_off.append(np.loadtxt(path,delimiter=",",skiprows=1))
+    res_off.append(np.loadtxt(path, delimiter=",", skiprows=1))
 res_off =  np.vstack(res_off)
 
 res_on = []
 for path in path_on:
-    res_on.append(np.loadtxt(path,delimiter=",",skiprows=1))
+    res_on.append(np.loadtxt(path, delimiter=",", skiprows=1))
 res_on = np.vstack(res_on)
 
 idx_on = np.where(res_on[:, 1] > 0.0)[0]
@@ -122,6 +123,5 @@ temp = np.loadtxt("/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat
 beg_times = temp[:, -2]
 end_times = temp[:, -1]
 
-ph._plot_bursts_into_timeseries(fig.get_axes()[3], beg_times, end_times)
-
-
+y_offset = np.random.uniform(-1, 1, size=len(beg_times))
+ph._plot_bursts_into_timeseries(fig.get_axes()[3], beg_times, end_times, y_offset = y_offset)
