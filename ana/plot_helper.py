@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-11-04 18:59:11
+# @Last Modified: 2021-11-10 18:58:33
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -151,6 +151,7 @@ def overview_dynamic(h5f, filenames=None, threshold=None, states=True, skip=[]):
         ah.find_system_bursts_from_global_rate(
             h5f, rate_threshold=rate_threshold, merge_threshold=0.1
         )
+        ah.remove_bursts_with_sequence_length_null(h5f)
         ah.find_ibis(h5f)
 
     plot_parameter_info(h5f, axes[0])
@@ -516,12 +517,17 @@ def plot_bursts_into_timeseries(h5f, ax=None, apply_formatting=True, **kwargs):
     end_times = end_times[idx]
 
     num_b = len(beg_times)
+    log.info(f"Found {num_b} bursts of any length")
     try:
-        ibi = np.nanmean(h5f[f"ana.ibi.system_level.all_modules"])
+        ibi = np.nanmedian(h5f[f"ana.ibi.system_level.all_modules"])
     except:
         ibi = np.nan
-    log.info(f"Found {num_b} bursts system-wide")
-    log.info(f"System-wide IBI: {ibi:.2f} seconds")
+    log.info(f"System-wide IBI (median): {ibi:.2f} seconds")
+    try:
+        ibi = np.nanmedian(h5f[f"ana.ibi.system_level.any_module"])
+    except:
+        ibi = np.nan
+    log.info(f"Any-length IBI (median): {ibi:.2f} seconds")
 
     plot_kws = kwargs.copy()
     plot_kws.setdefault("color", "black")
@@ -648,6 +654,7 @@ def plot_parameter_info(h5f, ax=None, apply_formatting=True, add=[]):
 
     try:
         dat.append(["Stim [mV]", h5f["meta.dynamics_jE"]])
+        dat.append(["Adapt. [s]", h5f["meta.dynamics_tD"]])
     except:
         pass
 
@@ -1637,11 +1644,12 @@ def plot_distribution_sequence_length(h5f, ax=None, apply_formatting=True):
     log.info(seq_lens)
 
     num_bins = len(h5f["ana.mods"])
-    bins = np.arange(-0.5, num_bins + 1 + 0.6, 1)
+    # bins = np.arange(-0.5, num_bins + 1 + 0.6, 1)
 
-    log.info(bins)
-    counts, _ = np.histogram(seq_lens, binwidth=1)
-    log.info(f"seq lenghts: {counts}")
+    # log.info(bins)
+    # counts, _ = np.histogram(seq_lens, bins=bins)
+    vals, counts = np.unique(seq_lens, return_counts=True)
+    log.info(f"seq lenghts: {vals} {counts}")
 
     kwargs = {
         "ax": ax,
