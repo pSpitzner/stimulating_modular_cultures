@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-10-25 17:28:21
-# @Last Modified: 2021-11-03 20:32:16
+# @Last Modified: 2021-11-10 16:26:37
 # ------------------------------------------------------------------------------ #
 # Hard coded script to analyse experimental data
 # ------------------------------------------------------------------------------ #
@@ -49,8 +49,8 @@ output_path = "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/exp
 exclude_list = []
 
 # layouts = ["1b", "3b", "merged"]
-layouts = ["1b"]
-# layouts = ["3b"]
+# layouts = ["1b"]
+layouts = ["3b"]
 # layouts = ["merged"]
 conditions = ["1_pre", "2_stim", "3_post"]
 
@@ -59,11 +59,12 @@ conditions = ["1_pre", "2_stim", "3_post"]
 
 burstframes = []
 isisframes = []
-expframes = []
+trialframes = []
 rijframes = []
 
 for layout in layouts:
     for condition in conditions:
+
         for path in glob.glob(f"{input_path}/{layout}/*"):
             experiment = os.path.basename(path)
 
@@ -77,7 +78,7 @@ for layout in layouts:
             )
 
             ah.find_rates(h5f, bs_large=200 / 1000)
-            threshold = 0.05 * np.nanmax(h5f["ana.rates.system_level"])
+            threshold = 0.1 * np.nanmax(h5f["ana.rates.system_level"])
             ah.find_system_bursts_from_global_rate(
                 h5f, rate_threshold=threshold, merge_threshold=0.1
             )
@@ -85,7 +86,7 @@ for layout in layouts:
             # plot overview
             os.makedirs(f"{output_path}/{layout}/{experiment}", exist_ok=True)
             fig = ph.overview_dynamic(h5f)
-            fig.savefig(f"{output_path}/{layout}/{experiment}/{condition}overview.pdf")
+            fig.savefig(f"{output_path}/{layout}/{experiment}/{condition}_overview.pdf")
 
             # get a nice zoom in
             try:
@@ -96,7 +97,7 @@ for layout in layouts:
                 beg = 0
             beg = np.fmax(0, beg - 10)
             fig.get_axes()[-2].set_xlim(beg, beg + 20)
-            fig.savefig(f"{output_path}/{layout}/{experiment}/{condition}zoom.pdf")
+            fig.savefig(f"{output_path}/{layout}/{experiment}/{condition}_zoom.pdf")
 
             ah.find_participating_fraction_in_bursts(h5f)
             fracs = np.array(h5f["ana.bursts.system_level.participating_fraction"])
@@ -124,7 +125,7 @@ for layout in layouts:
                     "Inter-burst-interval": ibis,
                     "Condition": condition[2:],
                     "Experiment": experiment,
-                    "Stimulation": "On" if condition == "2_stim" else "Off",
+                    "Stimulation": "On" if condition[0:2] == "2_" else "Off",
                 }
             )
 
@@ -142,12 +143,12 @@ for layout in layouts:
                     "ISI": isis,
                     "Condition": condition[2:],
                     "Experiment": experiment,
-                    "Stimulation": "On" if condition == "2_stim" else "Off",
+                    "Stimulation": "On" if condition[0:2] == "2_" else "Off",
                 }
             )
             isisframes.append(df)
 
-            # statistics across experiments, rij
+            # statistics across trials and rijs
             # NxN matrix
             rij = ah.find_rij(h5f, time_bin_size=200 / 1000)
             np.fill_diagonal(rij, np.nan)
@@ -158,7 +159,7 @@ for layout in layouts:
                     "Correlation Coefficient": rij_flat,
                     "Condition": condition[2:],
                     "Experiment": experiment,
-                    "Stimulation": "On" if condition == "2_stim" else "Off",
+                    "Stimulation": "On" if condition[0:2] == "2_" else "Off",
                 }
             )
             rijframes.append(df)
@@ -172,13 +173,15 @@ for layout in layouts:
                     "Mean Correlation": [mean_rij],
                     "Mean IBI": [np.nanmean(ibis)],
                     "Median IBI": [np.nanmedian(ibis)],
+                    "Mean Fraction": [np.nanmean(fracs)],
+                    "Median Fraction": [np.nanmedian(fracs)],
                     "Functional Complexity": [fc],
                     "Condition": condition[2:],
                     "Experiment": experiment,
-                    "Stimulation": "On" if condition == "2_stim" else "Off",
+                    "Stimulation": "On" if condition[0:2] == "2_" else "Off",
                 }
             )
-            expframes.append(df)
+            trialframes.append(df)
 
             # if experiment == "210405_C" and "post" in condition:
             # assert False
@@ -191,7 +194,28 @@ df_bursts = pd.concat(burstframes, ignore_index=True)
 df_isis = pd.concat(isisframes, ignore_index=True)
 df_isis["logISI"] = df_isis.apply(lambda row: np.log10(row["ISI"]), axis=1)
 df_rij = pd.concat(rijframes, ignore_index=True)
-df_exp = pd.concat(expframes, ignore_index=True)
+df_trials = pd.concat(trialframes, ignore_index=True)
+
+
+
+def to_hdf5(df_path):
+    df_bursts.to_hdf(df_path, "/data/df_bursts", complevel=6)
+    df_isis.to_hdf(df_path, "/data/df_isis", complevel=6)
+    df_rij.to_hdf(df_path, "/data/df_rij", complevel=6)
+    df_trials.to_hdf(df_path, "/data/df_trials", complevel=6)
+
+def from_hdf5(df_path):
+    global df_bursts
+    global df_isis
+    global df_rij
+    global df_trials
+
+    df_bursts = pd.read_hdf(df_path, "/data/df_bursts")
+    df_isis = pd.read_hdf(df_path, "/data/df_isis")
+    df_rij = pd.read_hdf(df_path, "/data/df_rij")
+    df_trials = pd.read_hdf(df_path, "/data/df_trials")
+
+to_hdf5(f"./dat/exp_out/{layout}.hdf5")
 
 # ------------------------------------------------------------------------------ #
 # Plotting
@@ -200,8 +224,8 @@ df_exp = pd.concat(expframes, ignore_index=True)
 # sns.set_theme(style="whitegrid", palette=None)
 matplotlib.rcParams["axes.spines.right"] = False
 matplotlib.rcParams["axes.spines.top"] = False
-matplotlib.rcParams["axes.spines.left"] = True
-matplotlib.rcParams["axes.spines.bottom"] = True
+matplotlib.rcParams["axes.spines.left"] = False
+matplotlib.rcParams["axes.spines.bottom"] = False
 matplotlib.rcParams["xtick.direction"] = "out"
 matplotlib.rcParams["ytick.direction"] = "out"
 matplotlib.rcParams["axes.axisbelow"] = True
@@ -335,10 +359,10 @@ def cat_hist_plot(df, category, obs, bins, **kwargs):
     return fig
 
 
-ibi_stim = np.mean(df_exp.query("`Condition` == 'stim'")["Median IBI"])
+ibi_stim = np.mean(df_trials.query("`Condition` == 'stim'")["Median IBI"])
 print(f"IBI, mean median stim: {ibi_stim}")
 
-ibi_pre = np.mean(df_exp.query("`Condition` == 'pre'")["Median IBI"])
+ibi_pre = np.mean(df_trials.query("`Condition` == 'pre'")["Median IBI"])
 print(f"IBI, mean median pre: {ibi_pre}")
 
 if not violins:
@@ -426,7 +450,7 @@ sns.pointplot(
     y="Num Bursts",
     hue="Experiment",
     palette="YlGnBu_d",
-    data=df_exp,
+    data=df_trials,
 )
 ax.get_legend().set_visible(False)
 ax.set_ylim(-0.05, 200.5)
@@ -440,7 +464,7 @@ sns.pointplot(
     y="Mean Correlation",
     hue="Experiment",
     palette="YlGnBu_d",
-    data=df_exp,
+    data=df_trials,
 )
 ax.get_legend().set_visible(False)
 ax.set_ylim(-0.05, 1.05)
@@ -453,7 +477,7 @@ sns.pointplot(
     y="Functional Complexity",
     hue="Experiment",
     palette="YlGnBu_d",
-    data=df_exp,
+    data=df_trials,
 )
 ax.get_legend().set_visible(False)
 ax.set_ylim(-0.05, 1.05)
@@ -466,7 +490,7 @@ sns.pointplot(
     y="Median IBI",
     hue="Experiment",
     palette="YlGnBu_d",
-    data=df_exp,
+    data=df_trials,
 )
 ax.get_legend().set_visible(False)
 ax.set_ylim(-0.05, None)
@@ -479,7 +503,7 @@ sns.pointplot(
     y="Mean IBI",
     hue="Experiment",
     palette="YlGnBu_d",
-    data=df_exp,
+    data=df_trials,
 )
 ax.get_legend().set_visible(False)
 ax.set_ylim(-0.05, None)
