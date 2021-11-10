@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-10-20 15:55:41
+# @Last Modified: 2021-10-21 18:41:45
 #
 # plot a merged down, multidimensional hdf5 file (from individual simulations)
 # and select which dims to show where
@@ -52,19 +52,18 @@ args = parser.parse_args()
 
 data = nh.load_ndim_h5f(args.input_path)
 
-obs = nh.choose(data.keys(), "Choose an observable:", max=1, via_int=True)
+# obs = nh.choose(data.keys(), "Choose an observable:", max=1, via_int=True)
 
-selected_cs = dict()
-for dim in data[obs].dims:
-    if dim == "repetition" or dim == "vector_observable":
-        continue
-    options = data[obs].coords[dim].to_numpy()
-    if len(options) == 1:
-        selected_cs[dim] = options[0]
-    else:
-        selected_cs[dim] = nh.choose(options, f"Choose a coordinates for '{dim}':")
-
-    print(f"Using '{dim}' = {selected_cs[dim]}")
+# selected_cs = dict()
+# for dim in data[obs].dims:
+#     if dim == "repetition" or dim == "vector_observable":
+#         continue
+#     options = data[obs].coords[dim].to_numpy()
+#     if len(options) == 1:
+#         selected_cs[dim] = options[0]
+#     else:
+#         selected_cs[dim] = nh.choose(options, f"Choose a coordinates for '{dim}':")
+#     print(f"Using '{dim}' = {selected_cs[dim]}")
 
 
 
