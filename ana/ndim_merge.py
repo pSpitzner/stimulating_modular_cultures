@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-11-09 14:48:06
+# @Last Modified: 2021-11-10 13:51:02
 #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into an ndim array
@@ -87,8 +87,10 @@ def all_in_one(candidate=None):
         res["mod_blen_3"] = 1
         res["mod_blen_4"] = 1
         res["mod_num_spikes_in_bursts_1"] = 1
-        res["sys_mean_ibis"] = 1
-        res["sys_median_ibis"] = 1
+        res["sys_mean_any_ibis"] = 1
+        res["sys_median_any_ibis"] = 1
+        res["sys_mean_all_ibis"] = 1
+        res["sys_median_all_ibis"] = 1
         res["any_ibis"] = 1
         res["sys_ibis_cv"] = 1
         res["any_ibis_cv"] = 1
@@ -170,8 +172,10 @@ def all_in_one(candidate=None):
 
     # ibis
     try:
-        res["sys_mean_ibis"] = np.nanmean(h5f["ana.ibi.system_level.all_modules"])
-        res["sys_median_ibis"] = np.nanmedian(h5f["ana.ibi.system_level.all_modules"])
+        res["sys_mean_any_ibis"] = np.nanmean(h5f["ana.ibi.system_level.any_module"])
+        res["sys_median_any_ibis"] = np.nanmedian(h5f["ana.ibi.system_level.any_module"])
+        res["sys_mean_all_ibis"] = np.nanmean(h5f["ana.ibi.system_level.all_modules"])
+        res["sys_median_all_ibis"] = np.nanmedian(h5f["ana.ibi.system_level.all_modules"])
         res["any_ibis_cv"] = np.nanmean(h5f["ana.ibi.system_level.cv_any_module"])
         res["sys_ibis_cv"] = np.nanmean(h5f["ana.ibi.system_level.cv_across_modules"])
         ibis_module = []
