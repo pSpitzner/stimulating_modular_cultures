@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-05 10:37:47
-# @Last Modified: 2021-06-09 10:17:37
+# @Last Modified: 2021-11-05 11:32:51
 # ------------------------------------------------------------------------------ #
 # Helper to load the topology from hdf5
 # ------------------------------------------------------------------------------ #
@@ -14,7 +14,7 @@ import h5py
 import logging
 import numpy as np
 import hi5 as h5
-from hi5 import BetterDict
+# from hi5 import BetterDict
 
 log = logging.getLogger(__name__)
 
@@ -134,3 +134,162 @@ def index_alignment(num_n, num_inhib, bridge_ids):
     bridge_ids_new = np.array(bridge_ids_new, dtype="int64")
 
     return topo_indices, brian_indices, inhib_ids_new, excit_ids_new, bridge_ids_new
+
+
+# ------------------------------------------------------------------------------ #
+# Orlandi rewrite
+# ------------------------------------------------------------------------------ #
+
+try:
+    from numba import jit, prange
+
+    # raise ImportError
+    log.info("Using numba")
+
+except ImportError:
+    log.info("Numba not available")
+    # replace numba functions if numba not available:
+    # we only use jit and prange
+    # helper needed for decorators with kwargs
+    def parametrized(dec):
+        def layer(*args, **kwargs):
+            def repl(f):
+                return dec(f, *args, **kwargs)
+
+            return repl
+
+        return layer
+
+    @parametrized
+    def jit(func, **kwargs):
+        return func
+
+    def prange(*args):
+        return range(*args)
+
+
+# lets define parameters of the algorithm.
+# Numba needs dictionaries that have the same data type
+# fmt: off
+par = dict (
+    N   = 160.,        #  number neurons
+    rho = -1.,        #  [1/um2] density
+    L   = 600.0,        #  [um] linear dish size
+
+    #  axons, variable length, segments of fixed length with variable angle
+    std_l   = 800.0,  #  [um]  st. dev. of rayleigh dist. for axon len
+                      #  expectation value: <l> = std_l*sqrt(pi/2)
+    max_l   = 1500.0, #  [um]  max lentgh allowed for axons
+    del_l   = 10.0,   #  [um]  length of each segment of axons
+    std_phi = 0.1,    #  [rad] std of Gauss dist. for angles betw segs
+
+    #  soma, hard sphere
+    R_s     = 7.5,    #  [um] radius of soma
+
+    #  dendritic tree, sphere with variable radius
+    mu_d    = 150.,   #  [um] mean of Gauss dist. for radius
+    std_d   = 20.0,   #  [um] std of Gauss dist. for radius
+
+    #  connection probability alpha when axons intersect dendritic tree
+    alpha = .5,
+
+    # after hitting a wall, retry placing axon segment, default: 50
+    axon_retry = 5000,
+
+    # after hitting a wall, we multiply the next random angle with this value
+    # so the path is a bit more flexible. default: 5
+    angle_mod  = 5.0,
+)
+
+# fmt: on
+
+
+def _grow_axon(par, start, end):
+    pass
+
+
+@jit(nopython=True)
+def _soma_is_within_substrate(x, y, r=0):
+    x_in = False
+    y_in = False
+
+    # default modular cultures are four modules of size 200 um with 200 um padding
+    mods = np.array([[0.0, 200.0], [400.0, 600.0]])
+
+    for m in range(0, len(mods)):
+        if x >= mods[m][0] + r and x <= mods[m][1] - r:
+            x_in = True
+        if y >= mods[m][0] + r and y <= mods[m][1] - r:
+            y_in = True
+
+    return x_in and y_in
+
+@jit(nopython=True, parallel=False, fastmath=True, cache=True)
+def _is_intersecting_circles(ref_pos, ref_rad, x, y, r=0):
+    """
+        Check whether x, y, is intersecting with any of the circles at ref_pos with
+        radiu ref_rad
+    """
+    for i in range(ref_pos.shape[0]):
+        x_, y_ = ref_pos[i, :]
+        r_ = ref_rad[i]
+        if (x-x_)*(x-x_) + (y-y_)*(y-y_) < (r+r_)*(r+r_):
+            return True
+
+    return False
+
+
+
+@jit(nopython=True, parallel=False, fastmath=True, cache=True)
+def place_neurons(par_N, par_L, par_R_s, is_in_substrate):
+    """
+        make sure to set parameters correctly before calling this
+    """
+
+    rejections = 0
+
+    # a 2d np array with x, y poitions, soma_radius and dendritic_tree diameter
+    neuron_pos = np.ones(shape=(int(par_N), 2)) * - 93288.0
+    neuron_rad = np.ones(shape=(int(par_N))) * par_R_s
+
+    for i in range(int(par_N)):
+        placed = False
+        while (not placed):
+            placed = True
+            x = np.random.uniform(0.0, par_L)
+            y = np.random.uniform(0.0, par_L)
+            # print(i, x, y)
+            if not is_in_substrate(x, y):
+                placed = False
+                rejections += 1
+                continue
+            if _is_intersecting_circles(neuron_pos[0:i], neuron_rad[0:i], x, y, par_R_s):
+                print(i, "intersecting")
+                placed = False
+                rejections += 1
+                continue
+            neuron_pos[i, 0] = x
+            neuron_pos[i, 1] = y
+
+    return neuron_pos
+
+
+# import plot_helper as ph
+# neuron_pos = place_neurons(par["N"], par["L"], par["R_s"], _soma_is_within_substrate)
+# fig, ax = plt.subplots()
+# ph._circles(neuron_pos[:,0], neuron_pos[:,1], 7.5, ax=ax, fc="white", ec="black", alpha=1, lw=0.25, zorder=4)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
