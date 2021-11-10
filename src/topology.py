@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-05 10:37:47
-# @Last Modified: 2021-11-05 11:32:51
+# @Last Modified: 2021-11-10 23:42:37
 # ------------------------------------------------------------------------------ #
 # Helper to load the topology from hdf5
 # ------------------------------------------------------------------------------ #
@@ -14,6 +14,7 @@ import h5py
 import logging
 import numpy as np
 import hi5 as h5
+
 # from hi5 import BetterDict
 
 log = logging.getLogger(__name__)
@@ -169,47 +170,143 @@ except ImportError:
 
 
 # lets define parameters of the algorithm.
-# Numba needs dictionaries that have the same data type
-# fmt: off
-par = dict (
-    N   = 160.,        #  number neurons
-    rho = -1.,        #  [1/um2] density
-    L   = 600.0,        #  [um] linear dish size
+# Numba does not like dicts, so we use global variables
+# with a prefix. these guys should not change much!
 
-    #  axons, variable length, segments of fixed length with variable angle
-    std_l   = 800.0,  #  [um]  st. dev. of rayleigh dist. for axon len
-                      #  expectation value: <l> = std_l*sqrt(pi/2)
-    max_l   = 1500.0, #  [um]  max lentgh allowed for axons
-    del_l   = 10.0,   #  [um]  length of each segment of axons
-    std_phi = 0.1,    #  [rad] std of Gauss dist. for angles betw segs
+par_N = 160  #  number neurons
+# par_rho = -1.,        #  [1/um2] density
+par_L = 600.0  #  [um] maximum linear dish size
 
-    #  soma, hard sphere
-    R_s     = 7.5,    #  [um] radius of soma
+#  axons, variable length, segments of fixed length with variable angle
+par_std_l = 800.0  #  [um]  st. dev. of rayleigh dist. for axon len
+#  expectation value: <l> = std_l*sqrt(pi/2)
+par_max_l = 1500.0  #  [um]  max lentgh allowed for axons
+par_del_l = 10.0  #  [um]  length of each segment of axons
+par_std_phi = 0.1  #  [rad] std of Gauss dist. for angles betw segs
 
-    #  dendritic tree, sphere with variable radius
-    mu_d    = 150.,   #  [um] mean of Gauss dist. for radius
-    std_d   = 20.0,   #  [um] std of Gauss dist. for radius
+#  soma, hard sphere
+par_R_s = 7.5  #  [um] radius of soma
 
-    #  connection probability alpha when axons intersect dendritic tree
-    alpha = .5,
+#  dendritic tree, sphere with variable radius
+par_mu_d = 150.0  #  [um] mean of Gauss dist. for radius
+par_std_d = 20.0  #  [um] std of Gauss dist. for radius
 
-    # after hitting a wall, retry placing axon segment, default: 50
-    axon_retry = 5000,
+#  connection probability alpha when axons intersect dendritic tree
+par_alpha = 0.5
 
-    # after hitting a wall, we multiply the next random angle with this value
-    # so the path is a bit more flexible. default: 5
-    angle_mod  = 5.0,
-)
+# after hitting a wall, retry placing axon segment, default: 50
+par_axon_retry = 5000
 
-# fmt: on
+# after hitting a wall, we multiply the next random angle with this value
+# so the path is a bit more flexible. default: 5
+par_angle_mod = 5.0
 
 
-def _grow_axon(par, start, end):
-    pass
+@jit(nopython=True, parallel=False, fastmath=True, cache=True)
+def grow_axon(start, target=None):
+
+    length = np.random.rayleigh(par_std_l)
+    num_segs = int(length / par_del_l)
+
+    last_x = start[0]
+    last_y = start[1]
+    last_phi = np.random.uniform(0, 1,) * 2 * np.pi
+
+    path = np.ones((num_segs, 2)) * np.nan
+
+    for sdx in range(0, num_segs):
+        placed = False
+        tries = 0
+        angle_mod = 1.0
+
+        while not placed and tries < par_axon_retry:
+            placed = True
+            tries += 1
+            phi = last_phi + np.random.normal(0, par_std_phi) * angle_mod
+            x = last_x + par_del_l * np.cos(phi)
+            y = last_y + par_del_l * np.sin(phi)
+
+            if target is None:
+                # check confinement, possibly allow larger bending angles at walls
+                if not _is_within_substrate(x, y, 0):
+                    placed = False
+                    angle_mod = par_angle_mod
+                    continue
+            else:
+                # if we have a target, ignore the substrate
+                # and check that we are not deflecting too far
+                if not _is_angle_on_course([last_x, last_y], target, phi):
+                    placed = False
+                    continue
+
+        if placed:
+            # update last coordinates
+            last_x = x
+            last_y = y
+            last_phi = phi
+            path[sdx, 0] = last_x
+            path[sdx, 1] = last_y
+        else:
+            # failed to place segment within given number of attempts
+            break
+
+    return path
 
 
-@jit(nopython=True)
-def _soma_is_within_substrate(x, y, r=0):
+def grow_axon_to_target(start, target, target_radius):
+
+    length = np.random.rayleigh(par_std_l)
+    num_segs = int(length / par_del_l)
+    path = np.ones((num_segs, 2)) * np.nan
+
+    # if we have a specific target, draw phi until it matches
+    for i in range(0, 5000):
+        phi = np.random.uniform(0, 1,) * 2 * np.pi
+        if _is_angle_on_course(start, target, phi):
+            last_phi = phi
+            break
+
+
+    last_x = start[0]
+    last_y = start[1]
+
+
+@jit(nopython=True, parallel=False, fastmath=True, cache=True)
+def _is_angle_on_course(source_pos, target_pos, phi):
+    src_x, src_y = source_pos
+    tar_x, tar_y = target_pos
+
+    atan = np.arctan2(tar_y - src_y, tar_x - src_x)
+    print(phi, atan, np.pi / 20)
+
+    if np.fabs(phi - atan) > np.pi / 20:
+        return False
+
+    return True
+
+
+def grow_bridging_axon(source_positions, target_positions):
+
+    # get an idea where the modules are located. assuming some clustering in space,
+    # then the center of mass is a good proxy
+    source_cm = np.nanmean(source_positions, axis=0)
+    target_cm = np.nanmean(target_positions, axis=0)
+
+    target_distances = np.sqrt(
+        np.power(target_positions[:, 0] - target_cm[0], 2.0)
+        + np.power(target_positions[:, 1] - target_cm[1], 2.0)
+    )
+
+    # pick the source closes to cm
+    source_distances = np.sqrt(
+        np.power(source_positions[:, 0] - source_cm[0], 2.0)
+        + np.power(source_positions[:, 1] - source_cm[1], 2.0)
+    )
+    source_idx = np.argmin(source_distances)
+
+
+@jit(nopython=True, parallel=False, fastmath=True, cache=True)
+def _is_within_substrate(x, y, r=0):
     x_in = False
     y_in = False
 
@@ -224,6 +321,7 @@ def _soma_is_within_substrate(x, y, r=0):
 
     return x_in and y_in
 
+
 @jit(nopython=True, parallel=False, fastmath=True, cache=True)
 def _is_intersecting_circles(ref_pos, ref_rad, x, y, r=0):
     """
@@ -233,11 +331,10 @@ def _is_intersecting_circles(ref_pos, ref_rad, x, y, r=0):
     for i in range(ref_pos.shape[0]):
         x_, y_ = ref_pos[i, :]
         r_ = ref_rad[i]
-        if (x-x_)*(x-x_) + (y-y_)*(y-y_) < (r+r_)*(r+r_):
+        if (x - x_) * (x - x_) + (y - y_) * (y - y_) < (r + r_) * (r + r_):
             return True
 
     return False
-
 
 
 @jit(nopython=True, parallel=False, fastmath=True, cache=True)
@@ -249,22 +346,26 @@ def place_neurons(par_N, par_L, par_R_s, is_in_substrate):
     rejections = 0
 
     # a 2d np array with x, y poitions, soma_radius and dendritic_tree diameter
-    neuron_pos = np.ones(shape=(int(par_N), 2)) * - 93288.0
-    neuron_rad = np.ones(shape=(int(par_N))) * par_R_s
+    neuron_pos = np.ones(shape=(par_N, 2)) * -93288.0
+    neuron_rad = np.ones(shape=(par_N)) * par_R_s
 
     for i in range(int(par_N)):
         placed = False
-        while (not placed):
+        while not placed:
             placed = True
             x = np.random.uniform(0.0, par_L)
             y = np.random.uniform(0.0, par_L)
-            # print(i, x, y)
-            if not is_in_substrate(x, y):
+
+            # dont place out of bounds
+            if not is_in_substrate(x, y, par_R_s):
                 placed = False
                 rejections += 1
                 continue
-            if _is_intersecting_circles(neuron_pos[0:i], neuron_rad[0:i], x, y, par_R_s):
-                print(i, "intersecting")
+
+            # dont overlap other neurons
+            if _is_intersecting_circles(
+                neuron_pos[0:i], neuron_rad[0:i], x, y, par_R_s
+            ):
                 placed = False
                 rejections += 1
                 continue
@@ -274,22 +375,27 @@ def place_neurons(par_N, par_L, par_R_s, is_in_substrate):
     return neuron_pos
 
 
-# import plot_helper as ph
-# neuron_pos = place_neurons(par["N"], par["L"], par["R_s"], _soma_is_within_substrate)
-# fig, ax = plt.subplots()
-# ph._circles(neuron_pos[:,0], neuron_pos[:,1], 7.5, ax=ax, fc="white", ec="black", alpha=1, lw=0.25, zorder=4)
+import plot_helper as ph
+
+neuron_pos = place_neurons(par_N, par_L, par_R_s, _is_within_substrate)
+fig, ax = plt.subplots()
+ph._circles(
+    neuron_pos[:, 0],
+    neuron_pos[:, 1],
+    7.5,
+    ax=ax,
+    fc="white",
+    ec="black",
+    alpha=1,
+    lw=0.25,
+    zorder=4,
+)
+
+for n in range(0, par_N):
+    path = grow_axon(neuron_pos[n, :])
+    ax.plot(path[:, 0], path[:, 1], color="black", lw=0.35, zorder=0, alpha=0.5)
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+path = grow_axon([0, 100], [0,500])
+# for source_pos in [[100, 0], [101, 1], [ 200, -1,]]:
+#     _is_angle_on_course(source_pos, [300, 0], -1)
