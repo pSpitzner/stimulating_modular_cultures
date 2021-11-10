@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-05 10:37:47
-# @Last Modified: 2021-11-10 23:42:37
+# @Last Modified: 2021-11-10 23:43:19
 # ------------------------------------------------------------------------------ #
 # Helper to load the topology from hdf5
 # ------------------------------------------------------------------------------ #
@@ -375,27 +375,27 @@ def place_neurons(par_N, par_L, par_R_s, is_in_substrate):
     return neuron_pos
 
 
-import plot_helper as ph
+# import plot_helper as ph
 
-neuron_pos = place_neurons(par_N, par_L, par_R_s, _is_within_substrate)
-fig, ax = plt.subplots()
-ph._circles(
-    neuron_pos[:, 0],
-    neuron_pos[:, 1],
-    7.5,
-    ax=ax,
-    fc="white",
-    ec="black",
-    alpha=1,
-    lw=0.25,
-    zorder=4,
-)
+# neuron_pos = place_neurons(par_N, par_L, par_R_s, _is_within_substrate)
+# fig, ax = plt.subplots()
+# ph._circles(
+#     neuron_pos[:, 0],
+#     neuron_pos[:, 1],
+#     7.5,
+#     ax=ax,
+#     fc="white",
+#     ec="black",
+#     alpha=1,
+#     lw=0.25,
+#     zorder=4,
+# )
 
-for n in range(0, par_N):
-    path = grow_axon(neuron_pos[n, :])
-    ax.plot(path[:, 0], path[:, 1], color="black", lw=0.35, zorder=0, alpha=0.5)
+# for n in range(0, par_N):
+#     path = grow_axon(neuron_pos[n, :])
+#     ax.plot(path[:, 0], path[:, 1], color="black", lw=0.35, zorder=0, alpha=0.5)
 
 
-path = grow_axon([0, 100], [0,500])
-# for source_pos in [[100, 0], [101, 1], [ 200, -1,]]:
-#     _is_angle_on_course(source_pos, [300, 0], -1)
+# path = grow_axon([0, 100], [0,500])
+# # for source_pos in [[100, 0], [101, 1], [ 200, -1,]]:
+# #     _is_angle_on_course(source_pos, [300, 0], -1)
