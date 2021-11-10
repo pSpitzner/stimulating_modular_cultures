@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-10-27 18:10:11
-# @Last Modified: 2021-11-08 17:55:49
+# @Last Modified: 2021-11-10 18:36:36
 # ------------------------------------------------------------------------------ #
 # plot a merged down, multidimensional hdf5 file (from individual simulations)
 # and select which dims to show where
@@ -154,10 +154,12 @@ for obs in observables:
                 y = dat_med.sel({dim2: cs2})
                 yerr = dat_sem.sel({dim2: cs2})
 
+            selects = np.where(np.isfinite(y))
+
             ax.errorbar(
-                x=x,
-                y=y,
-                yerr=yerr,
+                x=x[selects],
+                y=y[selects],
+                yerr=yerr[selects],
                 fmt="-",
                 markersize=1,
                 color=color,
@@ -169,6 +171,7 @@ for obs in observables:
 
         ax.set_xlabel(nh.dim_labels(dim1))
         ax.set_ylabel(nh.obs_labels(obs))
+        ax.set_ylabel(obs)
         ax.legend()
 
     # histograms
@@ -225,7 +228,7 @@ for obs in observables:
         ax.legend(loc='upper center')
 
 
-    fig.canvas.manager.set_window_title(nh.obs_labels(obs).replace("\n", " "))
+    fig.canvas.manager.set_window_title(obs)
     # ax.legend()
     ax.xaxis.set_major_locator(mpl.ticker.MultipleLocator(20))
     ax.xaxis.set_minor_locator(mpl.ticker.MultipleLocator(5))
