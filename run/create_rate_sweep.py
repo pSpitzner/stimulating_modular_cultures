@@ -16,8 +16,8 @@ l_rep = np.arange(0, 50)
 l_jA = [45.0]
 l_jG = [50.0]
 l_jM = [15.0]
-l_tD = [8.0]
-l_rate = np.hstack([np.arange(40, 70, 5), np.arange(70, 110, 1), np.arange(110, 130, 5)])
+l_tD = [20.0]
+l_rate = np.arange(65, 111)
 
 print("l_jA  ", l_jA)
 print("l_jG  ", l_jG)
