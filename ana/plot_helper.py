@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-11-10 18:58:33
+# @Last Modified: 2021-11-11 13:33:37
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -221,7 +221,8 @@ def warntry(func):
     return wrapper
 
 
-def plot_raster(h5f, ax=None, apply_formatting=True, sort_by_module=True, **kwargs):
+def plot_raster(h5f, ax=None, apply_formatting=True, sort_by_module=True,
+    exclude_nids = [], **kwargs):
     """
         Plot a raster plot
 
@@ -264,6 +265,9 @@ def plot_raster(h5f, ax=None, apply_formatting=True, sort_by_module=True, **kwar
             n_id_sorted = h5f["ana.mod_sort"](n_id)
         else:
             n_id_sorted = n_id
+
+        if n_id_sorted in exclude_nids:
+            continue
 
         m_id = h5f["data.neuron_module_id"][n_id]
         spikes = h5f["data.spiketimes"][n_id]
@@ -404,7 +408,7 @@ def plot_system_rate(h5f, ax=None, apply_formatting=True, mark_burst_threshold=T
     return ax
 
 
-def plot_state_variable(h5f, ax=None, apply_formatting=True, variable="D"):
+def plot_state_variable(h5f, ax=None, apply_formatting=True, variable="D", **kwargs):
     """
         We may either have an average value, then the h5f dataset has shape(1, t)
         or an entry for every neuron, then shape(N, t)
@@ -425,12 +429,16 @@ def plot_state_variable(h5f, ax=None, apply_formatting=True, variable="D"):
         m_dc = h5f["ana.mods"][mdx]
 
         selects = np.where(h5f["data.neuron_module_id"][:] == m_id)[0]
+
+        plot_kwargs = kwargs.copy()
+        plot_kwargs.setdefault("zorder", 1)
+        plot_kwargs.setdefault("color", h5f["ana.mod_colors"][m_id])
+
         # mean across neurons
         ax.plot(
             h5f[f"data.state_vars_time"][:],
             np.nanmean(stat_vals[selects, :], axis=0),
-            color=h5f["ana.mod_colors"][m_id],
-            zorder=1,
+            **kwargs
         )
 
         # show some faint lines for individual neurons from each module

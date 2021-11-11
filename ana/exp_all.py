@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-10-25 17:28:21
-# @Last Modified: 2021-11-10 16:26:37
+# @Last Modified: 2021-11-11 18:16:24
 # ------------------------------------------------------------------------------ #
 # Hard coded script to analyse experimental data
 # ------------------------------------------------------------------------------ #
@@ -48,21 +48,22 @@ output_path = "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/exp
 
 exclude_list = []
 
-# layouts = ["1b", "3b", "merged"]
+layouts = ["1b", "3b", "merged"]
 # layouts = ["1b"]
-layouts = ["3b"]
+# layouts = ["3b"]
 # layouts = ["merged"]
 conditions = ["1_pre", "2_stim", "3_post"]
 
 # layouts = ["KCl_1b"]
 # conditions = ["1_KCl_0mM", "2_KCl_2mM"]
 
-burstframes = []
-isisframes = []
-trialframes = []
-rijframes = []
 
 for layout in layouts:
+    burstframes = []
+    isisframes = []
+    trialframes = []
+    rijframes = []
+    rijpairframes = []
     for condition in conditions:
 
         for path in glob.glob(f"{input_path}/{layout}/*"):
@@ -114,7 +115,7 @@ for layout in layouts:
             # and last burst gets a nan.
             ah.find_ibis(h5f)
             ibis = h5f["ana.ibi.system_level.any_module"]
-            ibis.append(np.nan)
+            ibis.extend([np.nan]*(len(blen) - len(ibis)) )
 
             df = pd.DataFrame(
                 {
@@ -153,7 +154,6 @@ for layout in layouts:
             rij = ah.find_rij(h5f, time_bin_size=200 / 1000)
             np.fill_diagonal(rij, np.nan)
             rij_flat = rij.flatten()
-
             df = pd.DataFrame(
                 {
                     "Correlation Coefficient": rij_flat,
@@ -163,6 +163,23 @@ for layout in layouts:
                 }
             )
             rijframes.append(df)
+
+            # we also want to compare the correlation coefficients for different
+            # combinations ("parings") of neurons from certain modules
+
+            for pairing in ["within_group_02", "within_group_13", "across_groups_02_13"]:
+                rij_paired = ah.find_rij_pairs(h5f, rij=rij, pairing=pairing)
+                df = pd.DataFrame(
+                    {
+                        "Correlation Coefficient": rij_paired,
+                        "Condition": condition[2:],
+                        "Experiment": experiment,
+                        "Pairing": pairing,
+                        "Pair ID" : np.arange(len(rij_paired)),
+                        "Stimulation": "On" if condition[0:2] == "2_" else "Off",
+                    }
+                )
+                rijpairframes.append(df)
 
             fc = ah._functional_complexity(rij)
             mean_rij = np.nanmean(rij)
@@ -190,32 +207,40 @@ for layout in layouts:
             h5.close_hot()
             del h5f
 
-df_bursts = pd.concat(burstframes, ignore_index=True)
-df_isis = pd.concat(isisframes, ignore_index=True)
-df_isis["logISI"] = df_isis.apply(lambda row: np.log10(row["ISI"]), axis=1)
-df_rij = pd.concat(rijframes, ignore_index=True)
-df_trials = pd.concat(trialframes, ignore_index=True)
+    df_bursts = pd.concat(burstframes, ignore_index=True)
+    df_isis = pd.concat(isisframes, ignore_index=True)
+    df_isis["logISI"] = df_isis.apply(lambda row: np.log10(row["ISI"]), axis=1)
+    df_rij = pd.concat(rijframes, ignore_index=True)
+    df_rij_paired = pd.concat(rijpairframes, ignore_index=True)
+    df_trials = pd.concat(trialframes, ignore_index=True)
 
 
 
-def to_hdf5(df_path):
-    df_bursts.to_hdf(df_path, "/data/df_bursts", complevel=6)
-    df_isis.to_hdf(df_path, "/data/df_isis", complevel=6)
-    df_rij.to_hdf(df_path, "/data/df_rij", complevel=6)
-    df_trials.to_hdf(df_path, "/data/df_trials", complevel=6)
+    def to_hdf5(df_path):
+        df_bursts.to_hdf(df_path, "/data/df_bursts", complevel=6)
+        df_isis.to_hdf(df_path, "/data/df_isis", complevel=6)
+        df_rij.to_hdf(df_path, "/data/df_rij", complevel=6)
+        df_rij_paired.to_hdf(df_path, "/data/df_rij_paired", complevel=6)
+        df_trials.to_hdf(df_path, "/data/df_trials", complevel=6)
 
-def from_hdf5(df_path):
-    global df_bursts
-    global df_isis
-    global df_rij
-    global df_trials
+    def from_hdf5(df_path):
+        global df_bursts
+        global df_isis
+        global df_rij
+        global df_trials
 
-    df_bursts = pd.read_hdf(df_path, "/data/df_bursts")
-    df_isis = pd.read_hdf(df_path, "/data/df_isis")
-    df_rij = pd.read_hdf(df_path, "/data/df_rij")
-    df_trials = pd.read_hdf(df_path, "/data/df_trials")
+        df_bursts = pd.read_hdf(df_path, "/data/df_bursts")
+        df_isis = pd.read_hdf(df_path, "/data/df_isis")
+        df_rij = pd.read_hdf(df_path, "/data/df_rij")
+        df_trials = pd.read_hdf(df_path, "/data/df_trials")
 
-to_hdf5(f"./dat/exp_out/{layout}.hdf5")
+    to_hdf5(f"./dat/exp_out/{layout}.hdf5")
+
+    ibi_stim = np.mean(df_trials.query("`Condition` == 'stim'")["Median IBI"])
+    print(f"IBI, mean median stim: {ibi_stim}")
+
+    ibi_pre = np.mean(df_trials.query("`Condition` == 'pre'")["Median IBI"])
+    print(f"IBI, mean median pre: {ibi_pre}")
 
 # ------------------------------------------------------------------------------ #
 # Plotting
@@ -358,12 +383,6 @@ def cat_hist_plot(df, category, obs, bins, **kwargs):
     fig.tight_layout()
     return fig
 
-
-ibi_stim = np.mean(df_trials.query("`Condition` == 'stim'")["Median IBI"])
-print(f"IBI, mean median stim: {ibi_stim}")
-
-ibi_pre = np.mean(df_trials.query("`Condition` == 'pre'")["Median IBI"])
-print(f"IBI, mean median pre: {ibi_pre}")
 
 if not violins:
     # Bursts

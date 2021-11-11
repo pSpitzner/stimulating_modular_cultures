@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-11-10 16:33:11
+# @Last Modified: 2021-11-11 17:16:11
 # ------------------------------------------------------------------------------ #
 
 
@@ -894,6 +894,9 @@ def find_rij(h5f, which="neurons", time_bin_size=40 / 1000):
 
     # Returns
     rij : 2d array, correlation coefficients, with nans along the diagonal
+
+    # Note
+    rij may contain np.nan if a neuron did not have any spikes.
     """
     assert which in ["neurons", "modules"]
 

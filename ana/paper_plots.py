@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-11-08 17:51:24
-# @Last Modified: 2021-11-10 18:30:58
+# @Last Modified: 2021-11-11 18:17:51
 # ------------------------------------------------------------------------------ #
 # collect the functions to create figure panels here
 # ------------------------------------------------------------------------------ #
@@ -27,6 +27,7 @@ import plot_helper as ph
 import ana_helper as ah
 import ndim_helper as nh
 import colors as cc
+import hi5 as h5
 
 # select things to draw for every panel
 show_title = False
@@ -44,7 +45,8 @@ matplotlib.rcParams["xtick.labelsize"] = 6
 matplotlib.rcParams["ytick.labelsize"] = 6
 matplotlib.rcParams["lines.dash_capstyle"] = "round"
 matplotlib.rcParams["lines.solid_capstyle"] = "round"
-matplotlib.rcParams["axes.titlesize"] = 8
+matplotlib.rcParams["font.size"] = 6
+matplotlib.rcParams["axes.titlesize"] = 6
 matplotlib.rcParams["axes.labelsize"] = 6
 matplotlib.rcParams["legend.fontsize"] = 6
 matplotlib.rcParams["legend.facecolor"] = "#D4D4D4"
@@ -54,6 +56,8 @@ matplotlib.rcParams["axes.spines.right"] = False
 matplotlib.rcParams["axes.spines.top"] = False
 matplotlib.rcParams["figure.figsize"] = [3.4, 2.7]  # APS single column
 matplotlib.rcParams["figure.dpi"] = 300
+matplotlib.rcParams["savefig.facecolor"] = (0.0, 0.0, 0.0, 0.0)  # transparent figure bg
+matplotlib.rcParams["axes.facecolor"] = (1.0, 0.0, 0.0, 0.0)  # developer mode, red axes
 
 
 colors = dict()
@@ -66,7 +70,7 @@ colors["KCl_2mM"] = "gray"
 simulation_coordinates = dict()
 simulation_coordinates["jA"] = 45
 simulation_coordinates["jG"] = 50
-simulation_coordinates["tD"] = 8
+simulation_coordinates["tD"] = 20
 
 log = logging.getLogger(__name__)
 warnings.filterwarnings("ignore")  # suppress numpy warnings
@@ -90,25 +94,32 @@ def exp_raster_plots(
         )
 
         fig, ax = plt.subplots()
-        ph.plot_raster(h5f, ax, color=colors[c_str], clip_on=False)
-        ph.plot_bursts_into_timeseries(
-            h5f, ax, apply_formatting=False, style="fill_between", color=colors[c_str]
+        ph.plot_raster(
+            h5f, ax, color=colors[c_str], clip_on=False, markersize=1.5, alpha=0.75
         )
+        # ph.plot_bursts_into_timeseries(
+        #     h5f, ax, apply_formatting=False, style="fill_between", color=colors[c_str]
+        # )
 
         ax.set_ylim(-1, None)
+        ax.set_xlim(0, 540)
         ax.set_xlabel("")
         if idx > 0:
             ax.set_ylabel("")
         ax.set_yticks([])
-        ax.set_title(c_str)
+        # ax.set_title(c_str)
+        sns.despine(ax=ax, left=True, bottom=True)
+        _time_scale_bar(ax=ax, x1=340, x2=520, y=-2, ylabel=-3.5, label="180 s")
 
-        ax.xaxis.set_major_formatter(matplotlib.ticker.NullFormatter())
-        ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(180))
-        ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(180))
-        ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(60))
-        cc.set_size2(ax, 3, 1.5)
+        # ax.xaxis.set_major_formatter(matplotlib.ticker.NullFormatter())
+        # ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(180))
+        # ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(180))
+        # ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(60))
+        ax.set_xticks([])
+
+        cc.set_size2(ax, 3, 0.75)
         ax.get_figure().savefig(
-            f"./fig/paper/exp_raster_nozoom_{c_str}.pdf", dpi=300, transparent=True
+            f"./fig/paper/exp_raster_nozoom_{c_str}.pdf", dpi=300, transparent=False
         )
 
         fig, ax = plt.subplots()
@@ -122,21 +133,25 @@ def exp_raster_plots(
         )
 
         ax.margins(x=0, y=0)
+        ax.set_xlim(0, 540)
         if "KCl" in condition:
             ax.set_ylim(0, 4.5)
         else:
             ax.set_ylim(0, 2.9)
-        ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(180))
-        ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(60))
+        # ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(180))
+        # ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(60))
         ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(2))
         ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(1))
+        sns.despine(ax=ax, left=False, bottom=True, trim=True, offset=2)
+        ax.set_xticks([])
         ax.set_ylabel("Rates [Hz]")
-        ax.set_xlabel("Time [seconds]")
+        # ax.set_xlabel("Time [seconds]")
         if idx > 0:
             ax.set_ylabel("")
+
         cc.set_size2(ax, 3, 0.75)
         ax.get_figure().savefig(
-            f"./fig/paper/exp_rate_nozoom_{c_str}.pdf", dpi=300, transparent=True
+            f"./fig/paper/exp_rate_nozoom_{c_str}.pdf", dpi=300, transparent=False
         )
 
     # optogenetic
@@ -200,26 +215,37 @@ def exp_chemical_vs_opto(observable="Fraction"):
 
     cc.set_size2(ax, 2.5, 3)
 
-    ax.get_figure().savefig(
-        "./fig/paper/exp_chem_vs_opto.pdf", dpi=300, transparent=True
-    )
+    ax.get_figure().savefig("./fig/paper/exp_chem_vs_opto.pdf", dpi=300)
 
     return ax
 
 
 # Fig 2
-def exp_violins_for_layouts():
+def exp_violins_for_layouts(remove_outlier=False):
 
     dfs = dict()
     dfs["single-bond"] = load_pd_hdf5("./dat/exp_out/1b.hdf5")
     dfs["triple-bond"] = load_pd_hdf5("./dat/exp_out/3b.hdf5")
     dfs["merged"] = load_pd_hdf5("./dat/exp_out/merged.hdf5")
 
+    if remove_outlier:
+
+        def query(df):
+            if layout == "single-bond":
+                return df.query("`Experiment` != '210405_C'")
+            else:
+                return df
+
+    else:
+
+        def query(df):
+            return df
+
     for layout in dfs.keys():
         log.info(f"")
         log.info(f"{layout}")
         ax = custom_violins(
-            dfs[layout]["bursts"],
+            query(dfs[layout]["bursts"]),
             category="Condition",
             observable="Fraction",
             ylim=[0, 1],
@@ -232,13 +258,15 @@ def exp_violins_for_layouts():
         # reuse xlabel for title
         ax.set_xlabel(f"{layout}")
         cc.set_size2(ax, 3, 2.5)
-        ax.get_figure().savefig(f"./fig/paper/exp_violins_fraction_{layout}.pdf", dpi=300, transparent=True)
+        ax.get_figure().savefig(
+            f"./fig/paper/exp_violins_fraction_{layout}.pdf", dpi=300
+        )
 
     for layout in dfs.keys():
         log.info(f"")
         log.info(f"{layout}")
         ax = custom_violins(
-            dfs[layout]["rij"],
+            query(dfs[layout]["rij"]),
             category="Condition",
             observable="Correlation Coefficient",
             ylim=[0, 1],
@@ -251,11 +279,212 @@ def exp_violins_for_layouts():
         # reuse xlabel for title
         ax.set_xlabel(f"{layout}")
         cc.set_size2(ax, 3, 2.5)
-        ax.get_figure().savefig(f"./fig/paper/exp_violins_rij_{layout}.pdf", dpi=300, transparent=True)
+        ax.get_figure().savefig(f"./fig/paper/exp_violins_rij_{layout}.pdf", dpi=300)
+
+    for layout in dfs.keys():
+        log.info(f"")
+        log.info(f"{layout}")
+        ax = custom_violins(
+            # dfs[layout]["bursts"],
+            # remove the single-bond outlier for ibis?
+            dfs[layout]["bursts"].query("`Experiment` != '210405_C'"),
+            category="Condition",
+            observable="Inter-burst-interval",
+            ylim=[0, 90],
+            num_swarm_points=2500,
+            bw=0.2,
+        )
+        ax.set_ylim(0, 90)
+        sns.despine(ax=ax, bottom=True, left=False, trim=True)
+        ax.tick_params(bottom=False)
+        # reuse xlabel for title
+        ax.set_xlabel(f"{layout}")
+        cc.set_size2(ax, 3, 2.5)
+        ax.get_figure().savefig(f"./fig/paper/exp_violins_ibi_{layout}.pdf", dpi=300)
 
     return ax
 
+
+def exp_rij_for_layouts(remove_outlier=False):
+    dfs = dict()
+    dfs["single-bond"] = load_pd_hdf5("./dat/exp_out/1b.hdf5")
+    dfs["triple-bond"] = load_pd_hdf5("./dat/exp_out/3b.hdf5")
+    dfs["merged"] = load_pd_hdf5("./dat/exp_out/merged.hdf5")
+
+    if remove_outlier:
+
+        def query(df):
+            if layout == "single-bond":
+                return df.query("`Experiment` != '210405_C'")
+            else:
+                return df
+
+    else:
+
+        def query(df):
+            return df
+
+    layout = "single-bond"
+
+    for layout in dfs.keys():
+        log.info(f"{layout}")
+        ax = custom_rij_scatter(query(dfs[layout]["rij_paired"]),)
+
+        cc.set_size3(ax, 3, 3)
+        ax.get_figure().savefig(f"./fig/paper/exp_2drij_{layout}.pdf", dpi=300)
+
+    return ax
+
+
 # Fig 3
+def sim_raster_plots(
+    bs_large=20 / 1000,  # width of the gaussian kernel for rate
+    threshold_factor=2.5 / 100,  # fraction of max peak height for burst
+    naked=False,  # whether to strip frames
+):
+
+    rates = [75, 90]
+
+    # exclude_nids_from_raster = np.delete(np.arange(0, 160), np.arange(0, 160, 8))
+    exclude_nids_from_raster = []
+
+    for rdx, rate in enumerate(rates):
+
+        c_str = f"{rate} Hz"
+
+        h5f = ah.prepare_file(
+            f"./dat/inhibition_sweep_rate_160/dyn/stim=off_k=5_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate={rate:.1f}_rep=000.hdf5"
+        )
+
+        # ------------------------------------------------------------------------------ #
+        # raster
+        # ------------------------------------------------------------------------------ #
+
+        fig, ax = plt.subplots()
+        ax.set_rasterization_zorder(0)
+
+        ph.plot_raster(
+            h5f,
+            ax,
+            exclude_nids=exclude_nids_from_raster,
+            clip_on=True,
+            zorder=-1,
+            markersize=0.75,
+            alpha=0.5,
+        )
+        # ph.plot_bursts_into_timeseries(
+        #     h5f, ax, apply_formatting=False, style="fill_between", zorder=-2
+        # )
+
+        ax.set_ylim(-1, None)
+        ax.set_xlim(0, 540)
+        ax.set_ylabel("")
+        # ax.set_ylabel("Raster")
+        ax.set_xlabel("")
+        # ax.set_title(c_str, loc="left")
+        ax.set_yticks([])
+        if naked:
+            ax.set_xticks([])
+
+            sns.despine(ax=ax, left=True, bottom=True)
+
+            if rdx == len(rates) - 1:
+                _time_scale_bar(ax=ax, x1=340, x2=520, y=-15, ylabel=-25, label="180 s")
+        else:
+            sns.despine(ax=ax, left=False, right=False, bottom=False, top=False)
+            ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(180))
+            ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(60))
+            # ax.xaxis.set_major_formatter(matplotlib.ticker.NullFormatter())
+            ax.set_xticks([])
+
+        cc.set_size3(ax, 3, 1.0)
+
+        # # coordinates are pretty much ignored after cc.set_size2
+        # ax.text(-0.2, 0.5, c_str, va="top")
+
+        ax.get_figure().savefig(f"./fig/paper/sim_raster_nozoom_{c_str}.pdf", dpi=300)
+
+        # ------------------------------------------------------------------------------ #
+        # rates
+        # ------------------------------------------------------------------------------ #
+
+        ah.find_rates(h5f, bs_large=bs_large)
+        threshold = threshold_factor * np.nanmax(h5f["ana.rates.system_level"])
+        ah.find_system_bursts_from_global_rate(
+            h5f, rate_threshold=threshold, merge_threshold=0.1
+        )
+
+        fig, ax = plt.subplots()
+        ph.plot_system_rate(
+            h5f,
+            ax,
+            mark_burst_threshold=False,
+            color="#333",
+            apply_formatting=False,
+            clip_on=True,
+            lw=0.8,
+        )
+
+        ax.margins(x=0, y=0)
+        ax.set_xlim(0, 540)
+        ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(180))
+        ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(60))
+        # ax.xaxis.set_major_formatter(matplotlib.ticker.NullFormatter())
+        ax.set_xticks([])
+        # ax.set_ylabel("Rates [Hz]")
+        # ax.set_xlabel("Time [seconds]")
+
+        if rate == 75:
+            ax.set_ylim(0, 80)
+            ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(80))
+            ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(20))
+            if naked:
+                ax.set_xticks([])
+                sns.despine(ax=ax, left=False, bottom=True, trim=True, offset=2)
+            cc.set_size2(ax, 3, 0.75)
+        elif rate == 90:
+            ax.set_ylim(0, 40)
+            ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(40))
+            ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(20))
+            if naked:
+                ax.set_xticks([])
+                sns.despine(ax=ax, left=False, bottom=True, trim=True, offset=2)
+            cc.set_size3(ax, 3, 0.75 / 2)
+
+        ax.get_figure().savefig(
+            f"./fig/paper/sim_rate_nozoom_{c_str}.pdf", dpi=300, transparent=False
+        )
+
+        # ------------------------------------------------------------------------------ #
+        # adaptation
+        # ------------------------------------------------------------------------------ #
+
+        fig, ax = plt.subplots()
+        ph.plot_state_variable(h5f, ax, variable="D", lw=0.8, apply_formatting=False)
+
+        ax.margins(x=0, y=0)
+        ax.set_xlim(0, 540)
+        ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(180))
+        ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(60))
+
+        ax.set_ylim(0, 1)
+        # ax.set_ylabel("Resources")
+        ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
+        ax.yaxis.set_minor_locator(matplotlib.ticker.NullLocator())
+        # ax.set_xlabel("Time [seconds]")
+        if naked:
+            ax.set_xticks([])
+            sns.despine(ax=ax, left=False, bottom=True, trim=True, offset=2)
+
+        cc.set_size3(ax, 3, 0.75)
+
+        ax.get_figure().savefig(
+            f"./fig/paper/sim_resources_nozoom_{c_str}.pdf", dpi=300, transparent=False
+        )
+
+        h5.close_hot()
+
+
 def sim_vs_exp_ibi(input_path, ax=None, **kwargs):
 
     kwargs = kwargs.copy()
@@ -277,13 +506,15 @@ def sim_vs_exp_ibi(input_path, ax=None, **kwargs):
     y = dat_med
     yerr = dat_sem
 
+    selects = np.where(np.isfinite(y))
+
     kwargs.setdefault("color", "#333")
     kwargs.setdefault("label", "simulation")
 
     ax.errorbar(
-        x=x,
-        y=y,
-        yerr=yerr,
+        x=x[selects],
+        y=y[selects],
+        yerr=yerr[selects],
         fmt="o",
         markersize=1.5,
         elinewidth=1,
@@ -294,10 +525,22 @@ def sim_vs_exp_ibi(input_path, ax=None, **kwargs):
 
     kwargs.pop("label")
 
-    ax.plot(x, y, zorder=1, **kwargs)
+    ax.plot(x[selects], y[selects], zorder=1, **kwargs)
 
-    ax.plot([0, 72, 72], [40, 40, 0], ls=":", color=colors["pre"], zorder=0)
-    ax.plot([0, 100, 100], [10, 10, 0], ls=":", color=colors["stim"], zorder=0)
+    ax.plot(
+        [0, 75, 75],
+        [35, 35, 0],
+        ls=":",
+        color=cc.alpha_to_solid_on_bg(colors["pre"], 0.3),
+        zorder=0,
+    )
+    ax.plot(
+        [0, 90, 90],
+        [6, 6, 0],
+        ls=":",
+        color=cc.alpha_to_solid_on_bg(colors["stim"], 0.3),
+        zorder=0,
+    )
     # ax.axhline(y=10, xmin=0, xmax=1, ls = ":", color="gray", zorder=0)
     # ax.axhline(y=40, xmin=0, xmax=1, ls = ":", color="gray", zorder=0)
     # ax.set_yscale("log")
@@ -307,8 +550,8 @@ def sim_vs_exp_ibi(input_path, ax=None, **kwargs):
     ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(20))
     ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(10))
 
-    ax.set_xlim(67.5, 112.5)
-    ax.set_ylim(0, 60)
+    ax.set_xlim(65, 110)
+    ax.set_ylim(0, 70)
 
     if show_xlabel:
         ax.set_xlabel(r"Noise rate (Hz)")
@@ -323,11 +566,10 @@ def sim_vs_exp_ibi(input_path, ax=None, **kwargs):
     # if use_compact_size:
     # cc.set_size2(ax, 3.5, 2.5)
 
-    ax.get_figure().savefig(
-        f"./fig/paper/ibi_sim_vs_exp.pdf", dpi=300, transparent=True
-    )
+    ax.get_figure().savefig(f"./fig/paper/ibi_sim_vs_exp.pdf", dpi=300)
 
     return ax
+
 
 def controls_sim_vs_exp_ibi():
     fig, ax = plt.subplots()
@@ -339,6 +581,7 @@ def controls_sim_vs_exp_ibi():
     sim_vs_exp_ibi(p2, ax=ax, color="red", label="0 removed")
 
     return ax
+
 
 def sim_participating_fraction(input_path, ax=None, **kwargs):
 
@@ -401,16 +644,9 @@ def sim_participating_fraction(input_path, ax=None, **kwargs):
     if use_compact_size:
         cc.set_size2(ax, 3.5, 2)
 
-    ax.get_figure().savefig(
-        f"./fig/paper/participating_fraction.pdf", dpi=300, transparent=True
-    )
+    ax.get_figure().savefig(f"./fig/paper/participating_fraction.pdf", dpi=300)
 
     return ax
-
-
-prev = None
-x = None
-nxt = None
 
 
 def sim_modules_participating_in_bursts(input_path, drop_zero_len=True):
@@ -422,6 +658,7 @@ def sim_modules_participating_in_bursts(input_path, drop_zero_len=True):
 
     x = data["any_num_b"].coords[dim1]
     selects = np.where((x >= 67.5) & (x <= 112.5))
+    # selects = np.ones_like(x, dtype=bool)
 
     fig, ax = plt.subplots()
 
@@ -509,7 +746,7 @@ def sim_modules_participating_in_bursts(input_path, drop_zero_len=True):
     if use_compact_size:
         cc.set_size2(ax, 3.5, 2)
 
-    ax.get_figure().savefig("./fig/paper/sim_fractions.pdf", dpi=300, transparent=True)
+    ax.get_figure().savefig("./fig/paper/sim_fractions.pdf", dpi=300)
 
 
 # ------------------------------------------------------------------------------ #
@@ -522,7 +759,7 @@ def load_pd_hdf5(input_path):
         return a dict of data frames for experimental analysis
     """
     res = dict()
-    for key in ["bursts", "isis", "rij", "trials"]:
+    for key in ["bursts", "isis", "rij", "rij_paired", "trials"]:
         res[key] = pd.read_hdf(input_path, f"/data/df_{key}")
 
     return res
@@ -603,14 +840,17 @@ def custom_violins(
                 num_boot=500,
                 func=np.nanmedian,
                 resample_group_col=True,
-                percentiles=[2.5, 50, 97.5]
+                percentiles=[2.5, 50, 97.5],
             )
         except:
             log.warning("Nested bootstrap failed")
             # this may happen when category variable is not defined.
             mid, error, percentiles = ah.pd_bootstrap(
-                df_for_cat, obs=observable, num_boot=500, func=np.nanmedian,
-                percentiles=[2.5, 50, 97.5]
+                df_for_cat,
+                obs=observable,
+                num_boot=500,
+                func=np.nanmedian,
+                percentiles=[2.5, 50, 97.5],
             )
 
         log.info(f"{cat}: median {mid:.3g}, se {error:.3g}, percentiles: {percentiles}")
@@ -663,14 +903,13 @@ def custom_violins(
 
     # move the swarms slightly to the right and throw away left half
     for idx, cat in enumerate(categories):
-        c = ax.collections[-len(categories)+idx]
+        c = ax.collections[-len(categories) + idx]
         offsets = c.get_offsets()
         odx = np.where(offsets[:, 0] >= idx)
         offsets = offsets[odx]
-        offsets[:, 0] += .05
+        offsets[:, 0] += 0.05
         c.set_offsets(offsets)
         log.debug(f"{cat}: {len(offsets)} points survived")
-
 
     ax.get_legend().set_visible(False)
 
@@ -700,6 +939,162 @@ def custom_pointplot(
     plt.setp(ax.collections, sizes=[2])
 
     return ax
+
+
+
+def custom_rij_scatter(df, ax=None, **kwargs):
+
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.get_figure()
+
+    for pdx, pairing in enumerate(df["Pairing"].unique()):
+
+        rijs_before = []
+        rijs_after = []
+        df_paired = df.query(f"Pairing == '{pairing}'")
+
+        # for each paring, make two long lists of rij: before stim and during stim.
+        # add data from all experiments
+
+        # rij may be np.nan if one of the neurons did not have any spikes.
+
+        for exp in df_paired["Experiment"].unique():
+            exp_df = df_paired.query(f"Experiment == '{exp}'")
+            df_before = exp_df.query(f"Condition == 'pre'")
+            df_after = exp_df.query(f"Condition == 'stim'")
+
+            assert np.all(
+                df_before["Pair ID"].to_numpy() == df_after["Pair ID"].to_numpy()
+            )
+
+            rijs_before.extend(df_before["Correlation Coefficient"].to_list())
+            rijs_after.extend(df_after["Correlation Coefficient"].to_list())
+
+        # sns.scatterplot(
+        #     x=rijs_before, y=rijs_after,
+        #     s=10,
+        #     alpha = 0.5,
+        #     # color = cc.alpha_to_solid_on_bg(f"C{pdx}", 0.7),
+        #     edgecolor=None,
+        #     linewidths=0,
+        #     label=pairing,
+        # )
+
+        ax.scatter(
+            rijs_before,
+            rijs_after,
+            s=3,
+            alpha=0.3,
+            # color = cc.alpha_to_solid_on_bg(f"C{pdx}", 0.7),
+            edgecolor=None,
+            linewidths=0,
+            label=pairing,
+            zorder=1,
+        )
+
+        sns.kdeplot(
+            x=rijs_before,
+            y=rijs_after,
+            levels=[0.95],
+            thresh=0.1,
+            fill=False,
+            linestyles=["-"],
+            # cut=0,
+            common_norm=False,
+            color=f"C{pdx}",
+            zorder=5,
+        )
+
+        sns.kdeplot(
+            x=rijs_before,
+            y=rijs_after,
+            levels=[0.25],
+            thresh=0.1,
+            fill=False,
+            linestyles=["--"],
+            # cut=0,
+            common_norm=False,
+            color=f"C{pdx}",
+            zorder=3,
+        )
+
+        # could not figure out how to duplicate an existing line collection, below
+        sns.kdeplot(
+            x=rijs_before,
+            y=rijs_after,
+            levels=[0.95],
+            thresh=0.1,
+            fill=False,
+            linestyles=["-"],
+            # cut=0,
+            common_norm=False,
+            color=f"white",
+            zorder=4,
+        )
+
+        sns.kdeplot(
+            x=rijs_before,
+            y=rijs_after,
+            levels=[0.25],
+            thresh=0.1,
+            fill=False,
+            linestyles=["-"],
+            # cut=0,
+            common_norm=False,
+            color=f"white",
+            zorder=2,
+        )
+
+    inner_lw = 1
+    outer_lw = 2.5
+
+    for c in ax.collections:
+        if not isinstance(c, matplotlib.collections.LineCollection):
+            continue
+
+        if np.all(c.get_color() == [[1., 1., 1., 1.]]):
+            c.set_linewidth(outer_lw)
+            # c.set_zorder(2)
+        else:
+            c.set_linewidth(inner_lw)
+            # c.set_zorder(3)
+        # copies.append(
+        #     matplotlib.collections.LineCollection(
+        #         c.get_segments(),
+        #         linewidth=outer_lw,
+        #         zorder=1,
+        #         color="white",
+        #         linestyle="solid",
+        #     )
+        # )
+
+    ax.plot([0, 1], [0, 1], zorder=0, ls="-", color="gray", clip_on=False, lw=1)
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.set_aspect(1)
+    ax.set_xlabel("rij pre")
+    ax.set_ylabel("rij stim")
+
+    return ax
+
+
+def _time_scale_bar(ax, x1, x2, y=-2, ylabel=-3, label=None, **kwargs):
+
+    if label is None:
+        label = f"{np.fabs(x2 - x1)}"
+
+    kwargs = kwargs.copy()
+    kwargs.setdefault("lw", 2)
+    kwargs.setdefault("color", "black")
+    kwargs.setdefault("clip_on", False)
+    kwargs.setdefault("zorder", 5)
+
+    ax.plot([x1, x2], [y, y], solid_capstyle="butt", **kwargs)
+    ax.text(
+        x1 + (x2 - x1) / 2, ylabel, label, transform=ax.transData, va="top", ha="center"
+    )
 
 
 # defaul bins when using histograms
