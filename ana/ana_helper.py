@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-11-11 17:16:11
+# @Last Modified: 2021-11-12 12:30:55
 # ------------------------------------------------------------------------------ #
 
 
@@ -620,6 +620,9 @@ def find_system_bursts_from_global_rate(
         Find global bursting events only based on the merged down rate.
         To get sequences, uses `sequences_from_module_contribution` and
         passes `sequence_kwargs`.
+        Per default, to count a module as "contributing" to a sequence,
+        at least _20%_ of the neurons of the module (but at least one neuron) have to
+        contribute at least _1_ spike
 
         optionally returns `bursts`
         optionally modifies `h5f`
