@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-11-12 12:30:55
+# @Last Modified: 2021-11-12 21:50:11
 # ------------------------------------------------------------------------------ #
 
 
@@ -888,7 +888,7 @@ def find_onset_durations(h5f, write_to_h5f=True, return_res=False):
         return onset_durations
 
 
-def find_rij(h5f, which="neurons", time_bin_size=40 / 1000):
+def find_rij(h5f, which="neurons", time_bin_size=200 / 1000):
     """
     # Paramters
     which : str, "neurons" or "modules", if "modules", mod rates have to be in h5f
