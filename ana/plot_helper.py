@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-11-11 13:33:37
+# @Last Modified: 2021-11-17 09:29:23
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -300,10 +300,10 @@ def plot_raster(h5f, ax=None, apply_formatting=True, sort_by_module=True,
     return ax
 
 
-def plot_module_rates(h5f, ax=None, apply_formatting=True, mark_burst_threshold=False):
+def plot_module_rates(h5f, ax=None, apply_formatting=True, mark_burst_threshold=False, **kwargs):
 
     assert "ana" in h5f.keypaths(), "`prepare_file(h5f)` before plotting!"
-
+    kwargs = kwargs.copy()
     log.info("Plotting Module Rates")
 
     if ax is None:
@@ -322,12 +322,14 @@ def plot_module_rates(h5f, ax=None, apply_formatting=True, mark_burst_threshold=
         # log.info(f"Threshold from SNR: {ah.get_threshold_via_signal_to_noise_ratio(pop_rate)}")
         log.info(f'CV {m_dc}: {h5f[f"ana.rates.cv.module_level"][m_dc]:.3f}')
         mean_rate = np.nanmean(pop_rate)
+        plot_kwargs = kwargs.copy()
+        plot_kwargs.setdefault("color", h5f[f"ana.mod_colors"][m_id])
+        plot_kwargs.setdefault("alpha", 0.5)
+        plot_kwargs.setdefault("label", f"{m_id:d}: {mean_rate:.2f} Hz")
         ax.plot(
             np.arange(0, len(pop_rate)) * dt,
             pop_rate,
-            label=f"{m_id:d}: {mean_rate:.2f} Hz",
-            color=h5f[f"ana.mod_colors"][m_id],
-            alpha=0.5,
+            **plot_kwargs
         )
 
         if mark_burst_threshold:
@@ -1977,6 +1979,7 @@ def plot_axon_layout(h5f, ax=None, apply_formatting=True):
 
     _plot_soma(h5f, ax)
     _plot_axons(h5f, ax)
+    # _plot_dendrites(h5f, ax)
 
     if apply_formatting:
         ax.spines["right"].set_visible(False)
@@ -2064,6 +2067,14 @@ def _plot_axons(h5f, ax):
         m_id = h5f["data.neuron_module_id"][n]
         clr = h5f["ana.mod_colors"][m_id]
         ax.plot(seg_x[n], seg_y[n], color=clr, lw=0.35, zorder=0, alpha=0.5)
+
+def _plot_dendrites(h5f, ax):
+    n_x = h5f["data.neuron_pos_x"][:]
+    n_y = h5f["data.neuron_pos_y"][:]
+    n_R = h5f["data.neuron_radius_dendritic_tree"][:]
+    _circles(n_x, n_y, n_R, ax=ax, ls="--", fc="none", ec="gray", alpha=.5, lw=0.9, zorder=0)
+
+
 
 
 # ------------------------------------------------------------------------------ #
