@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-11-08 17:51:24
-# @Last Modified: 2021-11-12 13:58:25
+# @Last Modified: 2021-11-16 11:53:15
 # ------------------------------------------------------------------------------ #
 # collect the functions to create figure panels here
 # ------------------------------------------------------------------------------ #
@@ -61,18 +61,22 @@ matplotlib.rcParams["axes.facecolor"] = (1.0, 0.0, 0.0, 0.0)  # developer mode, 
 
 
 colors = dict()
-colors["pre"] = "#335c67"
-colors["Off"] = "#335c67"
-colors["75 Hz"] = "#335c67"
-colors["82 Hz"] = "#335c67"
+colors["pre"] = "#135985"
+colors["Off"] = "#135985"
+colors["75 Hz"] = "#135985"
+colors["80 Hz"] = "#135985"
 
 colors["stim"] = "#e09f3e"
 colors["On"] = "#e09f3e"
 colors["90 Hz"] = "#e09f3e"
 
-colors["post"] = "#9e2a2b"
+colors["post"] = "#80A4BB"
 colors["KCl_0mM"] = "gray"
 colors["KCl_2mM"] = "gray"
+
+colors["rij_within_group_02"] = "#e09f3e"
+colors["rij_within_group_13"] = "#9e2a2b"
+colors["rij_across_groups_02_13"] = "#DC6637"
 
 simulation_coordinates = dict()
 simulation_coordinates["jA"] = 45
@@ -80,7 +84,7 @@ simulation_coordinates["jG"] = 50
 simulation_coordinates["tD"] = 20
 
 # we had one trial for single bond where we saw more bursts than everywhere else
-remove_outlier = False
+remove_outlier = True
 
 log = logging.getLogger(__name__)
 warnings.filterwarnings("ignore")  # suppress numpy warnings
@@ -183,14 +187,14 @@ def exp_raster_plots(
         render_plots()
 
 
-def exp_chemical_vs_opto(observable="Fraction"):
+def exp_chemical_vs_opto(observable="Fraction", df="bursts"):
     chem = load_pd_hdf5("./dat/exp_out/KCl_1b.hdf5")
     opto = load_pd_hdf5("./dat/exp_out/1b.hdf5")
 
     fig, ax = plt.subplots()
 
     custom_pointplot(
-        opto["bursts"].query("`Condition` in ['pre', 'stim']"),
+        opto[df].query("`Condition` in ['pre', 'stim']"),
         category="Stimulation",
         observable=observable,
         ax=ax,
@@ -198,7 +202,7 @@ def exp_chemical_vs_opto(observable="Fraction"):
     )
 
     custom_pointplot(
-        chem["bursts"],
+        chem[df],
         category="Stimulation",
         observable=observable,
         ax=ax,
@@ -208,7 +212,7 @@ def exp_chemical_vs_opto(observable="Fraction"):
         linestyles=":",
     )
     # draw chemical in front
-    from_last = len(chem["bursts"]["Trial"].unique())
+    from_last = len(chem[df]["Trial"].unique())
     num_lines = len(ax.collections)
     for idx in range(num_lines - from_last, num_lines):
         ax.collections[idx].set_zorder(num_lines - from_last + idx + 1)
@@ -502,6 +506,10 @@ def sim_vs_exp_violins(ax=None, **kwargs):
     dfs["exp"] = load_pd_hdf5("./dat/exp_out/1b.hdf5")
     dfs["sim"] = load_pd_hdf5("./dat/sim_out/k=5.hdf5")
 
+    for key in dfs["sim"].keys():
+        dfs["sim"][key] = dfs["sim"][key].query("`Condition` == '80 Hz' | `Condition` == '90 Hz'")
+
+
     if remove_outlier:
         for key in dfs["exp"].keys():
             dfs["exp"][key] = dfs["exp"][key].query("`Trial` != '210405_C'")
@@ -617,8 +625,8 @@ def sim_vs_exp_ibi(input_path, ax=None, **kwargs):
     ax.plot(x[selects], y[selects], zorder=1, **kwargs)
 
     ax.plot(
-        [0, 75, 75],
-        [35, 35, 0],
+        [0, 80, 80],
+        [20, 20, 0],
         ls=":",
         color=cc.alpha_to_solid_on_bg(colors["pre"], 0.3),
         zorder=0,
@@ -942,7 +950,7 @@ def custom_violins(
                 percentiles=[2.5, 50, 97.5],
             )
         except:
-            log.warning("Nested bootstrap failed")
+            # log.warning("Nested bootstrap failed")
             # this may happen when category variable is not defined.
             mid, error, percentiles = ah.pd_bootstrap(
                 df_for_cat,
@@ -985,8 +993,8 @@ def custom_violins(
         palette=light_palette,
         order=categories,
         zorder=-1,
-        edgecolor=(1.0, 1.0, 1.0, 0.3),
-        linewidth=0.3,
+        edgecolor=(1.0, 1.0, 1.0, 1),
+        linewidth=0.1,
     )
 
     # so, for the swarms, we may want around the same number of points per swarm
@@ -1071,6 +1079,7 @@ def custom_rij_scatter(df, ax=None, **kwargs):
         rijs_before = []
         rijs_after = []
         df_paired = df.query(f"Pairing == '{pairing}'")
+        # print(pairing)
 
         # for each paring, make two long lists of rij: before stim and during stim.
         # add data from all experiments
@@ -1078,9 +1087,9 @@ def custom_rij_scatter(df, ax=None, **kwargs):
         # rij may be np.nan if one of the neurons did not have any spikes.
 
         for exp in df_paired["Trial"].unique():
-            exp_df = df_paired.query(f"Experiment == '{exp}'")
-            df_before = exp_df.query(f"Condition == 'pre'")
-            df_after = exp_df.query(f"Condition == 'stim'")
+            exp_df = df_paired.query(f"`Trial` == '{exp}'")
+            df_before = exp_df.query(f"`Condition` == 'pre'")
+            df_after = exp_df.query(f"`Condition` == 'stim'")
 
             assert np.all(
                 df_before["Pair ID"].to_numpy() == df_after["Pair ID"].to_numpy()
@@ -1088,6 +1097,16 @@ def custom_rij_scatter(df, ax=None, **kwargs):
 
             rijs_before.extend(df_before["Correlation Coefficient"].to_list())
             rijs_after.extend(df_after["Correlation Coefficient"].to_list())
+
+        try:
+            color = colors[f"rij_{pairing}"]
+        except:
+            color = f"C{pdx}"
+
+        marker = "o"
+        if pairing == "across_groups_02_13":
+            marker = "x"
+
 
         # sns.scatterplot(
         #     x=rijs_before, y=rijs_after,
@@ -1102,67 +1121,71 @@ def custom_rij_scatter(df, ax=None, **kwargs):
         ax.scatter(
             rijs_before,
             rijs_after,
-            s=3,
-            alpha=0.3,
-            # color = cc.alpha_to_solid_on_bg(f"C{pdx}", 0.7),
+            s=1,
+            marker=marker,
+            # alpha=0.3,
+            # color = cc.alpha_to_solid_on_bg(color, 1),
+            alpha=1,
+            color = cc.alpha_to_solid_on_bg(color, 1),
             edgecolor=None,
-            linewidths=0,
+            linewidths=0.5,
             label=pairing,
             zorder=1,
+            # clip_on=False
         )
 
-        sns.kdeplot(
-            x=rijs_before,
-            y=rijs_after,
-            levels=[0.95],
-            thresh=0.1,
-            fill=False,
-            linestyles=["-"],
-            # cut=0,
-            common_norm=False,
-            color=f"C{pdx}",
-            zorder=5,
-        )
+        # sns.kdeplot(
+        #     x=rijs_before,
+        #     y=rijs_after,
+        #     levels=[0.95],
+        #     thresh=0.1,
+        #     fill=False,
+        #     linestyles=["-"],
+        #     # cut=0,
+        #     common_norm=False,
+        #     color=f"C{pdx}",
+        #     zorder=5,
+        # )
 
-        sns.kdeplot(
-            x=rijs_before,
-            y=rijs_after,
-            levels=[0.25],
-            thresh=0.1,
-            fill=False,
-            linestyles=["--"],
-            # cut=0,
-            common_norm=False,
-            color=f"C{pdx}",
-            zorder=3,
-        )
+        # sns.kdeplot(
+        #     x=rijs_before,
+        #     y=rijs_after,
+        #     levels=[0.25],
+        #     thresh=0.1,
+        #     fill=False,
+        #     linestyles=["--"],
+        #     # cut=0,
+        #     common_norm=False,
+        #     color=f"C{pdx}",
+        #     zorder=3,
+        # )
 
-        # could not figure out how to duplicate an existing line collection, below
-        sns.kdeplot(
-            x=rijs_before,
-            y=rijs_after,
-            levels=[0.95],
-            thresh=0.1,
-            fill=False,
-            linestyles=["-"],
-            # cut=0,
-            common_norm=False,
-            color=f"white",
-            zorder=4,
-        )
+        # # could not figure out how to duplicate an existing line collection, below
+        # sns.kdeplot(
+        #     x=rijs_before,
+        #     y=rijs_after,
+        #     levels=[0.95],
+        #     thresh=0.1,
+        #     fill=False,
+        #     linestyles=["-"],
+        #     # cut=0,
+        #     common_norm=False,
+        #     color=f"white",
+        #     zorder=4,
+        # )
 
-        sns.kdeplot(
-            x=rijs_before,
-            y=rijs_after,
-            levels=[0.25],
-            thresh=0.1,
-            fill=False,
-            linestyles=["-"],
-            # cut=0,
-            common_norm=False,
-            color=f"white",
-            zorder=2,
-        )
+        # sns.kdeplot(
+        #     x=rijs_before,
+        #     y=rijs_after,
+        #     levels=[0.25],
+        #     thresh=0.1,
+        #     fill=False,
+        #     linestyles=["-"],
+        #     # cut=0,
+        #     common_norm=False,
+        #     color=f"white",
+        #     zorder=2,
+        # )
 
     inner_lw = 1
     outer_lw = 2.5
