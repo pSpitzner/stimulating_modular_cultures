@@ -204,7 +204,7 @@ class ModularTopology(object):
             self.axon_paths
         )
 
-        h5_data["meta.topology"] = "orlandi"
+        h5_data["meta.topology"] = "orlandi modular"
         h5_data["meta.topology_num_neur"] = self.par_N
         h5_data["meta.topology_num_outgoing"] = np.mean(self.k_out)
         h5_data["meta.topology_sys_size"] = self.par_L
