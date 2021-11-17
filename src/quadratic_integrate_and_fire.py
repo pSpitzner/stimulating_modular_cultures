@@ -8,7 +8,6 @@
 # Loads topology from hdf5 and runs the simulations in brian.
 # ------------------------------------------------------------------------------ #
 
-import h5py
 import argparse
 import os
 import tempfile
@@ -16,6 +15,7 @@ import sys
 import shutil
 import numpy as np
 import logging
+
 from brian2 import *
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)-8s [%(name)s] %(message)s")
@@ -23,6 +23,7 @@ log = logging.getLogger(__name__)
 
 import stimulation as stim
 import topology as topo
+import hi5 as h5
 
 # we want to run this on a cluster, assign a custom cache directory to each thread
 # putting this into a user-directory that gets backed-up turns out to be a bad idea.
@@ -114,7 +115,7 @@ record_rates_freq = 50 * ms   # with which time resolution should rates be writt
 
 parser = argparse.ArgumentParser(description="Brian")
 
-parser.add_argument("-i",  dest="input_path",  help="input path",  metavar="FILE",  required=True)
+# parser.add_argument("-i",  dest="input_path",  help="input path",  metavar="FILE",  required=True)
 parser.add_argument("-o",  dest="output_path", help="output path", metavar="FILE")
 parser.add_argument("-jA", dest="jA",          help="in mV",       default=jA / mV,     type=float)
 parser.add_argument("-jG", dest="jG",          help="in mV",       default=jG / mV,     type=float)
@@ -123,6 +124,7 @@ parser.add_argument("-jE", dest="jE",          help="in mV",       default=jE / 
 parser.add_argument("-r",  dest="r",           help="in Hz",       default=rate / Hz,   type=float)
 parser.add_argument("-tD", dest="tD",          help="in seconds",  default=tD / second, type=float)
 parser.add_argument("-s",  dest="seed",        help="rng",         default=117,         type=int)
+parser.add_argument("-k", dest="k_inter",      help="bridging axons",  default=5,       type=int)
 parser.add_argument("-d",
     dest="sim_duration",   help="in seconds",  default=20 * 60, type=float)
 
@@ -151,6 +153,7 @@ args = parser.parse_args()
 
 # RNG
 numpy.random.seed(args.seed)
+topo.set_seed(args.seed)
 
 # correct units
 jA = args.jA * mV
@@ -164,9 +167,10 @@ args.sim_duration *= second
 args.stimulation_module = [int(i) for i in args.stimulation_module]
 
 print(f'#{"":#^75}#\n#{"running dynamics in brian":^75}#\n#{"":#^75}#')
-log.info("input topology:   %s", args.input_path)
+# log.info("input topology:   %s", args.input_path)
 log.info("output path:      %s", args.output_path)
 log.info("seed:             %s", args.seed)
+log.info("k_inter:          %s", args.k_inter)
 log.info("jA:               %s", jA)
 log.info("jM:               %s", jM)
 log.info("jG:               %s", jG)
@@ -188,8 +192,15 @@ log.info("inhibition:       %s (fraction of all neurons)", args.inhibition_fract
 # topology
 # ------------------------------------------------------------------------------ #
 
-assert os.path.isfile(args.input_path), "Specify the right input path"
-num_n, a_ij_sparse, mod_ids = topo.load_topology(args.input_path)
+# assert os.path.isfile(args.input_path), "Specify the right input path"
+# num_n, a_ij_sparse, mod_ids = topo._load_topology(args.input_path)
+# bridge_ids = topo._load_bridging_neurons(args.input_path)
+tp = topo.ModularTopology(num_bridging_axons=args.k_inter)
+num_n = tp.par_N
+a_ij_sparse = tp.aij_sparse
+mod_ids = tp.neuron_module_ids
+bridge_ids = tp.neuron_bridge_ids
+
 
 # ------------------------------------------------------------------------------ #
 # model, neurons
@@ -232,9 +243,6 @@ mini_g = PoissonInput(target=G, target_var="IA", N=1, rate=rate, weight=jM)
 # optionally, make a fraction of neurons inhibitiory. For now, only change `g`.
 num_inhib = int(num_n * args.inhibition_fraction)
 num_excit = int(num_n - num_inhib)
-
-# optionally, give bridging neurons different weights
-bridge_ids = topo.load_bridging_neurons(args.input_path)
 
 # in brian, we can only create a subgroup from consecutive indices.
 # thus, to separate GABA and AMPA (and bridge neuron) groups, we need to reorder
@@ -360,14 +368,14 @@ run(args.sim_duration, report="stdout", report_period=60 * 60 * second)
 
 
 # ------------------------------------------------------------------------------ #
-# Writing
+# Output
 # ------------------------------------------------------------------------------ #
+
 
 if args.output_path is None:
     log.error("No output path provided. try `-o`")
 else:
-    print(f'#{"":#^75}#\n#{"saving to disk":^75}#\n#{"":#^75}#')
-
+    print(f'#{"":#^75}#\n#{"Preparing to save to disk":^75}#\n#{"":#^75}#')
     try:
         # make sure directory exists
         outdir = os.path.abspath(os.path.expanduser(args.output_path + "/../"))
@@ -376,178 +384,134 @@ else:
     except Exception as e:
         log.exception("Could not copy input file")
 
-    try:
-        f = h5py.File(args.output_path, "a")
+# these are python-benedicts (nested dictionaries) and we have a helper
+# to dump the whole strucutre to hdf5 at the end
+h5_data, h5_desc = tp.get_everything_as_nested_dict(return_descriptions=True)
 
-        def convert_brian_spikes_to_pauls(spks_m):
-            trains = spks_m.spike_trains()
-            num_n = len(trains)  # monitor may be defined on a subgroup
-            tmax = 0
-            for tdx in trains.keys():
-                if len(trains[tdx]) > tmax:
-                    tmax = len(trains[tdx])
-            spiketimes = np.zeros(shape=(num_n, tmax))
-            spiketimes_as_list = np.zeros(shape=(2, spks_m.num_spikes))
-            last_idx = 0
-            for n in range(0, num_n):
-                # t = trains[n]
-                t = trains[t2b[n]]  # convert back from brian to topology indices
-                spiketimes[n, 0 : len(t)] = (t - args.equil_duration) / second
-                spiketimes_as_list[0, last_idx : last_idx + len(t)] = [n] * len(t)
-                spiketimes_as_list[1, last_idx : last_idx + len(t)] = (
-                    t - args.equil_duration
-                ) / second
-                last_idx += len(t)
-            return spiketimes, spiketimes_as_list.T
+# ------------------------------------------------------------------------------ #
+# meta data of this simulation
+# ------------------------------------------------------------------------------ #
+# fmt: off
+h5_data["meta.dynamics_jA"] = jA / mV
+h5_desc["meta.dynamics_jA"] = "AMPA current strength, in mV"
 
-        # normal spikes, no stim in two different formats
-        spks, spks_as_list = convert_brian_spikes_to_pauls(spks_m)
+h5_data["meta.dynamics_jG"] = jG / mV
+h5_desc["meta.dynamics_jG"] = "GABA current strength, in mV"
 
-        dset = f.create_dataset("/data/spiketimes", compression="gzip", data=spks)
-        dset.attrs[
-            "description"
-        ] = "2d array of spiketimes, neuron x spiketime in seconds, zero-padded"
+h5_data["meta.dynamics_jM"] = jM / mV
+h5_desc["meta.dynamics_jM"] = "shot noise (minis) strength, in mV"
 
-        dset = f.create_dataset(
-            "/data/spiketimes_as_list", compression="gzip", data=spks_as_list
+h5_data["meta.dynamics_jE"] = jE / mV
+h5_desc["meta.dynamics_jE"] = "constant current strength from optogenetic simtulation, in mV"
+
+h5_data["meta.dynamics_tD"] = tD / second
+h5_desc["meta.dynamics_tD"] = "characteristic decay time, in seconds"
+
+h5_data["meta.dynamics_rate"] = rate / Hz
+h5_desc["meta.dynamics_rate"] = "rate for the (global) poisson input (shot-noise), in Hz"
+
+h5_data["meta.dynamics_simulation_duration"] = args.sim_duration / second
+h5_desc["meta.dynamics_simulation_duration"] = "in seconds"
+
+h5_data["meta.dynamics_equilibration_duration"] = args.equil_duration / second
+h5_desc["meta.dynamics_equilibration_duration"] = "in seconds"
+
+h5_data["meta.dynamics_bridge_weight"] = args.bridge_weight
+h5_desc["meta.dynamics_bridge_weight"] = "synaptic weight of bridging neurons. get applied as a factor to outgoing synaptic currents."
+
+h5_data["data.neuron_g"] = G.j[t2b]
+h5_desc["data.neuron_g"] = "synaptic weight that was ultimately used for each neuron in the dynamic simulation"
+
+h5_data["data.neuron_inhibitory_ids"] = inhib_ids
+h5_desc["data.neuron_inhibitory_ids"] = "List of neuron ids that were set to be inhibitory"
+
+h5_data["data.neuron_excitatory_ids"] = excit_ids
+h5_desc["data.neuron_excitatory_ids"] = "List of neuron ids that were set to be excitatory"
+
+# ------------------------------------------------------------------------------ #
+# simulation results
+# ------------------------------------------------------------------------------ #
+
+def convert_brian_spikes_to_pauls(spks_m):
+    trains = spks_m.spike_trains()
+    num_n = len(trains)  # monitor may be defined on a subgroup
+    tmax = 0
+    for tdx in trains.keys():
+        if len(trains[tdx]) > tmax:
+            tmax = len(trains[tdx])
+    spiketimes = np.zeros(shape=(num_n, tmax))
+    spiketimes_as_list = np.zeros(shape=(2, spks_m.num_spikes))
+    last_idx = 0
+    for n in range(0, num_n):
+        # t = trains[n]
+        t = trains[t2b[n]]  # convert back from brian to topology indices
+        spiketimes[n, 0 : len(t)] = (t - args.equil_duration) / second
+        spiketimes_as_list[0, last_idx : last_idx + len(t)] = [n] * len(t)
+        spiketimes_as_list[1, last_idx : last_idx + len(t)] = (
+            t - args.equil_duration
+        ) / second
+        last_idx += len(t)
+    return spiketimes, spiketimes_as_list.T
+
+try:
+    # normal spikes, no stim in two different formats
+    spks, spks_as_list = convert_brian_spikes_to_pauls(spks_m)
+
+    h5_data["data.spiketimes"] = spks
+    h5_desc["data.spiketimes"] = "2d array of spiketimes, neuron x spiketime in seconds, zero-padded"
+
+    h5_data["data.spiketimes_as_list"] = spks_as_list
+    h5_desc["data.spiketimes_as_list"] = "two-column list of spiketimes. first col is neuron id, second col the spiketime. effectively same data as in 'data.spiketimes'. neuron id will need casting to int for indexing."
+
+    if record_state:
+        # write the time axis once for all variables and neurons (should be shared)
+        t_axis = (stat_m.t - args.equil_duration) / second
+        h5_data["data.state_vars_time"] = t_axis
+        h5_desc["data.state_vars_time"] = "time axis of all state variables, in seconds"
+
+        for idx, var in enumerate(record_state_vars):
+            # careful to back-convert indices here
+            if isinstance(record_state_idxs, bool):
+                data = stat_m.variables[var].get_value()[:, t2b]
+            else:
+                # list
+                # we already called t2b for the selection, no need again
+                data = stat_m.variables[var].get_value()[:, :]
+
+            h5_data[f"data.state_vars_{var}"] = data.T
+            h5_desc[f"data.state_vars_{var}"] = f"state variable {var}, dim 1 neurons, dim 2 value for time, recorded neurons: {record_state_idxs}"
+
+    if record_rates:
+        # we could write rates, but
+        # at the default timestep, the data files (and RAM requirements) get huge.
+        # write with lower frequency, and smooth to not miss sudden changes
+        freq = int(record_rates_freq / defaultclock.dt)
+        width = record_rates_freq
+
+        def write_rate(mon, dsetname, description):
+            tmp = [
+                (mon.t / second - args.equil_duration / second)[::freq],
+                (mon.smooth_rate(window="gaussian", width=width) / Hz)[::freq],
+            ]
+            h5_data[dsetname] = np.array(tmp).T
+            h5_desc[dsetname] = description
+
+        # main rate monitor
+        write_rate(
+            rate_m,
+            "data.population_rate_smoothed",
+            "population rate in Hz, smoothed with gaussian kernel (of 50ms? width), first dim is time in seconds",
         )
-        dset.attrs[
-            "description"
-        ] = "two-column list of spiketimes. first col is neuron id, second col the spiketime. effectively same data as in '/data/spiketimes'. neuron id will need casting to int for indexing."
 
-        if args.stimulation_type != "off":
-            # stimultation timestamps in two different formats
-            # stim, stim_as_list = convert_brian_spikes_to_pauls(stim_m)
-            # dset = f.create_dataset(
-            #     "/data/stimulation_times_as_list", compression="gzip", data=stim_as_list
-            # )
-            # dset.attrs[
-            #     "description"
-            # ] = "two-column list of stimulation times. first col is target-neuron id, second col the stimulation time. Beware: we have approximateley one timestep delay between stimulation and spike."
+    print(f'#{"":#^75}#\n#{"Saving...":^75}#\n#{"":#^75}#')
 
-            dset = f.create_dataset("/data/neuron_stimulation_ids", data=stim_ids)
-            dset.attrs[
-                "description"
-            ] = "List of neuron ids that were stimulation targets"
+    h5.recursive_write(args.output_path, h5_data, h5_desc)
 
-            dset = f.create_dataset(
-                "/meta/dynamics_stimulated_modules",
-                data=np.array(args.stimulation_module),
-            )
-            dset.attrs[
-                "description"
-            ] = "List of module ids that were stimulation targets"
+    print(f'#{"":#^75}#\n#{"All done!":^75}#\n#{"":#^75}#')
 
-        if record_state:
-            # write the time axis once for all variables and neurons (should be shared)
-            t_axis = (stat_m.t - args.equil_duration) / second
-            dset = f.create_dataset(
-                "/data/state_vars_time", compression="gzip", data=t_axis
-            )
-            dset.attrs["description"] = "time axis of all state variables, in seconds"
-
-            for idx, var in enumerate(record_state_vars):
-                # careful to back-convert indices here
-                if isinstance(record_state_idxs, bool):
-                    data = stat_m.variables[var].get_value()[:, t2b]
-                else:
-                    # list
-                    # we already called t2b for the selection, no need again
-                    data = stat_m.variables[var].get_value()[:, :]
-
-                dset = f.create_dataset(
-                    f"/data/state_vars_{var}", compression="gzip", data=data.T
-                )
-                dset.attrs[
-                    "description"
-                ] = f"state variable {var}, dim 1 neurons, dim 2 value for time, recorded neurons: {record_state_idxs}"
-
-        if record_rates:
-            # we could write rates, but
-            # at the default timestep, the data files (and RAM requirements) get huge.
-            # write with lower frequency, and smooth to not miss sudden changes
-            freq = int(record_rates_freq / defaultclock.dt)
-            width = record_rates_freq
-
-            def write_rate(mon, dsetname, description):
-                tmp = [
-                    (mon.t / second - args.equil_duration / second)[::freq],
-                    (mon.smooth_rate(window="gaussian", width=width) / Hz)[::freq],
-                ]
-                dset = f.create_dataset(
-                    dsetname, compression="gzip", data=np.array(tmp).T
-                )
-                dset.attrs["description"] = description
-
-            # main rate monitor
-            write_rate(
-                rate_m,
-                "/data/population_rate_smoothed",
-                "population rate in Hz, smoothed with gaussian kernel (of 50ms? width), first dim is time in seconds",
-            )
-
-            # and one for every module ...
-            # creating brians monitors in a for loop turned out problematic
-            # for mdx, mon in enumerate(mod_rate_m):
-            #     write_rate(
-            #         mon,
-            #         "/data/module_rate_smoothed_modid={mods[mdx]:d}",
-            #         "same as population rate, just on a per module level",
-            #     )
-
-        # meta data of this simulation
-        dset = f.create_dataset("/meta/dynamics_jA", data=jA / mV)
-        dset.attrs["description"] = "AMPA current strength, in mV"
-
-        dset = f.create_dataset("/meta/dynamics_jG", data=jG / mV)
-        dset.attrs["description"] = "GABA current strength, in mV"
-
-        dset = f.create_dataset("/meta/dynamics_jM", data=jM / mV)
-        dset.attrs["description"] = "shot noise (minis) strength, in mV"
-
-        dset = f.create_dataset("/meta/dynamics_jE", data=jE / mV)
-        dset.attrs["description"] = "constant current strength from optogenetic simtulation, in mV"
-
-        dset = f.create_dataset("/meta/dynamics_tD", data=tD / second)
-        dset.attrs["description"] = "characteristic decay time, in seconds"
-
-        dset = f.create_dataset("/meta/dynamics_rate", data=rate / Hz)
-        dset.attrs[
-            "description"
-        ] = "rate for the (global) poisson input (shot-noise), in Hz"
-
-        dset = f.create_dataset(
-            "/meta/dynamics_simulation_duration", data=args.sim_duration / second
-        )
-        dset.attrs["description"] = "in seconds"
-
-        dset = f.create_dataset(
-            "/meta/dynamics_equilibration_duration", data=args.equil_duration / second
-        )
-        dset.attrs["description"] = "in seconds"
-
-        dset = f.create_dataset("/meta/dynamics_bridge_weight", data=args.bridge_weight)
-        dset.attrs[
-            "description"
-        ] = "synaptic weight of bridging neurons. get applied as a factor to outgoing synaptic currents."
-
-        dset = f.create_dataset("/data/neuron_g", data=G.j[t2b])
-        dset.attrs[
-            "description"
-        ] = "synaptic weight that was ultimately used for each neuron in the dynamic simulation"
-
-        dset = f.create_dataset("/data/neuron_inhibitory_ids", data=inhib_ids)
-        dset.attrs["description"] = "List of neuron ids that were set to be inhibitory"
-
-        dset = f.create_dataset("/data/neuron_excitatory_ids", data=excit_ids)
-        dset.attrs["description"] = "List of neuron ids that were set to be excitatory"
-
-        f.close()
-
-        print(f'#{"":#^75}#\n#{"All done!":^75}#\n#{"":#^75}#')
-
-    except Exception as e:
-        log.exception("Unable to save to disk")
+# fmt: on
+except Exception as e:
+    log.exception("Unable to save to disk")
 
 # remove cython caches
 try:
@@ -555,13 +519,3 @@ try:
 except Exception as e:
     log.exception("Unable to remove cached files")
 
-# try:
-    # os.remove(args.input_path)
-# except:
-    # log.exception("Unable to remove input file")
-
-
-# import plot_helper as ph
-
-# h5f = ph.ah.prepare_file(args.output_path)
-# ph.overview_dynamic(h5f)
