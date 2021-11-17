@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-05 10:37:47
-# @Last Modified: 2021-11-17 10:58:59
+# @Last Modified: 2021-11-17 11:06:07
 # ------------------------------------------------------------------------------ #
 # Helper to load the topology from hdf5
 # ------------------------------------------------------------------------------ #
@@ -326,16 +326,6 @@ def get_meta_data():
 
     return h5_data
 
-# x "data.neuron_pos_x"
-# x "data.neuron_pos_y"
-# "data.neuron_axon_length"
-# "data.neuron_axon_end_to_end_distance"
-# x "data.neuron_radius_dendritic_tree"
-# x "data.neuron_bridge_ids"
-# x "data.neuron_module_id"
-# "data.neuron_k_in"
-# "data.neuron_k_out"
-# "/data/connectivity_matrix_sparse"
 
 @jit(nopython=True, parallel=False, fastmath=True, cache=True)
 def grow_axon(start, num_segments=None, start_phi=None):
@@ -809,78 +799,23 @@ set_seed(np.random.random_integers(0, 1000))
 # set_seed(19)
 h5_data, h5_desc = init_modular_topology()
 h5_data.merge(get_meta_data())
-import plot_helper as ph
-h5_data = ph.ah.prepare_file(h5_data)
-ph.overview_topology(h5_data)
 
-import plot_helper as ph
-import seaborn as sns
+# import plot_helper as ph
+# h5_data = ph.ah.prepare_file(h5_data)
+# ph.overview_topology(h5_data)
 
-h5f = ph.ah.prepare_file("./dat/inhibition_sweep_rate_160/dyn/stim=off_k=5_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=90.0_rep=000.hdf5", hot=False)
+# import plot_helper as ph
+# import seaborn as sns
 
-fig, ax = plt.subplots()
-sns.histplot(h5_data["data.connectivity_matrix_sparse"][:][:, 0], discrete=True, color="C0")
-sns.histplot(h5_data["data.connectivity_matrix_sparse"][:][:, 1], discrete=True, color="C1")
-
-fig, ax = plt.subplots()
-sns.histplot(h5f["data.connectivity_matrix_sparse"][:][:, 0], discrete=True, color="C0")
-sns.histplot(h5f["data.connectivity_matrix_sparse"][:][:, 1], discrete=True, color="C1")
-ax.set_title("working")
-
-ph.overview_topology(h5f)
-
-# neuron_pos = place_neurons()
-# dendr_rads = draw_dendrite_radii(par_N, par_mu_d, par_std_d)
+# h5f = ph.ah.prepare_file("./dat/inhibition_sweep_rate_160/dyn/stim=off_k=5_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=90.0_rep=000.hdf5", hot=False)
 
 # fig, ax = plt.subplots()
-# ph._circles(
-#     neuron_pos[:, 0],
-#     neuron_pos[:, 1],
-#     7.5,
-#     ax=ax,
-#     fc="white",
-#     ec="black",
-#     alpha=1,
-#     lw=0.25,
-#     zorder=4,
-# )
+# sns.histplot(h5_data["data.connectivity_matrix_sparse"][:][:, 0], discrete=True, color="C0")
+# sns.histplot(h5_data["data.connectivity_matrix_sparse"][:][:, 1], discrete=True, color="C1")
 
-# for n in range(0, par_N):
-#     path = grow_axon(neuron_pos[n, :])
-#     ax.plot(path[:, 0], path[:, 1], color="black", lw=0.35, zorder=0, alpha=0.5)
+# fig, ax = plt.subplots()
+# sns.histplot(h5f["data.connectivity_matrix_sparse"][:][:, 0], discrete=True, color="C0")
+# sns.histplot(h5f["data.connectivity_matrix_sparse"][:][:, 1], discrete=True, color="C1")
+# ax.set_title("working")
 
-# nids, paths = grow_bridging_axons(neuron_pos, par_mods[0], [par_mods[1], par_mods[2]])
-
-# nsel = 0
-# cids = get_connections_for_neuron(
-#     neuron_pos, dendr_rads, n_id=nids[nsel], axon_path=paths[nsel]
-# )
-
-# ph._circles(
-#     neuron_pos[nids[nsel], 0],
-#     neuron_pos[nids[nsel], 1],
-#     6.5,
-#     ax=ax,
-#     fc="red",
-#     ec=None,
-#     zorder=5,
-#     lw=0.25,
-# )
-# ax.plot(paths[nsel][:, 0], paths[nsel][:, 1], color="red", lw=1, zorder=1, alpha=0.8)
-
-# ph._circles(
-#     neuron_pos[cids, 0],
-#     neuron_pos[cids, 1],
-#     6.5,
-#     ax=ax,
-#     fc="red",
-#     ec=None,
-#     alpha=0.5,
-#     zorder=5,
-#     lw=0.25,
-# )
-
-
-# for i in range(0, 15):
-# path, num_left = grow_axon_to_target(_center_of_rect(par_mods[0]), _center_of_rect(par_mods[1]), f)
-# ax.plot(path[:,0], path[:,1])
+# ph.overview_topology(h5f)
