@@ -144,7 +144,9 @@ class ModularTopology(object):
 
             # get connectivity for each neuron
             for idx, n_id in enumerate(br_nids):
-                cids = self.connections_for_neuron(n_id, axon_path=br_paths[idx])
+                cids = self.connections_for_neuron(
+                    n_id, axon_path=br_paths[idx]
+                )
                 axon_paths[n_id] = br_paths[idx]
                 aij_nested[n_id] = np.sort(cids)
 
@@ -170,7 +172,6 @@ class ModularTopology(object):
         res = self.__dict__
         res = {key: res[key] for key in res.keys() if key[0:4] == "par_"}
         return res
-
 
     def get_everything_as_nested_dict(self, return_descriptions=False):
         """get most relevant details of the topology as a benedict"""
@@ -255,7 +256,8 @@ class ModularTopology(object):
 
         # get the indices of neurons in the target module
         source_idx = [
-            _is_within_rect(x, y, 0, source_mod) for x, y in self.neuron_positions
+            _is_within_rect(x, y, 0, source_mod)
+            for x, y in self.neuron_positions
         ]
         source_idx = np.where(source_idx)[0]
         source_pos = self.neuron_positions[source_idx]
@@ -311,7 +313,9 @@ class ModularTopology(object):
                     # finish randomly
                     last_pos = path[-num_segs_left - 1]
                     rest_of_path = self.grow_axon(
-                        start=last_pos, num_segments=num_segs_left, start_phi=last_phi
+                        start=last_pos,
+                        num_segments=num_segs_left,
+                        start_phi=last_phi,
                     )
 
                     path[-num_segs_left:] = rest_of_path
@@ -329,7 +333,7 @@ class ModularTopology(object):
 
     def set_neuron_positions(self):
         """
-            make sure to set parameters correctly before calling this
+        make sure to set parameters correctly before calling this
         """
 
         rejections = 0
@@ -385,7 +389,7 @@ class ModularTopology(object):
 
     def set_neuron_module_ids(self):
         """
-            assign the module id of every neuron
+        assign the module id of every neuron
         """
         tar_mods = np.ones(self.par_N, dtype="int") * -1
         for idx in range(0, self.par_N):
@@ -408,15 +412,15 @@ class ModularTopology(object):
 
     def connections_for_neuron(self, n_id, axon_path):
         """
-            Get the connections due to a grown path
-            n_id : int
-                the id of the source neuron
-            axon_path : 2d array
-                positions of all axons segments growing from n_id
+        Get the connections due to a grown path
+        n_id : int
+            the id of the source neuron
+        axon_path : 2d array
+            positions of all axons segments growing from n_id
 
-            # Returns:
-            ids_to_connect_with : array
-                indices of neurons to form a connection with
+        # Returns:
+        ids_to_connect_with : array
+            indices of neurons to form a connection with
         """
 
         num_intersections = np.zeros(self.par_N, "int")
@@ -456,7 +460,8 @@ class ModularTopology(object):
             jdx = []
             for i in idx:
                 if np.any(
-                    np.random.uniform(0, 1, size=num_intersections[i]) < self.par_alpha
+                    np.random.uniform(0, 1, size=num_intersections[i])
+                    < self.par_alpha
                 ):
                     jdx.append(i)
             idx = np.array(jdx, dtype="int")
@@ -495,12 +500,12 @@ def _grow_axon(
 
         if num_segments is None:
             length = np.random.rayleigh(par_std_l)
-            num_segs = int(length / par_del_l)
+            num_segs = int(np.fmax(1, length / par_del_l))
         else:
             num_segs = num_segments
 
         if start_phi is None:
-            last_phi = np.random.uniform(0, 1,) * 2 * np.pi
+            last_phi = np.random.uniform(0, 1) * 2 * np.pi
         else:
             last_phi = start_phi
 
@@ -565,11 +570,14 @@ def _grow_axon_to_target(
     last_y = start[1]
 
     tries_to_grow = 0
-    while not termination_criterion(last_x, last_y) and tries_to_grow < par_axon_retry:
+    while (
+        not termination_criterion(last_x, last_y)
+        and tries_to_grow < par_axon_retry
+    ):
         tries_to_grow += 1
 
         length = np.random.rayleigh(par_std_l)
-        num_segs = int(length / par_del_l)
+        num_segs = int(np.fmax(1, length / par_del_l))
         path = np.ones((num_segs, 2)) * np.nan
 
         last_x = start[0]
@@ -577,7 +585,7 @@ def _grow_axon_to_target(
 
         # draw phi until it goes in the right direction
         for i in range(0, par_axon_retry):
-            phi = np.random.uniform(-0.5, 0.5,) * 2 * np.pi
+            phi = np.random.uniform(-0.5, 0.5) * 2 * np.pi
             if _is_angle_on_course(start, target, phi):
                 last_phi = phi
                 break
@@ -654,8 +662,8 @@ def _is_angle_on_course(source_pos, target_pos, phi, threshold=0.1):
 @jit(nopython=True, parallel=False, fastmath=True, cache=True)
 def _are_intersecting_circles(ref_pos, ref_rad, x, y, r=0):
     """
-        Check whether x, y, is intersecting with any of the circles at ref_pos with
-        radius ref_rad
+    Check whether x, y, is intersecting with any of the circles at ref_pos with
+    radius ref_rad
     """
     x_ = ref_pos[:, 0]
     y_ = ref_pos[:, 1]
@@ -665,12 +673,12 @@ def _are_intersecting_circles(ref_pos, ref_rad, x, y, r=0):
 
 def _nested_lists_to_2d_nan_padded(nested):
     """
-        For segment paths,
-        convert a list of lists/arrays (with varying length)
-        into a 2d array of shape (num_lists, max_len)
-        where missing elements are set to np.nan
+    For segment paths,
+    convert a list of lists/arrays (with varying length)
+    into a 2d array of shape (num_lists, max_len)
+    where missing elements are set to np.nan
 
-        nested : list of 2d arrays with shape (num_segments, 2)
+    nested : list of 2d arrays with shape (num_segments, 2)
     """
 
     max_len = np.max([len(x) for x in nested])
@@ -684,10 +692,10 @@ def _nested_lists_to_2d_nan_padded(nested):
 
 def _nested_lists_to_sparse(nested):
     """
-        Mostly for connectivity matrix,
-        when stored as list of listes with variable lengths,
-        convert to a sparse matrix like
-        `i=a_ij_sparse[:, 0], j=a_ij_sparse[:, 1]`
+    Mostly for connectivity matrix,
+    when stored as list of listes with variable lengths,
+    convert to a sparse matrix like
+    `i=a_ij_sparse[:, 0], j=a_ij_sparse[:, 1]`
     """
     sources = []
     targets = []
@@ -724,9 +732,18 @@ def _get_end_to_end_distances(axon_paths):
 
     res = np.zeros(len(axon_paths))
     for idx, path in enumerate(axon_paths):
-        pos1 = path[0]
-        pos2 = path[-1]
-        res[idx] = np.sqrt(np.square(pos1[0] - pos2[0]) + np.square(pos1[1] - pos2[1]))
+        try:
+            pos1 = path[0]
+            pos2 = path[-1]
+            res[idx] = np.sqrt(
+                np.square(pos1[0] - pos2[0]) + np.square(pos1[1] - pos2[1])
+            )
+        except Exception as e:
+            log.exception(
+                f"End to end distance failed for neuron {idx} with path {path}"
+            )
+            log.exception(e)
+            res[idx] = np.nan
 
     return res
 
@@ -744,19 +761,20 @@ def set_seed(seed):
     _set_seed(seed)
 
 
-
 def index_alignment(num_n, num_inhib, bridge_ids):
     """
-        resort indices so that they are contiguous, this is needed for brian:
+    resort indices so that they are contiguous, this is needed for brian:
 
-        * inhibitory, no bridge
-        * inhibitory, and bridge neurons
-        * excitatiory, and bridge
-        * excitatiory, no bridge
+    * inhibitory, no bridge
+    * inhibitory, and bridge neurons
+    * excitatiory, and bridge
+    * excitatiory, no bridge
 
 
     """
-    inhib_ids_old = np.sort(np.random.choice(num_n, size=num_inhib, replace=False))
+    inhib_ids_old = np.sort(
+        np.random.choice(num_n, size=num_inhib, replace=False)
+    )
     bridge_ids_old = bridge_ids
 
     inhib_no_bridge = []
@@ -798,24 +816,31 @@ def index_alignment(num_n, num_inhib, bridge_ids):
     excit_ids_new = brian_indices[num_inhib:]
     bridge_ids_new = np.array(bridge_ids_new, dtype="int64")
 
-    return topo_indices, brian_indices, inhib_ids_new, excit_ids_new, bridge_ids_new
+    return (
+        topo_indices,
+        brian_indices,
+        inhib_ids_new,
+        excit_ids_new,
+        bridge_ids_new,
+    )
 
 
 # ------------------------------------------------------------------------------ #
 # legacy helpers to load topology that was generated in older c code
 # ------------------------------------------------------------------------------ #
 
+
 def _load_topology(input_path):
     """
-        Loads variables needed for the topology, mainly connectivity matrix
+    Loads variables needed for the topology, mainly connectivity matrix
 
-        # Parameters
-            input_path : to .hdf5 file
+    # Parameters
+        input_path : to .hdf5 file
 
-        # Returns
-            num_n       : number of neurons
-            a_ij_sparse : the connectivity matrix in sparse form
-            mod_ids     : an array to find which module neurons belong to. index -> mod
+    # Returns
+        num_n       : number of neurons
+        a_ij_sparse : the connectivity matrix in sparse form
+        mod_ids     : an array to find which module neurons belong to. index -> mod
     """
 
     log.info(f"Loading connectivity from {input_path} ")
@@ -841,7 +866,9 @@ def _load_topology(input_path):
 
 def _load_bridging_neurons(input_path):
     try:
-        return h5.load(input_path, "/data/neuron_bridge_ids", keepdim=True).astype(
+        return h5.load(
+            input_path, "/data/neuron_bridge_ids", keepdim=True
+        ).astype(
             int, copy=False
         )  # brian doesnt like uints
     except Exception as e:
@@ -851,8 +878,8 @@ def _load_bridging_neurons(input_path):
 
 def _connect_synapses_from(S, a_ij):
     """
-        Apply connectivity matrix to brian Synapses object `S`.
-        Not used at the moment.
+    Apply connectivity matrix to brian Synapses object `S`.
+    Not used at the moment.
     """
     try:
         log.info("Applying connectivity (non-sparse) ... ")
