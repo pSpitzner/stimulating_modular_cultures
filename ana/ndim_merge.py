@@ -61,6 +61,7 @@ d_obs["tD"] = "/meta/dynamics_tD"
 
 threshold_factor = 0.025
 smoothing_width = 20 / 1000
+time_bin_size_for_rij = 200 / 1000
 remove_null_sequences = False
 
 # functions for analysis. candidate is the file path (e.g. to a hdf5 file)
@@ -187,9 +188,13 @@ def all_in_one(candidate=None):
 
     # correlation coefficients
     try:
-        rij_matrix = ah.find_rij(h5f, which="neurons", time_bin_size=200 / 1000)
+        rij_matrix = ah.find_rij(h5f, which="neurons", time_bin_size=time_bin_size_for_rij)
+        np.fill_diagonal(rij_matrix, np.nan)
     except:
         log.error("Failed to find correlation coefficients")
+
+    res["sys_mean_correlation"] = np.nanmean(rij_matrix)
+    res["sys_median_correlation"] = np.nanmedian(rij_matrix)
 
     for mod in [0, 1, 2, 3]:
         try:
@@ -208,7 +213,7 @@ def all_in_one(candidate=None):
                 h5f, rij_matrix, pairing=f"across_groups_{pair[0]}_{pair[1]}"
             )
         except Exception as e:
-            log.error(e)
+            log.exception(e)
             res[f"vec_rij_across_{pair[0]}_{pair[1]}"] = np.ones(1600) * np.nan
 
     # functional complexity
@@ -218,21 +223,18 @@ def all_in_one(candidate=None):
     res["vec_sys_hbins_participating_fraction"] = bins.copy()
 
     try:
-        C, rij = ah.find_functional_complexity(
+        C, _ = ah.find_functional_complexity(
             h5f, rij=rij_matrix, return_res=True, write_to_h5f=False, bins=bins
         )
         # this is not the place to do this, but ok
-        np.fill_diagonal(rij, np.nan)
-        rij, _ = np.histogram(rij.flatten(), bins=bins)
+        rij_hist, _ = np.histogram(rij_matrix.flatten(), bins=bins)
     except Exception as e:
-        log.debug(e)
+        log.exception(e)
         C = np.nan
-        rij = np.ones(21) * np.nan
+        rij_hist= np.ones(20) * np.nan
 
     res["sys_functional_complexity"] = C
-    res["vec_sys_hvals_correlation_coefficients"] = rij.copy()
-    res["sys_mean_correlation"] = np.nanmean(rij)
-    res["sys_median_correlation"] = np.nanmedian(rij)
+    res["vec_sys_hvals_correlation_coefficients"] = rij_hist.copy()
 
     # complexity on module level
     try:
@@ -240,7 +242,7 @@ def all_in_one(candidate=None):
             h5f, which="modules", return_res=True, write_to_h5f=False, bins=bins
         )
     except Exception as e:
-        log.debug(e)
+        log.exception(e)
         C = np.nan
     res["any_functional_complexity"] = C
 
@@ -248,27 +250,27 @@ def all_in_one(candidate=None):
     try:
         ah.find_participating_fraction_in_bursts(h5f)
         fracs = h5f["ana.bursts.system_level.participating_fraction"]
-        rij, _ = np.histogram(fracs, bins=bins)
+        rij_hist, _ = np.histogram(fracs, bins=bins)
     except Exception as e:
-        log.debug(e)
+        log.exception(e)
         fracs = np.array([np.nan])
-        rij = np.ones(21) * np.nan
+        rij_hist = np.ones(20) * np.nan
     res["sys_mean_participating_fraction"] = np.nanmean(fracs)
     res["sys_median_participating_fraction"] = np.nanmedian(fracs)
-    res["vec_sys_hvals_participating_fraction"] = rij.copy()
+    res["vec_sys_hvals_participating_fraction"] = rij_hist.copy()
 
     try:
         fractions = h5f["ana.bursts.system_level.participating_fraction"]
         C = ah._functional_complexity(np.array(fractions), num_bins=20)
     except Exception as e:
-        log.debug(e)
+        log.exception(e)
         C = np.nan
     res["sys_participating_fraction_complexity"] = C
 
     try:
         C = np.nanmean(h5f["ana.bursts.system_level.num_spikes_in_bursts"])
     except Exception as e:
-        log.debug(e)
+        log.exception(e)
         C = np.nan
     res["any_num_spikes_in_bursts"] = C
 
@@ -485,7 +487,11 @@ def main(args):
             index += (rep,)
 
             for key in res.keys():
-                res_ndim[key][index] = res[key]
+                try:
+                    res_ndim[key][index] = res[key]
+                except Exception as e:
+                    log.exception(f"{key} at {index} (rep {rep})")
+                    log.exception(e)
         else:
             log.error(f"unexpected repetitions (already read {num_rep}): {index}")
 
