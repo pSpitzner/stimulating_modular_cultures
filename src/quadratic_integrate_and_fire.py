@@ -380,7 +380,7 @@ else:
         # make sure directory exists
         outdir = os.path.abspath(os.path.expanduser(args.output_path + "/../"))
         os.makedirs(outdir, exist_ok=True)
-        shutil.copy2(args.input_path, args.output_path)
+        # shutil.copy2(args.input_path, args.output_path)
     except Exception as e:
         log.exception("Could not copy input file")
 
