@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-10-25 17:28:21
-# @Last Modified: 2021-11-12 13:53:26
+# @Last Modified: 2021-11-16 12:02:10
 # ------------------------------------------------------------------------------ #
 # Hard coded script to analyse experimental data
 # ------------------------------------------------------------------------------ #
@@ -48,9 +48,10 @@ import colors as cc
 remove_null_sequences = False
 
 # for correlation coefficients, size of time steps in which number of spikes are counted
-time_bin_size_for_rij = 200 / 1000 # in seconds
+time_bin_size_for_rij = 500 / 1000 # in seconds
 
 def main():
+    global h5f
     parser = argparse.ArgumentParser(description="Merge Multidm")
     parser.add_argument(
         "-t", dest="etype", required=True, help="'exp', 'exp_chemical', or 'sim'",
@@ -70,26 +71,30 @@ def main():
     else:
         assert False, "Choose type from 'sim' 'exp' 'exp_chemical'"
 
+    conditions = dict()
     if args.etype == "exp":
-        layouts = ["1b", "3b", "merged"]
-        conditions = ["1_pre", "2_stim", "3_post"]
+        for layout in ["1b", "3b", "merged"]:
+            conditions[layout] = ["1_pre", "2_stim", "3_post"]
     elif args.etype == "exp_chemical":
-        layouts = ["KCl_1b"]
-        conditions = ["1_KCl_0mM", "2_KCl_2mM"]
+            conditions["KCl_1b"] = ["1_KCl_0mM", "2_KCl_2mM"]
     elif args.etype == "sim":
-        layouts = ["k=5"]  # number of axons between modules
-        conditions = ["82", "90"]  # Hz
+        # number of axons between modules as layouts
+        conditions["k=5"] = ["80", "90"]  # Hz
+        conditions["k=1"] = ["75", "85"]
+        conditions["k=10"] = ["85", "92.5"]
+    else:
+        raise KeyError("type should be 'exp', 'exp_chemical' or 'sim'")
 
     # ------------------------------------------------------------------------------ #
     # iterate over all combination
     # ------------------------------------------------------------------------------ #
 
-    for layout in layouts:
+    for layout in conditions.keys():
         dataframes = dict()
         for key in ["bursts", "isis", "rij", "rij_paired", "trials"]:
             dataframes[key] = []
 
-        for condition in conditions:
+        for cdx, condition in enumerate(conditions[layout]):
             if "exp" in args.etype:
                 input_paths = glob.glob(f"{input_base}/{layout}/*")
             elif args.etype == "sim":
@@ -111,7 +116,8 @@ def main():
                     stimulation_string = "On" if condition[0:2] == "2_" else "Off"
                 elif args.etype == "sim":
                     condition_string = f"{condition} Hz"
-                    stimulation_string = "On" if float(condition) < 90  else "Off"
+                    # here we should be a bit more careful, maybe
+                    stimulation_string = "On" if cdx == 1  else "Off"
 
                 # the path still contains the trial
                 h5f = prepare_file(args.etype, condition, path)
@@ -216,18 +222,20 @@ def main():
 
                 # we also want to compare the correlation coefficients for different
                 # combinations ("parings") of neurons from certain modules
-                for pairing in [
-                    "within_group_02",
-                    "within_group_13",
-                    "across_groups_02_13",
-                ]:
+                pair_descriptions = dict()
+                pair_descriptions["across_groups_0_2"] = "within_stim"
+                pair_descriptions["across_groups_1_3"] = "within_nonstim"
+                pair_descriptions["across_groups_0_1"] = "across"
+                pair_descriptions["across_groups_2_3"] = "across"
+                pair_descriptions["all"] = "all"
+                for pairing in pair_descriptions.keys():
                     rij_paired = ah.find_rij_pairs(h5f, rij=rij, pairing=pairing)
                     df = pd.DataFrame(
                         {
                             "Correlation Coefficient": rij_paired,
                             "Condition": condition_string,
                             "Trial": trial,
-                            "Pairing": pairing,
+                            "Pairing": pair_descriptions[pairing],
                             "Pair ID": np.arange(len(rij_paired)),
                             "Stimulation": stimulation_string,
                             "Type": args.etype,
@@ -254,7 +262,6 @@ def main():
                     }
                 )
                 dataframes["trials"].append(df)
-
                 h5.close_hot()
                 del h5f
 
