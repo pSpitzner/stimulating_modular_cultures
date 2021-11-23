@@ -42,7 +42,6 @@ import dask_helper as dh
 import ana_helper as ah
 import hi5 as h5
 
-
 # ------------------------------------------------------------------------------ #
 # settings
 # ------------------------------------------------------------------------------ #
@@ -56,12 +55,12 @@ d_obs["jG"] = "/meta/dynamics_jG"
 d_obs["rate"] = "/meta/dynamics_rate"
 d_obs["tD"] = "/meta/dynamics_tD"
 # d_obs["alpha"] = "/meta/topology_alpha"
-# d_obs["k_inter"] = "/meta/topology_k_inter"
+d_obs["k_inter"] = "/meta/topology_k_inter"
 # d_obs["k_frac"] = "/meta/dynamics_k_frac"
 
 threshold_factor = 0.025
 smoothing_width = 20 / 1000
-time_bin_size_for_rij = 200 / 1000
+time_bin_size_for_rij = 500 / 1000
 remove_null_sequences = False
 
 # functions for analysis. candidate is the file path (e.g. to a hdf5 file)

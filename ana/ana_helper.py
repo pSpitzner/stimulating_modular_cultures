@@ -959,7 +959,9 @@ def find_rij_pairs(h5f, rij=None, pairing="within_modules", **kwargs):
                 # skip upper diagonal
                 continue
 
-            if pairing == "within_modules":
+            if pairing == "all":
+                res.append(rij[i, j])
+            elif pairing == "within_modules":
                 if h5f["data.neuron_module_id"][i] == h5f["data.neuron_module_id"][j]:
                     res.append(rij[i, j])
 
