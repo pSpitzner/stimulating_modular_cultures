@@ -48,46 +48,72 @@ import colors as cc
 remove_null_sequences = False
 
 # for correlation coefficients, size of time steps in which number of spikes are counted
-time_bin_size_for_rij = 500 / 1000 # in seconds
+time_bin_size_for_rij = 500 / 1000  # in seconds
+
+# threshold for burst detection [% of max peak height]
+threshold_factor = dict()
+threshold_factor["exp"] = 10 / 100
+threshold_factor["exp_chemical"] = 10 / 100
+threshold_factor["sim"] = 2.5 / 100
+
+# for pop. rate, width of gaussian placed on every spike, in seconds
+bs_large = dict()
+bs_large["exp"] = 200 / 1000
+bs_large["exp_chemical"] = 200 / 1000
+bs_large["sim"] = 20 / 1000
+
 
 def main():
     global h5f
     parser = argparse.ArgumentParser(description="Merge Multidm")
     parser.add_argument(
-        "-t", dest="etype", required=True, help="'exp', 'exp_chemical', or 'sim'",
+        "-t",
+        dest="etype",
+        required=True,
+        help="'exp', 'exp_chemical', or 'sim'",
+    )
+    parser.add_argument(
+        "-i",
+        dest="input_base",
+        required=False,
+        help="Root directory for files, `./dat/exp_in/`",
+    )
+    parser.add_argument(
+        "-o",
+        dest="output_path",
+        required=False,
+        help="`./dat/exp_out/`",
     )
     args = parser.parse_args()
 
-    if "exp" in args.etype:
-        input_base = "/Users/paul/mpi/simulation/brian_modular_cultures/data_for_jordi/2021-10-11/Experimental data - ML spike/ConsistentRasterWith12000frames"
-        output_path = (
-            "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/exp_out"
-        )
-    elif args.etype == "sim":
-        input_base = "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/inhibition_sweep_rate_160/dyn"
-        output_path = (
-            "/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/sim_out"
-        )
+    if args.output_path is not None:
+        output_path = args.output_path
     else:
-        assert False, "Choose type from 'sim' 'exp' 'exp_chemical'"
+        if "exp" in args.etype:
+            output_path = "./dat/exp_out"
+        elif args.etype == "sim":
+            output_path = "./dat/sim_out"
 
     conditions = dict()
     if args.etype == "exp":
         for layout in ["1b", "3b", "merged"]:
             conditions[layout] = ["1_pre", "2_stim", "3_post"]
     elif args.etype == "exp_chemical":
-            conditions["KCl_1b"] = ["1_KCl_0mM", "2_KCl_2mM"]
+        conditions["KCl_1b"] = ["1_KCl_0mM", "2_KCl_2mM"]
     elif args.etype == "sim":
         # number of axons between modules as layouts
-        conditions["k=5"] = ["80", "90"]  # Hz
-        conditions["k=1"] = ["75", "85"]
-        conditions["k=10"] = ["85", "92.5"]
+        conditions["k=5"] = ["80.0", "90.0"]  # Hz
+        conditions["k=1"] = ["75.0", "85.0"]
+        conditions["k=10"] = ["85.0", "92.5"]
     else:
         raise KeyError("type should be 'exp', 'exp_chemical' or 'sim'")
 
     # ------------------------------------------------------------------------------ #
     # iterate over all combination
     # ------------------------------------------------------------------------------ #
+
+    print(f"Reading from {args.input_base}")
+    print(f"Writing to {output_path}")
 
     for layout in conditions.keys():
         dataframes = dict()
@@ -96,10 +122,10 @@ def main():
 
         for cdx, condition in enumerate(conditions[layout]):
             if "exp" in args.etype:
-                input_paths = glob.glob(f"{input_base}/{layout}/*")
+                input_paths = glob.glob(f"{args.input_base}/{layout}/*")
             elif args.etype == "sim":
                 input_paths = glob.glob(
-                    f"{input_base}/stim=off_{layout}_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate={condition}.0_rep=*.hdf5"
+                    f"{args.input_base}/stim=off_{layout}_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate={condition}_rep=*.hdf5"
                 )
 
             # trials / realizations
@@ -113,11 +139,13 @@ def main():
                 # for the dataframes, we need to tidy up some labels
                 if "exp" in args.etype:
                     condition_string = condition[2:]
-                    stimulation_string = "On" if condition[0:2] == "2_" else "Off"
+                    stimulation_string = (
+                        "On" if condition[0:2] == "2_" else "Off"
+                    )
                 elif args.etype == "sim":
                     condition_string = f"{condition} Hz"
                     # here we should be a bit more careful, maybe
-                    stimulation_string = "On" if cdx == 1  else "Off"
+                    stimulation_string = "On" if cdx == 1 else "Off"
 
                 # the path still contains the trial
                 h5f = prepare_file(args.etype, condition, path)
@@ -128,7 +156,9 @@ def main():
 
                 # plot overview panels for experiments
                 if "exp" in args.etype:
-                    os.makedirs(f"{output_path}/{layout}/{trial}", exist_ok=True)
+                    os.makedirs(
+                        f"{output_path}/{layout}/{trial}", exist_ok=True
+                    )
                     fig = ph.overview_dynamic(h5f)
                     fig.savefig(
                         f"{output_path}/{layout}/{trial}/{condition}_overview.pdf"
@@ -143,7 +173,9 @@ def main():
                         beg = 0
                     beg = np.fmax(0, beg - 10)
                     fig.get_axes()[-2].set_xlim(beg, beg + 20)
-                    fig.savefig(f"{output_path}/{layout}/{trial}/{condition}_zoom.pdf")
+                    fig.savefig(
+                        f"{output_path}/{layout}/{trial}/{condition}_zoom.pdf"
+                    )
                     plt.close(fig)
 
                 # ------------------------------------------------------------------------------ #
@@ -151,12 +183,17 @@ def main():
                 # ------------------------------------------------------------------------------ #
 
                 # we have already done a bunch of analysis in `prepare_file`
-                fracs = np.array(h5f["ana.bursts.system_level.participating_fraction"])
-                blen = np.array(h5f["ana.bursts.system_level.end_times"]) - np.array(
-                    h5f["ana.bursts.system_level.beg_times"]
+                fracs = np.array(
+                    h5f["ana.bursts.system_level.participating_fraction"]
                 )
+                blen = np.array(
+                    h5f["ana.bursts.system_level.end_times"]
+                ) - np.array(h5f["ana.bursts.system_level.beg_times"])
                 slen = np.array(
-                    [len(x) for x in h5f["ana.bursts.system_level.module_sequences"]]
+                    [
+                        len(x)
+                        for x in h5f["ana.bursts.system_level.module_sequences"]
+                    ]
                 )
                 olen = ah.find_onset_durations(h5f, return_res=True)
 
@@ -229,7 +266,9 @@ def main():
                 pair_descriptions["across_groups_2_3"] = "across"
                 pair_descriptions["all"] = "all"
                 for pairing in pair_descriptions.keys():
-                    rij_paired = ah.find_rij_pairs(h5f, rij=rij, pairing=pairing)
+                    rij_paired = ah.find_rij_pairs(
+                        h5f, rij=rij, pairing=pairing
+                    )
                     df = pd.DataFrame(
                         {
                             "Correlation Coefficient": rij_paired,
@@ -283,20 +322,17 @@ def main():
 
 def prepare_file(etype, condition, path_prefix):
     if etype == "exp" or etype == "exp_chemical":
-        bs_large = 200 / 1000 # for pop. rate, width of gaussian placed on every spike
-        threshold_factor = 10 / 100 # threshold for burst detection [% max peak height]
         h5f = ah.load_experimental_files(
             path_prefix=f"{path_prefix}/", condition=condition
         )
     elif etype == "sim":
-        bs_large = 20 / 100
-        threshold_factor = 2.5 / 100
         h5f = ah.prepare_file(path_prefix)
 
-    ah.find_rates(h5f, bs_large=bs_large)
+    ah.find_rates(h5f, bs_large=bs_large[etype])
     ah.find_system_bursts_from_global_rate(
         h5f,
-        rate_threshold=threshold_factor * np.nanmax(h5f["ana.rates.system_level"]),
+        rate_threshold=threshold_factor[etype]
+        * np.nanmax(h5f["ana.rates.system_level"]),
         merge_threshold=0.1,
         skip_sequences=False,
     )
