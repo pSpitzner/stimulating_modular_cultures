@@ -58,7 +58,7 @@ d_obs["tD"] = "/meta/dynamics_tD"
 d_obs["k_inter"] = "/meta/topology_k_inter"
 # d_obs["k_frac"] = "/meta/dynamics_k_frac"
 
-threshold_factor = 0.025
+threshold_factor = 2.5 / 100
 smoothing_width = 20 / 1000
 time_bin_size_for_rij = 500 / 1000
 remove_null_sequences = False

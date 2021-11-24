@@ -128,6 +128,8 @@ def main():
                     f"{args.input_base}/stim=off_{layout}_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate={condition}_rep=*.hdf5"
                 )
 
+            print(f"found {len(input_paths)} files for {layout} {condition}")
+
             # trials / realizations
             for path in input_paths:
                 trial = os.path.basename(path)
