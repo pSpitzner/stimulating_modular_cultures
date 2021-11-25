@@ -333,6 +333,28 @@ def load_experimental_files(path_prefix, condition="1_pre_"):
 
     h5f["meta.dynamics_simulation_duration"] = 540.0
 
+    try:
+        # fluorescence traces
+        fl_traces = np.loadtxt(
+            f"{path_prefix}{condition}/Results.csv", delimiter=",", skiprows=1
+        )
+
+        # for each neuron, we have 4 columns, and want to use the 2nd one, "mean"
+        # first col is time index, then we start counting neurons
+        fl_idx = np.arange(0, num_n, dtype="int")*4 + 2
+        fl_traces = fl_traces[:, fl_idx]
+
+        # drop first 60 seconds due to artifacts at the beginning of the recording
+        fl_traces = fl_traces[1200:, :]
+
+        h5f["data.neuron_fluorescence_trace"] = fl_traces.copy().T
+        h5f["data.neuron_fluorescence_timestep"] = 50 / 1000
+        # h5f["pd.fl"] = pd.read_csv(f"{path_prefix}{condition}/Results.csv")
+
+    except Exception as e:
+        log.exception(f"{path_prefix} {condition}")
+        log.exception(e)
+
     return prepare_file(h5f)
 
 
@@ -651,15 +673,15 @@ def find_system_bursts_from_global_rate(
         beg_times, end_times, threshold=merge_threshold
     )
 
-    sequence_kwargs.setdefault("min_spikes", 1)
-    # 20% of a modules neurons
-    npm = h5f["meta.topology_num_neur"] / len(h5f["ana.mod_ids"])
-    min_neurons = np.nanmax([1, int(0.20 * npm)])
-    sequence_kwargs.setdefault("min_neurons", min_neurons)
 
     if skip_sequences:
         sys_seqs = [tuple()] * len(beg_times)
     else:
+        sequence_kwargs.setdefault("min_spikes", 1)
+        # 20% of a modules neurons
+        npm = h5f["meta.topology_num_neur"] / len(h5f["ana.mod_ids"])
+        min_neurons = np.nanmax([1, int(0.20 * npm)])
+        sequence_kwargs.setdefault("min_neurons", min_neurons)
         sys_seqs = sequences_from_module_contribution(
             h5f, beg_times, end_times, **sequence_kwargs
         )
@@ -888,10 +910,12 @@ def find_onset_durations(h5f, write_to_h5f=True, return_res=False):
         return onset_durations
 
 
-def find_rij(h5f, which="neurons", time_bin_size=200 / 1000):
+def find_rij(h5f=None, which="neurons", time_bin_size=200 / 1000):
     """
     # Paramters
-    which : str, "neurons" or "modules", if "modules", mod rates have to be in h5f
+    which : str, "neurons", "modules", "depletion",
+        if "modules", mod rates have to be in h5f
+        if "depletion" time_bin_size is ignored and native time resolution is used
     time_bin_size : float, if "neurons" selected this is the bin size for
         `binned_spike_count` in seconds
 
@@ -901,7 +925,7 @@ def find_rij(h5f, which="neurons", time_bin_size=200 / 1000):
     # Note
     rij may contain np.nan if a neuron did not have any spikes.
     """
-    assert which in ["neurons", "modules"]
+    assert which in ["neurons", "modules", "depletion"]
 
     if which == "neurons":
         if time_bin_size is None:
@@ -922,6 +946,9 @@ def find_rij(h5f, which="neurons", time_bin_size=200 / 1000):
         for mdx, m_id in enumerate(h5f["ana.mod_ids"]):
             m_dc = h5f["ana.mods"][mdx]
             series[mdx, :] = h5f[f"ana.rates.module_level.{m_dc}"][:]
+
+    elif which == "depletion":
+        series = h5f["data.state_vars_D"]
 
     rij = np.corrcoef(series)
     return rij
@@ -2301,7 +2328,7 @@ def pd_bootstrap(
     """
 
     if sample_size is None:
-        sample_size = len(df)
+        sample_size = np.fmin(len(df), 10_000)
 
     if percentiles is None:
         percentiles = [2.5, 50, 97.5]
@@ -2381,7 +2408,7 @@ def pd_nested_bootstrap(df, grouping_col, obs, num_boot=500, func=np.nanmean, re
 
         for candidate in candidates_resampled:
             sub_df = sub_dfs[candidate]
-            sample_size = len(sub_df)
+            sample_size = np.fmin(len(sub_df), 10_000)
 
             log.debug(f"{candidate}: {sample_size} entries for {obs}")
 
@@ -2483,7 +2510,6 @@ def sequences_from_module_contribution(
         sys_seqs.append(seq)
 
     return sys_seqs
-
 
 def sequence_histogram(ids, sequences=None):
 
