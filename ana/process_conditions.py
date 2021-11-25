@@ -119,6 +119,9 @@ def main():
         dataframes = dict()
         for key in ["bursts", "isis", "rij", "rij_paired", "trials"]:
             dataframes[key] = []
+        if args.etype == "sim":
+            # we collect the correlation coefficients of synaptic resources for sim
+            dataframes["drij"] = []
 
         for cdx, condition in enumerate(conditions[layout]):
             if "exp" in args.etype:
@@ -240,11 +243,11 @@ def main():
                 dataframes["isis"].append(df)
 
                 # ------------------------------------------------------------------------------ #
-                # trials and correlation coefficients
+                # neuron level correlation coefficients
                 # ------------------------------------------------------------------------------ #
 
                 # NxN matrix
-                rij = ah.find_rij(h5f, time_bin_size=time_bin_size_for_rij)
+                rij = ah.find_rij(h5f, which="neurons", time_bin_size=time_bin_size_for_rij)
                 np.fill_diagonal(rij, np.nan)
                 rij_flat = rij.flatten()
                 df = pd.DataFrame(
@@ -284,7 +287,30 @@ def main():
                     )
                     dataframes["rij_paired"].append(df)
 
+                # ------------------------------------------------------------------------------ #
+                # Correlation of the depletion variable, for simulations
+                # ------------------------------------------------------------------------------ #
+
+                if args.etype == "sim":
+                    drij = ah.find_rij(h5f, which="depletion")
+                    np.fill_diagonal(drij, np.nan)
+                    drij_flat = drij.flatten()
+                    df = pd.DataFrame(
+                        {
+                            "Depletion rij": drij_flat,
+                            "Condition": condition_string,
+                            "Trial": trial,
+                            "Stimulation": stimulation_string,
+                            "Type": args.etype,
+                        }
+                    )
+                    # just the bunch of all rijs
+                    dataframes["drij"].append(df)
+
+                # ------------------------------------------------------------------------------ #
                 # and some summary statistics on the trial level
+                # ------------------------------------------------------------------------------ #
+
                 fc = ah._functional_complexity(rij)
                 mean_rij = np.nanmean(rij)
                 df = pd.DataFrame(
@@ -302,6 +328,9 @@ def main():
                         "Type": args.etype,
                     }
                 )
+                if args.etype == "sim":
+                    df["Mean Depletion rij"] = np.nanmean(drij)
+                    df["Median Depletion rij"] = np.nanmedian(drij)
                 dataframes["trials"].append(df)
                 h5.close_hot()
                 del h5f
