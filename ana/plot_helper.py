@@ -81,11 +81,11 @@ import ana_helper as ah
 
 def overview_topology(h5f, filenames=None, skip_graph=False):
     """
-        Plots an overview figure of the topology of `h5f`.
+    Plots an overview figure of the topology of `h5f`.
 
-        If `filenames` are provided, they are passed to the underlying plot
-        functions and, where possible, ensemble statistics across filenames are
-        used.
+    If `filenames` are provided, they are passed to the underlying plot
+    functions and, where possible, ensemble statistics across filenames are
+    used.
     """
     fig, axes = plt.subplots(nrows=2, ncols=3, figsize=[12, 8])
 
@@ -138,7 +138,7 @@ def overview_dynamic(h5f, filenames=None, threshold=None, states=True, skip=[]):
         ah.prepare_file(h5f)
 
     if not "ana.rates" in h5f.keypaths():
-        ah.find_rates(h5f, bs_large = 20/1000)
+        ah.find_rates(h5f, bs_large=20 / 1000)
 
     if threshold is not None or "ana.bursts" not in h5f.keypaths():
         # (re) do the detection so that we do not have default values
@@ -163,8 +163,9 @@ def overview_dynamic(h5f, filenames=None, threshold=None, states=True, skip=[]):
     if not "bursts" in skip:
         ax = plot_bursts_into_timeseries(h5f, axes[3], style="markers")
         _style_legend(ax.legend(loc=1))
-        ax = plot_bursts_into_timeseries(h5f, axes[1], apply_formatting=False,
-            style="fill_between")
+        ax = plot_bursts_into_timeseries(
+            h5f, axes[1], apply_formatting=False, style="fill_between"
+        )
     if not "init" in skip:
         ax = plot_initiation_site(h5f, axes[4])
         ax.xaxis.set_major_locator(plt.NullLocator())
@@ -187,7 +188,10 @@ def overview_dynamic(h5f, filenames=None, threshold=None, states=True, skip=[]):
 
 def overview_burst_duration_and_isi(h5f, filenames=None, which="all"):
     fig, axes = plt.subplots(
-        nrows=3, ncols=1, figsize=(4, 6), gridspec_kw=dict(height_ratios=[1, 3, 3]),
+        nrows=3,
+        ncols=1,
+        figsize=(4, 6),
+        gridspec_kw=dict(height_ratios=[1, 3, 3]),
     )
     plot_distribution_burst_duration(h5f, ax=axes[1], filenames=filenames)
     plot_distribution_isi(h5f, ax=axes[2], filenames=filenames, which=which)
@@ -221,19 +225,27 @@ def warntry(func):
     return wrapper
 
 
-def plot_raster(h5f, ax=None, apply_formatting=True, sort_by_module=True,
-    exclude_nids = [], **kwargs):
+def plot_raster(
+    h5f,
+    ax=None,
+    apply_formatting=True,
+    sort_by_module=True,
+    neuron_id_as_y = True,
+    base_color=None,
+    exclude_nids=[],
+    **kwargs,
+):
     """
-        Plot a raster plot
+    Plot a raster plot
 
-        # Parameters:
-        h5f : BetterDict
-            of a loaded hdf5 file with the conventional entries.
-            call `prepare_file(h5f)` to set everything up!
-        sort_by_module : bool
-            set to False to avoid reordering by module
-        apply_formatting : bool
-            if false, no styling changes will be done to ax
+    # Parameters:
+    h5f : BetterDict
+        of a loaded hdf5 file with the conventional entries.
+        call `prepare_file(h5f)` to set everything up!
+    sort_by_module : bool
+        set to False to avoid reordering by module
+    apply_formatting : bool
+        if false, no styling changes will be done to ax
     """
     kwargs = kwargs.copy()
     assert "ana" in h5f.keypaths(), "`prepare_file(h5f)` before plotting!"
@@ -257,27 +269,50 @@ def plot_raster(h5f, ax=None, apply_formatting=True, sort_by_module=True,
         kwargs.setdefault("markersize", 2.0)
         kwargs.setdefault("markeredgewidth", 0)
 
-    for n_id in h5f["ana.neuron_ids"]:
+    # sort by module, access as [:] to load, in case h5 dataset
+    neurons = h5f["ana.neuron_ids"][:].copy()
+    if sort_by_module:
+        idx = np.argsort(h5f["data.neuron_module_id"][neurons])
+        neurons = neurons[idx]
+
+    mods = h5f["data.neuron_module_id"][:][neurons]
+    last_mod = np.nan
+    num_mods = len(h5f["ana.mod_ids"])
+    offset = len(neurons)
+    offset_add = offset / (len(neurons) + num_mods)
+
+    for ndx, n_id in enumerate(neurons):
         # if n_id > 1000:
         # continue
 
-        if sort_by_module:
-            n_id_sorted = h5f["ana.mod_sort"](n_id)
-        else:
-            n_id_sorted = n_id
+        m_id = mods[ndx]
+        # m_id = h5f["data.neuron_module_id"][n_id]
 
-        if n_id_sorted in exclude_nids:
-            continue
-
-        m_id = h5f["data.neuron_module_id"][n_id]
         spikes = h5f["data.spiketimes"][n_id]
+        spikes = spikes[np.where(np.isfinite(spikes))]
+
+        if neuron_id_as_y:
+            offset = ndx
+        else:
+            offset -= offset_add
+            if last_mod != m_id:
+                offset -= offset_add
+            last_mod = m_id
 
         plot_kws = kwargs.copy()
-        plot_kws.setdefault("color", h5f["ana.mod_colors"][m_id])
+        if base_color is None:
+            plot_kws.setdefault("color", h5f["ana.mod_colors"][m_id])
+        else:
+            plot_kws.setdefault(
+                "color",
+                cc.alpha_to_solid_on_bg(
+                    base_color, (num_mods - m_id) / num_mods
+                ),
+            )
 
         ax.plot(
             spikes,
-            n_id_sorted * np.ones(len(spikes)),
+            offset * np.ones(len(spikes)),
             marker,
             **plot_kws,
         )
@@ -290,7 +325,9 @@ def plot_raster(h5f, ax=None, apply_formatting=True, sort_by_module=True,
         ax.set_ylim(0, len(h5f["ana.neuron_ids"]))
         try:
             if len(h5f["ana.mods"]) == 4 and len(h5f["ana.neuron_ids"]) == 160:
-                ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(40))
+                ax.yaxis.set_major_locator(
+                    matplotlib.ticker.MultipleLocator(40)
+                )
                 ax.yaxis.set_minor_locator(matplotlib.ticker.NullLocator())
                 ax.set_ylim(0, 160)
         except:
@@ -300,7 +337,9 @@ def plot_raster(h5f, ax=None, apply_formatting=True, sort_by_module=True,
     return ax
 
 
-def plot_module_rates(h5f, ax=None, apply_formatting=True, mark_burst_threshold=False, **kwargs):
+def plot_module_rates(
+    h5f, ax=None, apply_formatting=True, mark_burst_threshold=False, **kwargs
+):
 
     assert "ana" in h5f.keypaths(), "`prepare_file(h5f)` before plotting!"
     kwargs = kwargs.copy()
@@ -326,11 +365,7 @@ def plot_module_rates(h5f, ax=None, apply_formatting=True, mark_burst_threshold=
         plot_kwargs.setdefault("color", h5f[f"ana.mod_colors"][m_id])
         plot_kwargs.setdefault("alpha", 0.5)
         plot_kwargs.setdefault("label", f"{m_id:d}: {mean_rate:.2f} Hz")
-        ax.plot(
-            np.arange(0, len(pop_rate)) * dt,
-            pop_rate,
-            **plot_kwargs
-        )
+        ax.plot(np.arange(0, len(pop_rate)) * dt, pop_rate, **plot_kwargs)
 
         if mark_burst_threshold:
             try:
@@ -360,7 +395,9 @@ def plot_module_rates(h5f, ax=None, apply_formatting=True, mark_burst_threshold=
     return ax
 
 
-def plot_system_rate(h5f, ax=None, apply_formatting=True, mark_burst_threshold=True, **kwargs):
+def plot_system_rate(
+    h5f, ax=None, apply_formatting=True, mark_burst_threshold=True, **kwargs
+):
     assert "ana" in h5f.keypaths(), "`prepare_file(h5f)` before plotting!"
 
     kwargs = kwargs.copy()
@@ -383,18 +420,15 @@ def plot_system_rate(h5f, ax=None, apply_formatting=True, mark_burst_threshold=T
     kwargs.setdefault("color", "black")
     kwargs.setdefault("label", f"system: {mean_rate:.2f} Hz")
 
-    ax.plot(
-        np.arange(0, len(pop_rate)) * dt,
-        pop_rate,
-        **kwargs
-    )
+    ax.plot(np.arange(0, len(pop_rate)) * dt, pop_rate, **kwargs)
     log.info(f'CV system rate: {h5f["ana.rates.cv.system_level"]:.3f}')
-
 
     if mark_burst_threshold:
         try:
             ax.axhline(
-                y=h5f["ana.bursts.system_level.rate_threshold"], ls=":", color="black",
+                y=h5f["ana.bursts.system_level.rate_threshold"],
+                ls=":",
+                color="black",
             )
         except Exception as e:
             log.debug(e)
@@ -410,17 +444,21 @@ def plot_system_rate(h5f, ax=None, apply_formatting=True, mark_burst_threshold=T
     return ax
 
 
-def plot_state_variable(h5f, ax=None, apply_formatting=True, variable="D", **kwargs):
+def plot_state_variable(
+    h5f, ax=None, apply_formatting=True, variable="D", **kwargs
+):
     """
-        We may either have an average value, then the h5f dataset has shape(1, t)
-        or an entry for every neuron, then shape(N, t)
+    We may either have an average value, then the h5f dataset has shape(1, t)
+    or an entry for every neuron, then shape(N, t)
 
-        could add a strides argument for high t-resolutions
+    could add a strides argument for high t-resolutions
     """
 
     log.info(f"Plotting state variable '{variable}'")
     assert f"data.state_vars_{variable}" in h5f.keypaths()
-    stat_vals = h5f[f"data.state_vars_{variable}"]  # avoid loading this with [:]!
+    stat_vals = h5f[
+        f"data.state_vars_{variable}"
+    ]  # avoid loading this with [:]!
 
     if ax is None:
         fig, ax = plt.subplots()
@@ -440,7 +478,7 @@ def plot_state_variable(h5f, ax=None, apply_formatting=True, variable="D", **kwa
         ax.plot(
             h5f[f"data.state_vars_time"][:],
             np.nanmean(stat_vals[selects, :], axis=0),
-            **kwargs
+            **kwargs,
         )
 
         # show some faint lines for individual neurons from each module
@@ -469,6 +507,80 @@ def plot_state_variable(h5f, ax=None, apply_formatting=True, variable="D", **kwa
     return ax
 
 
+def plot_fluorescence_trace(
+    h5f,
+    ax=None,
+    neurons=None,
+    base_color=None,
+    **kwargs,
+):
+    """
+    Only makes sense for experimental files, where we have the entries set.
+    requires `h5f["data.neuron_fluorescence_trace"]`.
+    """
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.get_figure()
+
+    if neurons is None:
+        neurons = h5f["ana.neuron_ids"].copy()
+
+    # sort by module
+    idx = np.argsort(h5f["data.neuron_module_id"][neurons])
+    neurons = neurons[idx]
+
+    mods = h5f["data.neuron_module_id"][neurons]
+    last_mod = np.nan
+    num_mods = len(h5f["ana.mod_ids"])
+    offset = 0
+
+    for ndx, n_id in enumerate(neurons):
+        plot_kws = kwargs.copy()
+        m_id = mods[ndx]
+
+        offset -= 0.15
+        if last_mod != m_id:
+            offset -= 0.1
+        last_mod = m_id
+
+        if base_color is None:
+            try:
+                color = h5f["ana.mod_colors"][m_id]
+            except:
+                color = "black"
+        else:
+            color = cc.alpha_to_solid_on_bg(
+                base_color, (num_mods - m_id) / num_mods
+            )
+
+        plot_kws.setdefault("color", color)
+        plot_kws.setdefault("lw", 0.5)
+        plot_kws.setdefault("zorder", -m_id)
+
+        dt = h5f["data.neuron_fluorescence_timestep"]
+        y = h5f["data.neuron_fluorescence_trace"][n_id].copy()
+        x = np.arange(0, len(y) * dt, dt)
+
+        y_smooth = ah.smooth_rate(y, clock_dt=dt, width=40 * dt)
+
+        bg = np.nanmin(y_smooth)
+
+        # zscoring
+        # y = (y - np.nanmean(y)) / np.nanstd(y)
+
+        # df/f
+        y = (y - bg) / bg
+
+        ax.plot(
+            x,
+            y + offset,
+            **plot_kws,
+        )
+
+    return ax
+
+
 def plot_bursts_into_timeseries(h5f, ax=None, apply_formatting=True, **kwargs):
 
     kwargs = kwargs.copy()
@@ -493,7 +605,9 @@ def plot_bursts_into_timeseries(h5f, ax=None, apply_formatting=True, **kwargs):
             beg_times = h5f[f"ana.bursts.module_level.{m_dc}.beg_times"]
             end_times = h5f[f"ana.bursts.module_level.{m_dc}.end_times"]
         except KeyError:
-            log.debug("No module-level burst in h5f. Cannot plot those burst times")
+            log.debug(
+                "No module-level burst in h5f. Cannot plot those burst times"
+            )
             continue
 
         num_b = len(beg_times)
@@ -508,11 +622,7 @@ def plot_bursts_into_timeseries(h5f, ax=None, apply_formatting=True, **kwargs):
         plot_kws.setdefault("label", f"{num_b} bursts, ~{ibi:.1f} s")
 
         _plot_bursts_into_timeseries(
-            ax,
-            beg_times,
-            end_times,
-            y_offset=pad + 1 + m_id,
-            **plot_kws
+            ax, beg_times, end_times, y_offset=pad + 1 + m_id, **plot_kws
         )
 
     log.info(f"Found {total_num_b} bursts across modules")
@@ -544,13 +654,8 @@ def plot_bursts_into_timeseries(h5f, ax=None, apply_formatting=True, **kwargs):
     plot_kws.setdefault("label", f"{num_b} bursts, ~{ibi:.1f} s")
 
     _plot_bursts_into_timeseries(
-        ax,
-        beg_times,
-        end_times,
-        y_offset=pad,
-        **plot_kws
+        ax, beg_times, end_times, y_offset=pad, **plot_kws
     )
-
 
     if apply_formatting:
         ax.set_ylim(0, len(h5f["ana.mods"]) + 2 * pad)
@@ -567,26 +672,38 @@ def _plot_bursts_into_timeseries(
     ax, beg_times, end_times, y_offset=3, style="markers", **kwargs
 ):
     """
-        lower level helper to plot beginning and end times of bursts.
+    lower level helper to plot beginning and end times of bursts.
 
-        # Parameters
-        style : str
-            "markers" to show in and outs via small triangles
-            "fill" to highlight the the background with a `fill_between`
+    # Parameters
+    style : str
+        "markers" to show in and outs via small triangles
+        "fill" to highlight the the background with a `fill_between`
     """
 
     kwargs = kwargs.copy()
 
     if style == "markers":
         kwargs.setdefault("color", "black")
-        ax.plot(beg_times, np.ones(len(beg_times)) * y_offset, marker="4", lw=0, **kwargs)
+        ax.plot(
+            beg_times,
+            np.ones(len(beg_times)) * y_offset,
+            marker="4",
+            lw=0,
+            **kwargs,
+        )
 
         try:
             kwargs.pop("label")
         except KeyError:
             pass
 
-        ax.plot(end_times, np.ones(len(end_times)) * y_offset, marker="3", lw=0, **kwargs)
+        ax.plot(
+            end_times,
+            np.ones(len(end_times)) * y_offset,
+            marker="3",
+            lw=0,
+            **kwargs,
+        )
 
     elif style == "fill_between":
         kwargs.setdefault("color", "black")
@@ -605,10 +722,12 @@ def _plot_bursts_into_timeseries(
         for idx in range(0, len(beg_times)):
             beg = beg_times[idx]
             end = end_times[idx]
-            x.extend([beg, end, beg+(end-beg)/2])
+            x.extend([beg, end, beg + (end - beg) / 2])
             where.extend([True, True, False])
 
-        trans = matplotlib.transforms.blended_transform_factory(ax.transData, ax.transAxes)
+        trans = matplotlib.transforms.blended_transform_factory(
+            ax.transData, ax.transAxes
+        )
 
         ax.fill_between(
             x=x,
@@ -618,10 +737,8 @@ def _plot_bursts_into_timeseries(
             interpolate=False,
             lw=0,
             transform=trans,
-            **kwargs
+            **kwargs,
         )
-
-
 
 
 def plot_parameter_info(h5f, ax=None, apply_formatting=True, add=[]):
@@ -783,10 +900,14 @@ def pd_sequence_length(df):
     # prequery
     for query in tqdm(
         [
-            "`Bridge weight` == 1 & `Connections` == 1 & `Number of inhibitory neurons` == 0",
-            "`Bridge weight` == 1 & `Connections` == 2 & `Number of inhibitory neurons` == 0",
-            "`Bridge weight` == 1 & `Connections` == 3 & `Number of inhibitory neurons` == 0",
-            "`Bridge weight` == 1 & `Connections` == 5 & `Number of inhibitory neurons` == 0",
+            "`Bridge weight` == 1 & `Connections` == 1 & `Number of inhibitory"
+            " neurons` == 0",
+            "`Bridge weight` == 1 & `Connections` == 2 & `Number of inhibitory"
+            " neurons` == 0",
+            "`Bridge weight` == 1 & `Connections` == 3 & `Number of inhibitory"
+            " neurons` == 0",
+            "`Bridge weight` == 1 & `Connections` == 5 & `Number of inhibitory"
+            " neurons` == 0",
         ],
         desc="Queries",
         leave=False,
@@ -854,7 +975,9 @@ def pd_burst_duration(df):
         df2.query("`Bridge weight` == 1 & `Sequence length` == 2"), x, y
     )
     ax.set_title("L=2", loc="left")
-    ax = plot_pd_violin(df2.query("`Bridge weight` == 1 & `Sequence length` > 1"), x, y)
+    ax = plot_pd_violin(
+        df2.query("`Bridge weight` == 1 & `Sequence length` > 1"), x, y
+    )
     ax.set_title("L>1", loc="left")
     # plot_pd_violin(df2.query("`Bridge weight` == 0.75"), x, y)
     # plot_pd_violin(df2.query("`Bridge weight` == 0.5"), x, y)
@@ -877,12 +1000,18 @@ def pd_burst_duration_change_under_stim(df):
 
     # query so what remains is repetitions and the condition to compare
     df1 = df.query(
-        "`Sequence length` >= 1 & `Number of inhibitory neurons` > 0 & `Connections` == 5 & `Bridge weight` == 1.0 & (Stimulation == 'Off' | Stimulation == 'On (0, 2)')"
+        "`Sequence length` >= 1 & `Number of inhibitory neurons` > 0 &"
+        " `Connections` == 5 & `Bridge weight` == 1.0 & (Stimulation == 'Off' |"
+        " Stimulation == 'On (0, 2)')"
     )
     # use the mean duration as the observable, to which contributions are exactly
     # one data point from one realization, and
     # compare between different `stimulation` conditions
-    df2 = df1.groupby(["Stimulation", "Repetition"])["Duration"].mean().reset_index()
+    df2 = (
+        df1.groupby(["Stimulation", "Repetition"])["Duration"]
+        .mean()
+        .reset_index()
+    )
 
     # ax = plot_pd_violin(df2, x="Stimulation", y="Duration", split=False)
     # ax = plot_pd_boxplot(df2, x="Stimulation", y="Duration")
@@ -922,11 +1051,11 @@ def plot_pd_boxplot(
     df, x="Sequence length", y="Probability", ax=None, apply_formatting=True
 ):
     """
-        Boxplot across stimulation conditions.
-        `df` needs to be filtered already:
-        ```
-        data = df.loc[((df["Connections"] == k) & (df["Bridge weight"] == bw))]
-        ```
+    Boxplot across stimulation conditions.
+    `df` needs to be filtered already:
+    ```
+    data = df.loc[((df["Connections"] == k) & (df["Bridge weight"] == bw))]
+    ```
     """
 
     if ax is None:
@@ -995,11 +1124,11 @@ def plot_pd_boxplot(
 
 def plot_pd_violin(df, x, y, ax=None, apply_formatting=True, split=True):
     """
-        Violinplot across stimulation conditions.
-        `df` needs to be filtered already:
-        ```
-        data = df.loc[((df["Connections"] == k) & (df["Bridge weight"] == bw))]
-        ```
+    Violinplot across stimulation conditions.
+    `df` needs to be filtered already:
+    ```
+    data = df.loc[((df["Connections"] == k) & (df["Bridge weight"] == bw))]
+    ```
     """
 
     if ax is None:
@@ -1015,8 +1144,12 @@ def plot_pd_violin(df, x, y, ax=None, apply_formatting=True, split=True):
         "Off": c0,
         "On (0)": cc.alpha_to_solid_on_bg(base=c1, alpha=0.25, bg="white"),
         "On (0, 2)": cc.alpha_to_solid_on_bg(base=c1, alpha=0.50, bg="white"),
-        "On (0, 1, 2)": cc.alpha_to_solid_on_bg(base=c1, alpha=0.75, bg="white"),
-        "On (0, 1, 2, 3)": cc.alpha_to_solid_on_bg(base=c1, alpha=1.00, bg="white"),
+        "On (0, 1, 2)": cc.alpha_to_solid_on_bg(
+            base=c1, alpha=0.75, bg="white"
+        ),
+        "On (0, 1, 2, 3)": cc.alpha_to_solid_on_bg(
+            base=c1, alpha=1.00, bg="white"
+        ),
     }
 
     order = None
@@ -1101,7 +1234,11 @@ def plot_pd_seqlen_vs_burst_duration(df, ax=None, apply_formatting=True):
         fig = ax.get_figure()
 
     sns.scatterplot(
-        x="Sequence length", y="Duration", hue="Sequence length", data=df, ax=ax,
+        x="Sequence length",
+        y="Duration",
+        hue="Sequence length",
+        data=df,
+        ax=ax,
     )
 
     if apply_formatting:
@@ -1121,8 +1258,12 @@ def _stimulation_color_palette():
         "Off": c0,
         "On (0)": cc.alpha_to_solid_on_bg(base=c1, alpha=0.25, bg="white"),
         "On (0, 2)": cc.alpha_to_solid_on_bg(base=c1, alpha=0.50, bg="white"),
-        "On (0, 1, 2)": cc.alpha_to_solid_on_bg(base=c1, alpha=0.75, bg="white"),
-        "On (0, 1, 2, 3)": cc.alpha_to_solid_on_bg(base=c1, alpha=1.00, bg="white"),
+        "On (0, 1, 2)": cc.alpha_to_solid_on_bg(
+            base=c1, alpha=0.75, bg="white"
+        ),
+        "On (0, 1, 2, 3)": cc.alpha_to_solid_on_bg(
+            base=c1, alpha=1.00, bg="white"
+        ),
     }
 
     return palette
@@ -1139,13 +1280,13 @@ def plot_comparison_rij_between_conditions_serial(
     plot_matrix=False,
 ):
     """
-        Plot a rij for every neuron pair between conditions.
-        Assumes that fname_1 and fname_2 lead to h5files with the same neuron positions
-        under different dynamic conditions.
+    Plot a rij for every neuron pair between conditions.
+    Assumes that fname_1 and fname_2 lead to h5files with the same neuron positions
+    under different dynamic conditions.
 
-        #Parameters
-        which : str, "modules" or "stim" to compare within/across modules or groups
-            of stimulated vs non-stimulated modules. stimulated mods are hardcoded to 02
+    #Parameters
+    which : str, "modules" or "stim" to compare within/across modules or groups
+        of stimulated vs non-stimulated modules. stimulated mods are hardcoded to 02
     """
 
     assert which in ["modules", "stim"]
@@ -1209,7 +1350,9 @@ def plot_comparison_rij_between_conditions_serial(
     ax.set_xlabel(label_1)
     ax.set_ylabel(label_2)
     ax.legend(
-        labelcolor="linecolor", markerscale=5, handlelength=0,
+        labelcolor="linecolor",
+        markerscale=5,
+        handlelength=0,
     )
 
     fig.tight_layout()
@@ -1232,7 +1375,7 @@ def plot_comparison_rij_between_conditions_batch(
     plot_matrix=False,
 ):
     """
-        not sure if this guy works
+    not sure if this guy works
     """
 
     assert which in ["modules", "stim"]
@@ -1302,7 +1445,9 @@ def plot_comparison_rij_between_conditions_batch(
     ax.set_xlabel(label_1)
     ax.set_ylabel(label_2)
     ax.legend(
-        labelcolor="linecolor", markerscale=5, handlelength=0,
+        labelcolor="linecolor",
+        markerscale=5,
+        handlelength=0,
     )
 
     fig.tight_layout()
@@ -1329,7 +1474,11 @@ def _plot_matrix(c, **kwargs):
 
 
 def plot_distribution_correlation_coefficients(
-    h5f, ax=None, apply_formatting=True, num_bins=20, which="neurons",
+    h5f,
+    ax=None,
+    apply_formatting=True,
+    num_bins=20,
+    which="neurons",
 ):
     """
     Uses (naively) binned spike counts per neuron to calculate correlation coefficients
@@ -1354,7 +1503,9 @@ def plot_distribution_correlation_coefficients(
 
     try:
         color = (
-            h5f["ana.mod_colors"][0] if len(h5f["ana.mod_colors"]) == 1 else "black",
+            h5f["ana.mod_colors"][0]
+            if len(h5f["ana.mod_colors"]) == 1
+            else "black",
         )
     except:
         color = "black"
@@ -1375,7 +1526,10 @@ def plot_distribution_correlation_coefficients(
 
     # im pretty sure sns ignores nans (rij diagonal)
     sns.histplot(
-        data=rij.flatten(), color=color, alpha=0.2, **kwargs,
+        data=rij.flatten(),
+        color=color,
+        alpha=0.2,
+        **kwargs,
     )
 
     if apply_formatting:
@@ -1413,9 +1567,10 @@ def plot_distribution_burst_duration(
             h5f["ana.ensemble.isi"] = ens["ana.isi"]
             del ens
 
-        assert (
-            h5f["ana.ensemble.filenames"] == filenames
-        ), "`filenames` dont match. Using multiple ensembles is not implemented yet."
+        assert h5f["ana.ensemble.filenames"] == filenames, (
+            "`filenames` dont match. Using multiple ensembles is not"
+            " implemented yet."
+        )
         bursts = h5f["ana.ensemble.bursts"]
 
     if ax is None:
@@ -1467,28 +1622,35 @@ def plot_distribution_burst_duration(
 
 
 def plot_distribution_isi(
-    h5f, ax=None, apply_formatting=True, log_binning=True, which="all", filenames=None,
+    h5f,
+    ax=None,
+    apply_formatting=True,
+    log_binning=True,
+    which="all",
+    filenames=None,
 ):
     """
-        Plot the inter spike intervals in h5f.
+    Plot the inter spike intervals in h5f.
 
-        # Parameters
-        h5f : BetterDict
-            if `h5f.ana.isi` is not set, it will be calculated (and added to the file)
-        which : str
-            `all`, `in_bursts` or `out_bursts`. which isi to focus on, default `all`.
+    # Parameters
+    h5f : BetterDict
+        if `h5f.ana.isi` is not set, it will be calculated (and added to the file)
+    which : str
+        `all`, `in_bursts` or `out_bursts`. which isi to focus on, default `all`.
 
-        log_binning : bool, True
-            set to false for linear bins
+    log_binning : bool, True
+        set to false for linear bins
 
-        filenames : str
-            if `filenames` are provided, bursts an
+    filenames : str
+        if `filenames` are provided, bursts an
     """
     assert which in ["all", "in_bursts", "out_bursts"]
 
     if "ana.isi" not in h5f.keypaths():
         log.info("Finding ISIS")
-        assert which == "all", "`find_bursts` before plotting isis other than `all`"
+        assert (
+            which == "all"
+        ), "`find_bursts` before plotting isis other than `all`"
         assert "ana.bursts" in h5f.keypaths()
         ah.find_isis(h5f)
 
@@ -1506,9 +1668,10 @@ def plot_distribution_isi(
             h5f["ana.ensemble.isi"] = ens["ana.isi"]
             del ens
 
-        assert (
-            h5f["ana.ensemble.filenames"] == filenames
-        ), "`filenames` dont match. Using multiple ensembles is not implemented yet."
+        assert h5f["ana.ensemble.filenames"] == filenames, (
+            "`filenames` dont match. Using multiple ensembles is not"
+            " implemented yet."
+        )
         isi = h5f["ana.ensemble.isi"]
 
     if ax is None:
@@ -1527,7 +1690,8 @@ def plot_distribution_isi(
             max_isi = this_max_isi
         try:
             log.info(
-                f'Mean ISI, in bursts, {m_dc}: {np.mean(isi[f"{m_id}.in_bursts"])*1000:.1f} (ms)'
+                f"Mean ISI, in bursts, {m_dc}:"
+                f' {np.mean(isi[f"{m_id}.in_bursts"])*1000:.1f} (ms)'
             )
         except:
             pass
@@ -1576,10 +1740,13 @@ def plot_distribution_isi(
 
 
 def plot_distribution_participating_fraction(
-    h5f, ax=None, apply_formatting=True, num_bins=20,
+    h5f,
+    ax=None,
+    apply_formatting=True,
+    num_bins=20,
 ):
     """
-        Plot the fraction of neurons participating in a burst
+    Plot the fraction of neurons participating in a burst
     """
 
     log.info("Plotting participating fraction")
@@ -1613,7 +1780,9 @@ def plot_distribution_participating_fraction(
     sns.histplot(
         data=fractions,
         # binwidth=1 / 1000,
-        color=h5f["ana.mod_colors"][0] if len(h5f["ana.mod_colors"]) == 1 else "black",
+        color=h5f["ana.mod_colors"][0]
+        if len(h5f["ana.mod_colors"]) == 1
+        else "black",
         alpha=0.2,
         **kwargs,
         label="system-wide",
@@ -1639,7 +1808,7 @@ def plot_distribution_participating_fraction(
 @warntry
 def plot_distribution_sequence_length(h5f, ax=None, apply_formatting=True):
     """
-        Plot the distribution of sequence lengths' during bursts
+    Plot the distribution of sequence lengths' during bursts
     """
 
     assert "ana.bursts" in h5f.keypaths()
@@ -1675,7 +1844,9 @@ def plot_distribution_sequence_length(h5f, ax=None, apply_formatting=True):
     sns.histplot(
         data=seq_lens,
         # binwidth=1 / 1000,
-        color=h5f["ana.mod_colors"][0] if len(h5f["ana.mod_colors"]) == 1 else "black",
+        color=h5f["ana.mod_colors"][0]
+        if len(h5f["ana.mod_colors"]) == 1
+        else "black",
         alpha=0.2,
         **kwargs,
         label="system-wide",
@@ -1691,12 +1862,14 @@ def plot_distribution_sequence_length(h5f, ax=None, apply_formatting=True):
 
 
 @warntry
-def plot_distribution_degree_k(h5f, ax=None, apply_formatting=True, filenames=None):
+def plot_distribution_degree_k(
+    h5f, ax=None, apply_formatting=True, filenames=None
+):
     """
-        Plot the distribution of the in-and out degree for `h5f`.
+    Plot the distribution of the in-and out degree for `h5f`.
 
-        if `filenames` is provided, distribution data is accumulated from all files,
-        and only styling/meta information is used from `h5f`.
+    if `filenames` is provided, distribution data is accumulated from all files,
+    and only styling/meta information is used from `h5f`.
     """
     if ax is None:
         fig, ax = plt.subplots()
@@ -1768,13 +1941,13 @@ def plot_distribution_degree_for_neuron_distance(
     h5f, ax=None, apply_formatting=True, filenames=None
 ):
     """
-        Plot the distribution of the network degree for `h5f`, as a function
-        of the distance between the neurons.
+    Plot the distribution of the network degree for `h5f`, as a function
+    of the distance between the neurons.
 
-        uses `data.connectivity_matrix_sparse` and `data.neuron_pos_x` (and y)
+    uses `data.connectivity_matrix_sparse` and `data.neuron_pos_x` (and y)
 
-        if `filenames` is provided, distribution data is accumulated from all files,
-        and only styling/meta information is used from `h5f`.
+    if `filenames` is provided, distribution data is accumulated from all files,
+    and only styling/meta information is used from `h5f`.
     """
 
     from itertools import combinations
@@ -1807,7 +1980,8 @@ def plot_distribution_degree_for_neuron_distance(
             xc = np.array(list(combinations(pos_x[selects], 2)))
             yc = np.array(list(combinations(pos_y[selects], 2)))
             n_dists = np.sqrt(
-                np.power(xc[:, 0] - xc[:, 1], 2) + np.power(yc[:, 0] - yc[:, 1], 2)
+                np.power(xc[:, 0] - xc[:, 1], 2)
+                + np.power(yc[:, 0] - yc[:, 1], 2)
             )
 
             return k_dists, n_dists
@@ -1874,12 +2048,14 @@ def plot_distribution_degree_for_neuron_distance(
 
 
 @warntry
-def plot_distribution_axon_length(h5f, ax=None, apply_formatting=True, filenames=None):
+def plot_distribution_axon_length(
+    h5f, ax=None, apply_formatting=True, filenames=None
+):
     """
-        Plot the distribution of the axon length for `h5f`.
+    Plot the distribution of the axon length for `h5f`.
 
-        if `filenames` is provided, distribution data is accumulated from all files,
-        and only styling/meta information is used from `h5f`.
+    if `filenames` is provided, distribution data is accumulated from all files,
+    and only styling/meta information is used from `h5f`.
     """
     if ax is None:
         fig, ax = plt.subplots()
@@ -1905,7 +2081,10 @@ def plot_distribution_axon_length(h5f, ax=None, apply_formatting=True, filenames
     }
 
     sns.histplot(
-        alen, label="length", color=matplotlib.cm.get_cmap("tab10").colors[0], **kwargs
+        alen,
+        label="length",
+        color=matplotlib.cm.get_cmap("tab10").colors[0],
+        **kwargs,
     )
     sns.histplot(
         aete,
@@ -1929,10 +2108,10 @@ def plot_distribution_dendritic_tree_size(
     h5f, ax=None, apply_formatting=True, filenames=None
 ):
     """
-        Plot the distribution of the size of the dendritic tree for `h5f`.
+    Plot the distribution of the size of the dendritic tree for `h5f`.
 
-        if `filenames` is provided, distribution data is accumulated from all files,
-        and only styling/meta information is used from `h5f`.
+    if `filenames` is provided, distribution data is accumulated from all files,
+    and only styling/meta information is used from `h5f`.
     """
     if ax is None:
         fig, ax = plt.subplots()
@@ -1942,7 +2121,9 @@ def plot_distribution_dendritic_tree_size(
     if filenames is None:
         n_R_d = h5f["data.neuron_radius_dendritic_tree"][:]
     else:
-        log.info("Loading multiple files for distribution of dendritic tree size")
+        log.info(
+            "Loading multiple files for distribution of dendritic tree size"
+        )
         n_R_d = h5.load(filenames, "/data/neuron_radius_dendritic_tree")
         n_R_d = np.concatenate(n_R_d).ravel()
 
@@ -2007,7 +2188,10 @@ def plot_connectivity_layout(h5f, ax=None, apply_formatting=True):
         G.add_nodes_from(h5f["ana.neuron_ids"])
         pos = dict()
         for idx, n in enumerate(h5f["ana.neuron_ids"]):
-            pos[n] = (h5f["data.neuron_pos_x"][idx], h5f["data.neuron_pos_y"][idx])
+            pos[n] = (
+                h5f["data.neuron_pos_x"][idx],
+                h5f["data.neuron_pos_y"][idx],
+            )
 
         # add edges
         try:
@@ -2049,7 +2233,17 @@ def plot_connectivity_layout(h5f, ax=None, apply_formatting=True):
 def _plot_soma(h5f, ax, n_R_s=7.5):
     n_x = h5f["data.neuron_pos_x"][:]
     n_y = h5f["data.neuron_pos_y"][:]
-    _circles(n_x, n_y, n_R_s, ax=ax, fc="white", ec="black", alpha=1, lw=0.25, zorder=4)
+    _circles(
+        n_x,
+        n_y,
+        n_R_s,
+        ax=ax,
+        fc="white",
+        ec="black",
+        alpha=1,
+        lw=0.25,
+        zorder=4,
+    )
     # _circles(n_x, n_y, n_R_s, ax=ax, fc="white", ec="none", alpha=1, lw=0.5, zorder=4)
     # _circles(n_x, n_y, n_R_s, ax=ax, fc="none", ec="black", alpha=0.3, lw=0.5, zorder=5)
 
@@ -2068,13 +2262,23 @@ def _plot_axons(h5f, ax):
         clr = h5f["ana.mod_colors"][m_id]
         ax.plot(seg_x[n], seg_y[n], color=clr, lw=0.35, zorder=0, alpha=0.5)
 
+
 def _plot_dendrites(h5f, ax):
     n_x = h5f["data.neuron_pos_x"][:]
     n_y = h5f["data.neuron_pos_y"][:]
     n_R = h5f["data.neuron_radius_dendritic_tree"][:]
-    _circles(n_x, n_y, n_R, ax=ax, ls="--", fc="none", ec="gray", alpha=.5, lw=0.9, zorder=0)
-
-
+    _circles(
+        n_x,
+        n_y,
+        n_R,
+        ax=ax,
+        ls="--",
+        fc="none",
+        ec="gray",
+        alpha=0.5,
+        lw=0.9,
+        zorder=0,
+    )
 
 
 # ------------------------------------------------------------------------------ #
@@ -2093,19 +2297,19 @@ def _style_legend(leg):
 
 def _ticklabels_lin_to_log10(x, pos):
     """
-        converts ticks of manually logged data (lin ticks) to log ticks, as follows
-         1 -> 10
-         0 -> 1
-        -1 -> 0.1
+    converts ticks of manually logged data (lin ticks) to log ticks, as follows
+     1 -> 10
+     0 -> 1
+    -1 -> 0.1
 
-        # Example
-        ```
-        ax.xaxis.set_major_formatter(
-            matplotlib.ticker.FuncFormatter(_ticklabels_lin_to_log10_power)
-        )
-        ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1))
-        ax.xaxis.set_minor_locator(_ticklocator_lin_to_log_minor())
-        ```
+    # Example
+    ```
+    ax.xaxis.set_major_formatter(
+        matplotlib.ticker.FuncFormatter(_ticklabels_lin_to_log10_power)
+    )
+    ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1))
+    ax.xaxis.set_minor_locator(_ticklocator_lin_to_log_minor())
+    ```
     """
     prec = int(np.ceil(-np.minimum(x, 0)))
     return "{{:.{:1d}f}}".format(prec).format(np.power(10.0, x))
@@ -2113,10 +2317,10 @@ def _ticklabels_lin_to_log10(x, pos):
 
 def _ticklabels_lin_to_log10_power(x, pos, nicer=True, nice_range=[-1, 0, 1]):
     """
-        converts ticks of manually logged data (lin ticks) to log ticks, as follows
-         1 -> 10^1
-         0 -> 10^0
-        -1 -> 10^-1
+    converts ticks of manually logged data (lin ticks) to log ticks, as follows
+     1 -> 10^1
+     0 -> 10^0
+    -1 -> 10^-1
     """
     if x.is_integer():
         # use easy to read formatter if exponents are close to zero
@@ -2131,7 +2335,7 @@ def _ticklabels_lin_to_log10_power(x, pos, nicer=True, nice_range=[-1, 0, 1]):
 
 def _ticklocator_lin_to_log_minor(vmin=-10, vmax=10, nbins=10):
     """
-        get minor ticks on when manually converting lin to log
+    get minor ticks on when manually converting lin to log
     """
     locs = []
     orders = int(np.ceil(vmax - vmin))
