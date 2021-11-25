@@ -209,10 +209,13 @@ for obs in observables:
             if len(h_cs_iter) > 1:
                 hvals = hvals.sel({h_dim_iter: cs})
 
+            hvals = hvals.to_numpy()
+            hvals = hvals.reshape(-1)
+
             # this is a hack to use seaborn to plot a precomputed histogram
             sns.histplot(
                 x=centroids,
-                weights=hvals.to_numpy(),
+                weights=hvals,
                 bins=len(centroids),
                 binrange=(min(bins), max(bins)),
                 ax=ax,
