@@ -98,6 +98,8 @@ def all_in_one(candidate=None):
         res["any_functional_complexity"] = 1
         res["sys_mean_correlation"] = 1
         res["sys_median_correlation"] = 1
+        res["sys_mean_depletion_correlation"] = 1
+        res["sys_median_depletion_correlation"] = 1
         res["sys_mean_participating_fraction"] = 1
         res["sys_median_participating_fraction"] = 1
         res["sys_participating_fraction_complexity"] = 1
@@ -108,6 +110,8 @@ def all_in_one(candidate=None):
         res["vec_sys_hvals_participating_fraction"] = 20
         res["vec_sys_hbins_correlation_coefficients"] = 21
         res["vec_sys_hvals_correlation_coefficients"] = 20
+        res["vec_sys_hbins_depletion_correlation_coefficients"] = 21
+        res["vec_sys_hvals_depletion_correlation_coefficients"] = 20
 
         # correlation coefficients, within
         for mod in [0, 1, 2, 3]:
@@ -188,12 +192,16 @@ def all_in_one(candidate=None):
     # correlation coefficients
     try:
         rij_matrix = ah.find_rij(h5f, which="neurons", time_bin_size=time_bin_size_for_rij)
+        rij_depletion_matrix = ah.find_rij(h5f, which="depletion")
         np.fill_diagonal(rij_matrix, np.nan)
+        np.fill_diagonal(rij_depletion_matrix, np.nan)
     except:
         log.error("Failed to find correlation coefficients")
 
     res["sys_mean_correlation"] = np.nanmean(rij_matrix)
     res["sys_median_correlation"] = np.nanmedian(rij_matrix)
+    res["sys_mean_depletion_correlation"] = np.nanmean(rij_depletion_matrix)
+    res["sys_median_depletion_correlation"] = np.nanmedian(rij_depletion_matrix)
 
     for mod in [0, 1, 2, 3]:
         try:
@@ -220,6 +228,7 @@ def all_in_one(candidate=None):
     bins = np.arange(0, 1 + 0.1 * bw, bw)
     res["vec_sys_hbins_correlation_coefficients"] = bins.copy()
     res["vec_sys_hbins_participating_fraction"] = bins.copy()
+    res["vec_sys_hbins_depletion_correlation_coefficients"] = bins.copy()
 
     try:
         C, _ = ah.find_functional_complexity(
@@ -227,13 +236,16 @@ def all_in_one(candidate=None):
         )
         # this is not the place to do this, but ok
         rij_hist, _ = np.histogram(rij_matrix.flatten(), bins=bins)
+        rij_depletion_hist, _ = np.histogram(rij_depletion_matrix.flatten(), bins=bins)
     except Exception as e:
         log.exception(e)
         C = np.nan
         rij_hist= np.ones(20) * np.nan
+        rij_depletion_hist= np.ones(20) * np.nan
 
     res["sys_functional_complexity"] = C
     res["vec_sys_hvals_correlation_coefficients"] = rij_hist.copy()
+    res["vec_sys_hvals_depletion_correlation_coefficients"] = rij_depletion_hist.copy()
 
     # complexity on module level
     try:
