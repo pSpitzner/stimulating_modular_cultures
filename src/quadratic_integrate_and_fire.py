@@ -18,7 +18,9 @@ import logging
 
 from brian2 import *
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)-8s [%(name)s] %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(levelname)-8s [%(name)s] %(message)s"
+)
 log = logging.getLogger(__name__)
 
 import stimulation as stim
@@ -65,13 +67,13 @@ b = 0.5            # sensitivity to sub-threshold fluctuations
 uIncr =  50 * mV   # after-spike increment of recovery variable u
 
 # synapse
-tD =   2 * second  # characteristic recovery time, between 0.5 and 20 seconds
+tD =  20 * second  # characteristic recovery time, between 0.5 and 20 seconds
 tA =  10 * ms      # decay time of post-synaptic current (AMPA current decay time)
-jA =  35 * mV      # AMPA current strength, between 10 - 50 mV
+jA =  45 * mV      # AMPA current strength, between 10 - 50 mV
                    # 170.612 value in javiers neurondyn
                    # this needs to scale with tV/tA
 tG = 20 * ms       # decay time of post-syanptic GABA current
-jG = 70 * mV       # GABA current strength
+jG = 50 * mV       # GABA current strength
 
 # noise
 beta = 0.8         # D = beta*D after spike, to reduce efficacy, beta < 1
@@ -145,7 +147,7 @@ parser.add_argument("--bridge_weight",
     help="synaptic weight of bridge neurons [0, 1]")
 
 parser.add_argument("--inhibition_fraction",
-    dest="inhibition_fraction",  default= 0.0, type=float,
+    dest="inhibition_fraction",  default= 0.2, type=float,
     help="how many neurons should be inhibitory")
 
 # fmt:on
@@ -185,7 +187,9 @@ log.info("recording rates:  %s", record_rates)
 if args.stimulation_type != "off":
     log.info("stim.   module: %s", args.stimulation_module)
 log.info("bridge weight:    %s", args.bridge_weight)
-log.info("inhibition:       %s (fraction of all neurons)", args.inhibition_fraction)
+log.info(
+    "inhibition:       %s (fraction of all neurons)", args.inhibition_fraction
+)
 
 
 # ------------------------------------------------------------------------------ #
@@ -240,7 +244,7 @@ G = NeuronGroup(
 # maybe exclude the bridging neurons, when looking at `1x1_projected` topology
 mini_g = PoissonInput(target=G, target_var="IA", N=1, rate=rate, weight=jM)
 
-# optionally, make a fraction of neurons inhibitiory. For now, only change `g`.
+# optionally, make a fraction of neurons inhibitiory.
 num_inhib = int(num_n * args.inhibition_fraction)
 num_excit = int(num_n - num_inhib)
 
