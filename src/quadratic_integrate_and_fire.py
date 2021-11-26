@@ -137,6 +137,9 @@ parser.add_argument("-stim",
     dest="stimulation_type", default="off", type=str,
     help="if/how to stimulate: 'off', 'poisson', 'hideaki'",)
 
+parser.add_argument("-stim_rate",  dest="stimulation_rate",
+    help="additional rate upon stim, in Hz", default=10, type=float)
+
 parser.add_argument("-mod",
     dest="stimulation_module", default='0', type=str,
     help="modules to stimulate, e.g. `0`, or `02` for multiple",)
@@ -167,6 +170,7 @@ rate = args.r * Hz
 args.equil_duration *= second
 args.sim_duration *= second
 args.stimulation_module = [int(i) for i in args.stimulation_module]
+args.stimulation_rate *= Hz
 
 print(f'#{"":#^75}#\n#{"running dynamics in brian":^75}#\n#{"":#^75}#')
 # log.info("input topology:   %s", args.input_path)
@@ -181,15 +185,16 @@ log.info("tD:               %s", tD)
 log.info("noise rate:       %s", rate)
 log.info("duration:         %s", args.sim_duration)
 log.info("equilibration:    %s", args.equil_duration)
-log.info("stimulation:      %s", args.stimulation_type)
 log.info("recording states: %s", record_state)
 log.info("recording rates:  %s", record_rates)
-if args.stimulation_type != "off":
-    log.info("stim.   module: %s", args.stimulation_module)
 log.info("bridge weight:    %s", args.bridge_weight)
 log.info(
     "inhibition:       %s (fraction of all neurons)", args.inhibition_fraction
 )
+log.info("stimulation:      %s", args.stimulation_type)
+if args.stimulation_type != "off":
+    log.info("stim. module:     %s", args.stimulation_module)
+    log.info("stimulation rate: %s", args.stimulation_rate)
 
 
 # ------------------------------------------------------------------------------ #
@@ -291,14 +296,18 @@ S_inh = Synapses(
 
 # connect synapses
 log.info("Applying connectivity from sparse matrix")
+# we would like to do the simple thing, but need to work around inhibition
+# and the different index conventions
 # S.connect(i=a_ij_sparse[:, 0], j=a_ij_sparse[:, 1])
 
 for n_id in inhib_ids:
+    # i goes from 0 to num_inhib, and is already in brian index convention
     i = np.where(inhib_ids == n_id)[0][0]
     idx = np.where(a_ij_sparse[:, 0] == n_id)[0]
     if len(idx) == 0:
         continue
     ii = i * np.ones(len(idx), dtype="int64")
+    # jj goes from 0 to num_n, and we still need to convert
     jj = t2b[a_ij_sparse[idx, 1]]
     S_inh.connect(i=ii, j=jj)
 
@@ -321,30 +330,26 @@ if args.stimulation_type == "hideaki":
         mod_ids=mod_ids, n_per_mod=5, mod_targets=args.stimulation_module
     )
     stim_ids = t2b[stim_ids]
-    # every 400ms, each candidate has a chance 0.4 to receive the stimulus
+    # every 400ms, each candidate has a chance 0.4 to receive the stimulus as
+    # a constant input current
     for sid in stim_ids:
-        G[sid].run_regularly("""
+        G[sid].run_regularly(
+            """
             stim_on = int(rand() < 0.4)
             Istim = stim_on * jE
         """,
-        dt = 400*ms)
+            dt=400 * ms,
+        )
 
 elif args.stimulation_type == "poisson":
-    # to target birde neurons only, assume bridge_ids are consecutive
-    # stim_g = G[bridge_ids]
-    # PoissonInput(target=stim_g, target_var="v", N=1, rate=rate, weight=vPeak)
-
-    poisson_rate = np.zeros(num_n)
+    stim_ids = []
     for mod in args.stimulation_module:
-        stim_idx = np.where(mod_ids == mod)[0]
-        poisson_rate[stim_idx] = 0.4 * (5 / 25) * 1 / (400 * ms)
+        stim_ids.extend(np.where(mod_ids == mod)[0])
+    stim_ids = t2b[np.array(stim_ids)]
 
-    print(poisson_rate)
-    stim_ids = np.arange(num_n, dtype="int64")
-
-    stim_g = PoissonGroup(num_n, poisson_rate, name="create_stimulation")
-    stim_s = Synapses(stim_g, G, on_pre="v_post = 2*vPeak", name="apply_stimulation")
-    stim_s.connect("i == j")
+    stim_g = PoissonGroup(len(stim_ids), args.stimulation_rate)
+    stim_s = Synapses(stim_g, G, on_pre="IA_post += jM")
+    stim_s.connect(i=np.arange(0, len(stim_ids)), j=stim_ids)
 
 # ------------------------------------------------------------------------------ #
 # Running
@@ -507,11 +512,13 @@ try:
             "population rate in Hz, smoothed with gaussian kernel (of 50ms? width), first dim is time in seconds",
         )
 
-    print(f'#{"":#^75}#\n#{"Saving...":^75}#\n#{"":#^75}#')
+    if args.output_path is not None:
+        print(f'#{"":#^75}#\n#{"Saving...":^75}#\n#{"":#^75}#')
+        h5.recursive_write(args.output_path, h5_data, h5_desc)
+        print(f'#{"":#^75}#\n#{"All done!":^75}#\n#{"":#^75}#')
+    else:
+        print("specify -o to save results to disk")
 
-    h5.recursive_write(args.output_path, h5_data, h5_desc)
-
-    print(f'#{"":#^75}#\n#{"All done!":^75}#\n#{"":#^75}#')
 
 # fmt: on
 except Exception as e:
@@ -522,4 +529,3 @@ try:
     shutil.rmtree(cache_dir, ignore_errors=True)
 except Exception as e:
     log.exception("Unable to remove cached files")
-

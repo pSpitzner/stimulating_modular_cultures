@@ -793,6 +793,7 @@ def index_alignment(num_n, num_inhib, bridge_ids):
                 excit_bridge.append(n_id)
             else:
                 excit_no_bridge.append(n_id)
+
     brian_indices = np.concatenate(
         [
             np.sort(inhib_no_bridge),
