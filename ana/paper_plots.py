@@ -351,22 +351,22 @@ def exp_chemical_vs_opto2(observable="Functional Complexity"):
 
     fig, ax = plt.subplots()
 
-    # x_pos = dict()
-    # x_pos["exp"] = {"Off" : 0.05, "On" : 1.05 }
-    # x_pos["exp_chemical"] = {"Off" : 0.25, "On" : 1.25 }
-    # x_pos_sticks = dict()
-    # x_pos_sticks["exp"] = {"Off" : 0, "On" : 1 }
-    # x_pos_sticks["exp_chemical"] = {"Off" : 0.2, "On" : 1.2 }
-
+    categories = ["exp", "exp_chemical"]
+    conditions = ["Off", "On"]
+    small_dx = 0.3
+    large_dx = 1.0
     x_pos = dict()
-    x_pos["exp"] = {"Off" : 0.0, "On" : 1.0 }
-    x_pos["exp_chemical"] = {"Off" : 0.25, "On" : 1.25 }
     x_pos_sticks = dict()
-    x_pos_sticks["exp"] = {"Off" : 0.0, "On" : 1.0 }
-    x_pos_sticks["exp_chemical"] = {"Off" : 0.25, "On" : 1.25 }
+    for ldx, l in enumerate(categories):
+        x_pos[l] = dict()
+        x_pos_sticks[l] = dict()
+        for cdx, c in enumerate(conditions):
+            x_pos[l][c] = ldx * large_dx + cdx*small_dx
+            x_pos_sticks[l][c] = ldx * large_dx + cdx*small_dx
+
 
     # opto
-    for etype in ["exp_chemical", "exp"]:
+    for etype in categories:
         clr = colors["stim"] if etype == "exp" else colors["KCl_0mM"]
         for trial in dfs[etype]['Trial'].unique():
             df = dfs[etype].loc[dfs[etype]['Trial'] == trial]
@@ -432,6 +432,105 @@ def exp_chemical_vs_opto2(observable="Functional Complexity"):
     cc.set_size3(ax, 1.2, 2)
 
     ax.get_figure().savefig(f"./fig/paper/exp_chem_vs_opto_{observable}.pdf", dpi=300)
+
+    return ax
+
+
+def exp_sticks_across_layouts(observable="Functional Complexity"):
+
+    layouts = ["1b", "3b", "merged"]
+    conditions = ["pre", "stim", "post"]
+    # we want the precalculated summary statistics of each trial
+    dfs = dict()
+    for key in layouts:
+        df = load_pd_hdf5(f"./dat/exp_out/{key}.hdf5")
+        dfs[key] = df["trials"].query("Condition == @conditions")
+
+    fig, ax = plt.subplots()
+
+    small_dx = 0.3
+    large_dx = 1.5
+    x_pos = dict()
+    x_pos_sticks = dict()
+    for ldx, l in enumerate(layouts):
+        x_pos[l] = dict()
+        x_pos_sticks[l] = dict()
+        for cdx, c in enumerate(conditions):
+            x_pos[l][c] = cdx * large_dx + ldx*small_dx
+            x_pos_sticks[l][c] = cdx * large_dx + ldx*small_dx
+
+    # x_pos["1b"] = {"pre" : 0.0, "stim" : 1.0, "post" :  2.0 }
+    # x_pos["3b"] = {"pre" : 0.25, "stim" : 1.25, "post"  :  2.25 }
+    # x_pos["merged"] = {"pre" : 0.5, "stim" : 1.5, "post" :  2.5 }
+    # x_pos_sticks["1b"] = {"pre" : 0.0, "stim" : 1.0, "post" :  2.0 }
+    # x_pos_sticks["3b"] = {"pre" : 0.25, "stim" : 1.25, "post"  :  2.25 }
+    # x_pos_sticks["merged"] = {"pre" : 0.5, "stim" : 1.5, "post" :  2.5 }
+
+
+    # opto
+    for edx, etype in enumerate(layouts):
+        clr = f"C{edx}"
+        for trial in dfs[etype]['Trial'].unique():
+            df = dfs[etype].loc[dfs[etype]['Trial'] == trial]
+            assert len(df) == len(layouts)
+            x = []
+            y = []
+            for idx, row in df.iterrows():
+                stim = row["Condition"]
+                x.append(x_pos[etype][stim])
+                y.append(row[observable])
+
+            ax.plot(
+                x,
+                y,
+                # marker="o",
+                # markersize=1,
+                lw=.5,
+                color=cc.alpha_to_solid_on_bg(clr, 0.2),
+                # color=clr,
+                # alpha = 0.3,
+                label=trial,
+                zorder=0,
+                clip_on = False,
+            )
+
+        for stim in conditions:
+            df = dfs[etype].query(f"Condition == '{stim}'")
+            # sticklike error bar
+            mid, error, percentiles = ah.pd_bootstrap(
+                df,
+                obs=observable,
+                num_boot=500,
+                func=np.nanmean,
+                percentiles=[2.5, 50, 97.5],
+            )
+            df_max = np.nanmax(df[observable])
+            df_min = np.nanmin(df[observable])
+
+            _draw_error_stick(
+                ax,
+                center=x_pos_sticks[etype][stim],
+                # mid=percentiles[1],
+                # errors=[percentiles[0], percentiles[2]],
+                mid=mid,
+                errors=[mid-error, mid+error],
+                outliers=[df_min, df_max],
+                orientation="v",
+                color=clr,
+                zorder=2,
+            )
+
+    # ax.legend()
+    ax.set_ylim(0, 1.0)
+    ax.set_xlim(-.25, 3.5)
+    sns.despine(ax=ax, bottom=True, left=False, trim=True, offset=5)
+    ax.set_xticks([])
+    ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
+    ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
+
+    cc.set_size3(ax, 2.2, 2)
+
+    # ax.get_figure().savefig(f"./fig/paper/exp_chem_vs_opto_{observable}.pdf", dpi=300)
 
     return ax
 
@@ -996,7 +1095,8 @@ def sim_modules_participating_in_bursts(
         data[obs] = data[obs].sel(simulation_coordinates)
 
     x = data["any_num_b"].coords[dim1]
-    selects = np.where((x >= xlim[0]) & (x <= xlim[1]))
+    # for 92.5 Hz we only sampled k = 10, hence drop the point
+    selects = np.where((x >= xlim[0]) & (x <= xlim[1]) & (x!=92.5) )
     # selects = np.ones_like(x, dtype=bool)
 
     fig, ax = plt.subplots()
@@ -1102,7 +1202,7 @@ def sim_violins_for_all_k():
         ax.set_xlabel(f"")
         ax.set_ylabel(f"")
         # ax.set_xticks([])
-        cc.set_size2(ax, 2, 3.0)
+        cc.set_size2(ax, 4, 3.0)
 
     def render_plots():
 
@@ -1116,6 +1216,7 @@ def sim_violins_for_all_k():
             ylim=[0, 1],
             num_swarm_points=500,
             bw=0.2,
+            scale="area",
         )
         apply_formatting(ax)
         ax.set_ylabel("Burst size")
@@ -1134,6 +1235,7 @@ def sim_violins_for_all_k():
             ylim=[0, 1],
             num_swarm_points=1000,
             bw=0.2,
+            scale="area",
         )
         apply_formatting(ax)
         ax.set_ylabel("Correlation Coefficient")
@@ -1141,6 +1243,28 @@ def sim_violins_for_all_k():
         ax.get_figure().savefig(
             f"./fig/paper/sim_violins_rij_{k}.pdf", dpi=300
         )
+
+        # depletion
+        try:
+            log.debug("depletion")
+            ax = custom_violins(
+                df["drij"],
+                category="Condition",
+                observable="Depletion rij",
+                palette=colors[k],
+                ylim=[-.5, 1],
+                num_swarm_points=1000,
+                bw=0.2,
+                scale="area",
+            )
+            apply_formatting(ax, ylim=False)
+            ax.set_ylabel("Depletion rij")
+            ax.set_xlabel(f"{k}")
+            ax.get_figure().savefig(
+                f"./fig/paper/sim_violins_depletion_rij_{k}.pdf", dpi=300
+            )
+        except:
+            log.debug("depletion skipped")
 
         # ibi
         log.debug("ibi")
@@ -1152,6 +1276,7 @@ def sim_violins_for_all_k():
             ylim=[0, 70],
             num_swarm_points=250,
             bw=0.2,
+            scale="area",
         )
         apply_formatting(ax, ylim=False, trim=False)
         ax.set_ylim([0, 70])
