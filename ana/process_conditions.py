@@ -61,6 +61,7 @@ bs_large = dict()
 bs_large["exp"] = 200 / 1000
 bs_large["exp_chemical"] = 200 / 1000
 bs_large["sim"] = 20 / 1000
+bs_large["sim_partial"] = 20 / 1000
 
 
 def main():
@@ -102,9 +103,14 @@ def main():
         conditions["KCl_1b"] = ["1_KCl_0mM", "2_KCl_2mM"]
     elif args.etype == "sim":
         # number of axons between modules as layouts
+        # first rate gets stimulated "off" value assigned, second becomes "on"
         conditions["k=5"] = ["80.0", "90.0"]  # Hz
         conditions["k=1"] = ["75.0", "85.0"]
         conditions["k=10"] = ["85.0", "92.5"]
+    elif args_etype == "sim_partial":
+        # for the case where we only stimulate 2 modules instead of uniform
+        # noise to all, we need a bit more tweaking below
+        conditions["k=5"] = ["0.0", "15.0"]
     else:
         raise KeyError("type should be 'exp', 'exp_chemical' or 'sim'")
 
@@ -119,7 +125,7 @@ def main():
         dataframes = dict()
         for key in ["bursts", "isis", "rij", "rij_paired", "trials"]:
             dataframes[key] = []
-        if args.etype == "sim":
+        if "sim" in args.etype:
             # we collect the correlation coefficients of synaptic resources for sim
             dataframes["drij"] = []
 
@@ -130,13 +136,17 @@ def main():
                 input_paths = glob.glob(
                     f"{args.input_base}/stim=off_{layout}_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate={condition}_rep=*.hdf5"
                 )
+            elif args.etype == "sim_partial":
+                input_paths = glob.glob(
+                    f"{args.input_base}/stim=02_{layout}_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=80.0_stimrate={condition}_rep=*.hdf5"
+                )
 
             print(f"found {len(input_paths)} files for {layout} {condition}")
 
             # trials / realizations
             for path in input_paths:
                 trial = os.path.basename(path)
-                if args.etype == "sim":
+                if "sim" in args.etype:
                     trial = trial.split("rep=")[-1].split(".")[0]
 
                 print(f"\n{args.etype} {layout} {condition} {trial}\n")
@@ -147,7 +157,7 @@ def main():
                     stimulation_string = (
                         "On" if condition[0:2] == "2_" else "Off"
                     )
-                elif args.etype == "sim":
+                elif "sim" in args.etype:
                     condition_string = f"{condition} Hz"
                     # here we should be a bit more careful, maybe
                     stimulation_string = "On" if cdx == 1 else "Off"
@@ -291,7 +301,7 @@ def main():
                 # Correlation of the depletion variable, for simulations
                 # ------------------------------------------------------------------------------ #
 
-                if args.etype == "sim":
+                if "sim" in args.etype:
                     drij = ah.find_rij(h5f, which="depletion")
                     np.fill_diagonal(drij, np.nan)
                     drij_flat = drij.flatten()
@@ -328,7 +338,7 @@ def main():
                         "Type": args.etype,
                     }
                 )
-                if args.etype == "sim":
+                if "sim" in args.etype:
                     df["Mean Depletion rij"] = np.nanmean(drij)
                     df["Median Depletion rij"] = np.nanmedian(drij)
                 dataframes["trials"].append(df)
@@ -352,11 +362,11 @@ def main():
 
 
 def prepare_file(etype, condition, path_prefix):
-    if etype == "exp" or etype == "exp_chemical":
+    if "exp" in etype:
         h5f = ah.load_experimental_files(
             path_prefix=f"{path_prefix}/", condition=condition
         )
-    elif etype == "sim":
+    elif "sim" in etype:
         h5f = ah.prepare_file(path_prefix)
 
     ah.find_rates(h5f, bs_large=bs_large[etype])

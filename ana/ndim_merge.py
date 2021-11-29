@@ -56,6 +56,7 @@ d_obs["rate"] = "/meta/dynamics_rate"
 d_obs["tD"] = "/meta/dynamics_tD"
 # d_obs["alpha"] = "/meta/topology_alpha"
 d_obs["k_inter"] = "/meta/topology_k_inter"
+d_obs["stim_rate"] = "/meta/dynamics_stimulation_rate"
 # d_obs["k_frac"] = "/meta/dynamics_k_frac"
 
 threshold_factor = 2.5 / 100
