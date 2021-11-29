@@ -419,6 +419,9 @@ h5_desc["meta.dynamics_tD"] = "characteristic decay time, in seconds"
 h5_data["meta.dynamics_rate"] = rate / Hz
 h5_desc["meta.dynamics_rate"] = "rate for the (global) poisson input (shot-noise), in Hz"
 
+h5_data["meta.dynamics_stimulation_rate"] = args.stimulation_rate / Hz
+h5_desc["meta.dynamics_stimulation_rate"] = "rate for the poisson input, added to stimulated modules, in Hz"
+
 h5_data["meta.dynamics_simulation_duration"] = args.sim_duration / second
 h5_desc["meta.dynamics_simulation_duration"] = "in seconds"
 
