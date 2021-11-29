@@ -55,6 +55,7 @@ threshold_factor = dict()
 threshold_factor["exp"] = 10 / 100
 threshold_factor["exp_chemical"] = 10 / 100
 threshold_factor["sim"] = 2.5 / 100
+threshold_factor["sim_partial"] = 2.5 / 100
 
 # for pop. rate, width of gaussian placed on every spike, in seconds
 bs_large = dict()
@@ -107,7 +108,7 @@ def main():
         conditions["k=5"] = ["80.0", "90.0"]  # Hz
         conditions["k=1"] = ["75.0", "85.0"]
         conditions["k=10"] = ["85.0", "92.5"]
-    elif args_etype == "sim_partial":
+    elif args.etype == "sim_partial":
         # for the case where we only stimulate 2 modules instead of uniform
         # noise to all, we need a bit more tweaking below
         conditions["k=5"] = ["0.0", "15.0"]
