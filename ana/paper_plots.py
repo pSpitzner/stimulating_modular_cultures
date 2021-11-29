@@ -677,7 +677,7 @@ def exp_rij_for_layouts():
 def sim_raster_plots(
     bs_large=20 / 1000,  # width of the gaussian kernel for rate
     threshold_factor=2.5 / 100,  # fraction of max peak height for burst
-    naked=False,  # whether to strip frames
+    zoomin = False,
 ):
 
     rates = [80, 90]
@@ -690,16 +690,19 @@ def sim_raster_plots(
         c_str = f"{rate} Hz"
 
         h5f = ah.prepare_file(
-            f"./dat/inhibition_sweep_rate_160/dyn/stim=off_k=5_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate={rate:.1f}_rep=000.hdf5"
+            f"./dat/the_last_one/dyn/stim=off_k=5_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate={rate:.1f}_rep=001.hdf5"
         )
 
         # ------------------------------------------------------------------------------ #
         # raster
         # ------------------------------------------------------------------------------ #
+        figsize = [3.5 / 2.54, 3 / 2.54]
+        if zoomin:
+            figsize = [1 / 2.54, 3 / 2.54]
+        fig, axes = plt.subplots(nrows=3, ncols=1, sharex=True, figsize=figsize)
 
-        fig, ax = plt.subplots()
+        ax = axes[1]
         ax.set_rasterization_zorder(0)
-
         ph.plot_raster(
             h5f,
             ax,
@@ -709,53 +712,26 @@ def sim_raster_plots(
             markersize=0.75,
             alpha=0.5,
         )
-        # ph.plot_bursts_into_timeseries(
-        #     h5f, ax, apply_formatting=False, style="fill_between", zorder=-2
-        # )
 
         ax.set_ylim(-1, None)
-        ax.set_xlim(0, 540)
         ax.set_ylabel("")
-        # ax.set_ylabel("Raster")
         ax.set_xlabel("")
-        # ax.set_title(c_str, loc="left")
+        ax.tick_params(axis='both', which='both', bottom=False)
         ax.set_yticks([])
-        if naked:
-            ax.set_xticks([])
-
-            sns.despine(ax=ax, left=True, bottom=True)
-
-            if rdx == len(rates) - 1:
-                _time_scale_bar(
-                    ax=ax, x1=340, x2=520, y=-15, ylabel=-25, label="180 s"
-                )
-        else:
-            sns.despine(ax=ax, left=False, right=False, bottom=False, top=False)
-            ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(180))
-            ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(60))
-            # ax.xaxis.set_major_formatter(matplotlib.ticker.NullFormatter())
-            ax.set_xticks([])
-
-        cc.set_size3(ax, 3, 1.0)
-
-        # # coordinates are pretty much ignored after cc.set_size2
-        # ax.text(-0.2, 0.5, c_str, va="top")
-
-        ax.get_figure().savefig(
-            f"./fig/paper/sim_raster_nozoom_{c_str}.pdf", dpi=300
-        )
+        # sns.despine(ax=ax, left=False, right=False, bottom=False, top=False)
+        sns.despine(ax=ax, left=True, right=True, bottom=True, top=True)
 
         # ------------------------------------------------------------------------------ #
         # rates
         # ------------------------------------------------------------------------------ #
 
+        ax = axes[0]
         ah.find_rates(h5f, bs_large=bs_large)
         threshold = threshold_factor * np.nanmax(h5f["ana.rates.system_level"])
         ah.find_system_bursts_from_global_rate(
             h5f, rate_threshold=threshold, merge_threshold=0.1
         )
 
-        fig, ax = plt.subplots()
         ph.plot_system_rate(
             h5f,
             ax,
@@ -763,71 +739,62 @@ def sim_raster_plots(
             color="#333",
             apply_formatting=False,
             clip_on=True,
-            lw=0.8,
+            lw=0.5,
         )
-
         ax.margins(x=0, y=0)
-        ax.set_xlim(0, 540)
-        ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(180))
-        ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(60))
-        # ax.xaxis.set_major_formatter(matplotlib.ticker.NullFormatter())
         ax.set_xticks([])
-        # ax.set_ylabel("Rates [Hz]")
-        # ax.set_xlabel("Time [seconds]")
 
-        if rate < 90:
-            ax.set_ylim(0, 80)
-            ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(80))
-            ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(20))
-            if naked:
-                ax.set_xticks([])
-                sns.despine(ax=ax, left=False, bottom=True, trim=True, offset=2)
-            cc.set_size2(ax, 3, 0.75)
-        elif rate == 90:
-            ax.set_ylim(0, 40)
-            ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(40))
-            ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(20))
-            if naked:
-                ax.set_xticks([])
-                sns.despine(ax=ax, left=False, bottom=True, trim=True, offset=2)
-            cc.set_size3(ax, 3, 0.75 / 2)
+        ax.set_ylim(0, 80)
+        ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(40))
+        ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(20))
+        if rate == 90:
+            ax.yaxis.set_major_locator(matplotlib.ticker.FixedLocator(([0, 40])))
+            ax.yaxis.set_minor_locator(matplotlib.ticker.FixedLocator(([20])))
+        sns.despine(ax=ax, left=False, bottom=False, trim=True, offset=0)
+        ax.tick_params(axis='x', which='both', bottom=False)
 
-        ax.get_figure().savefig(
-            f"./fig/paper/sim_rate_nozoom_{c_str}.pdf",
-            dpi=300,
-            transparent=False,
-        )
 
         # ------------------------------------------------------------------------------ #
         # adaptation
         # ------------------------------------------------------------------------------ #
 
-        fig, ax = plt.subplots()
+        # fig, ax = plt.subplots()
+        ax = axes[2]
         ph.plot_state_variable(
-            h5f, ax, variable="D", lw=0.8, apply_formatting=False
+            h5f, ax, variable="D", lw=0.5, apply_formatting=False
         )
 
         ax.margins(x=0, y=0)
-        ax.set_xlim(0, 540)
+        ax.set_xlim(0, 360)
         ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(180))
         ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(60))
 
         ax.set_ylim(0, 1)
-        # ax.set_ylabel("Resources")
         ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
-        ax.yaxis.set_minor_locator(matplotlib.ticker.NullLocator())
-        # ax.set_xlabel("Time [seconds]")
-        if naked:
-            ax.set_xticks([])
-            sns.despine(ax=ax, left=False, bottom=True, trim=True, offset=2)
+        ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.25))
+        sns.despine(ax=ax, left=False, bottom=False, trim=True, offset=0)
+        plt.subplots_adjust(hspace=0.1)
 
-        cc.set_size3(ax, 3, 0.75)
-
-        ax.get_figure().savefig(
-            f"./fig/paper/sim_resources_nozoom_{c_str}.pdf",
-            dpi=300,
-            transparent=False,
-        )
+        if zoomin == False:
+            ax.get_figure().savefig(
+                f"./fig/paper/sim_ts_combined_nozoom_{c_str}.pdf",
+                dpi=300,
+                transparent=False,
+            )
+        else:
+            if rate == 80:
+                x_ref = 298.35
+            elif rate == 90:
+                x_ref = 288.05
+            for ax in [axes[0], axes[2]]:
+                sns.despine(ax=ax, left=True, bottom=False, trim=False, offset=0)
+                ax.tick_params(axis='both', which='both', left=False, bottom=False)
+            ax.set_xlim(x_ref, x_ref + .25)
+            ax.get_figure().savefig(
+                f"./fig/paper/sim_ts_combined_zoom_{c_str}.pdf",
+                dpi=300,
+                transparent=False,
+            )
 
         h5.close_hot()
 
@@ -1031,8 +998,10 @@ def sim_participating_fraction(input_path, ax=None, **kwargs):
     dat_sem = data[obs].std(dim="repetition") / np.sqrt(num_reps)
 
     x = dat_med.coords["rate"]
-    y = dat_med
-    yerr = dat_sem
+    selects = np.where(x != 92.5)
+    x = x[selects]
+    y = dat_med[selects]
+    yerr = dat_sem[selects]
 
     if ax is None:
         fig, ax = plt.subplots()
@@ -1061,7 +1030,7 @@ def sim_participating_fraction(input_path, ax=None, **kwargs):
     ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(10))
     ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(5))
     ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
-    ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.25))
+    ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
 
     ax.set_xlim(65, 110)
     ax.set_ylim(0, 1)
@@ -1069,7 +1038,7 @@ def sim_participating_fraction(input_path, ax=None, **kwargs):
     if show_xlabel:
         ax.set_xlabel(r"Noise rate (Hz)")
     if show_ylabel:
-        ax.set_ylabel("Participating neurons\n(mean)")
+        ax.set_ylabel("Mean burst size")
     # if show_title:
     #     ax.set_title(r"")
     if show_legend:
@@ -1167,7 +1136,7 @@ def sim_modules_participating_in_bursts(
     ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(10))
     ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(5))
     ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
-    ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.25))
+    ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
     ax.set_xlim(xlim)
     ax.set_ylim(0, 1)
 
@@ -1190,7 +1159,7 @@ def sim_modules_participating_in_bursts(
     ax.get_figure().savefig("./fig/paper/sim_fractions.pdf", dpi=300)
 
 
-def sim_violins_for_all_k():
+def sim_violins_for_all_k(ax_width = 4):
 
     def apply_formatting(ax, ylim=True, trim=True):
         if ylim:
@@ -1202,7 +1171,7 @@ def sim_violins_for_all_k():
         ax.set_xlabel(f"")
         ax.set_ylabel(f"")
         # ax.set_xticks([])
-        cc.set_size2(ax, 4, 3.0)
+        cc.set_size2(ax, ax_width, 3.0)
 
     def render_plots():
 
