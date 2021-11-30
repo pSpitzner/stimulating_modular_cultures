@@ -2323,7 +2323,7 @@ def pd_bootstrap(
 
         # Returns:
         mean : mean across all drawn bootstrap samples
-        error : sem
+        std : std
 
     """
 
@@ -2348,10 +2348,10 @@ def pd_bootstrap(
         )
 
     mean = np.mean(resampled_estimates)
-    sem = np.std(resampled_estimates, ddof=1)
+    std = np.std(resampled_estimates, ddof=1)
     q = np.percentile(resampled_estimates, percentiles)
 
-    return mean, sem, q
+    return mean, std, q
 
 def pd_nested_bootstrap(df, grouping_col, obs, num_boot=500, func=np.nanmean, resample_group_col = False,
     percentiles=None):
@@ -2380,7 +2380,7 @@ def pd_nested_bootstrap(df, grouping_col, obs, num_boot=500, func=np.nanmean, re
 
         # Returns:
         mean : mean across all drawn bootstrap samples
-        error : sem
+        std : std
     """
 
     if percentiles is None:
