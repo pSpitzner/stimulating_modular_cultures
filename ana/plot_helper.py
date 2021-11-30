@@ -59,7 +59,7 @@ from brian2.units.allunits import *
 
 
 log = logging.getLogger(__name__)
-log.setLevel("DEBUG")
+log.setLevel("INFO")
 sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/../ana/"))
 
 # import logisi as logisi
@@ -230,7 +230,8 @@ def plot_raster(
     ax=None,
     apply_formatting=True,
     sort_by_module=True,
-    neuron_id_as_y = True,
+    neuron_id_as_y=True,
+    neurons=None,
     base_color=None,
     exclude_nids=[],
     **kwargs,
@@ -270,9 +271,12 @@ def plot_raster(
         kwargs.setdefault("markeredgewidth", 0)
 
     # sort by module, access as [:] to load, in case h5 dataset
-    neurons = h5f["ana.neuron_ids"][:].copy()
+    if neurons is None:
+        neurons = h5f["ana.neuron_ids"][:].copy()
+    else:
+        neurons = np.asarray(neurons)
     if sort_by_module:
-        idx = np.argsort(h5f["data.neuron_module_id"][neurons])
+        idx = _argsort_neuron_ids_by_module(h5f, neurons)
         neurons = neurons[idx]
 
     mods = h5f["data.neuron_module_id"][:][neurons]
@@ -298,6 +302,8 @@ def plot_raster(
             if last_mod != m_id:
                 offset -= offset_add
             last_mod = m_id
+
+        log.debug(f"neuron {n_id} module {m_id} at {offset}")
 
         plot_kws = kwargs.copy()
         if base_color is None:
@@ -525,9 +531,10 @@ def plot_fluorescence_trace(
 
     if neurons is None:
         neurons = h5f["ana.neuron_ids"].copy()
+    else:
+        neurons = np.asarray(neurons)
 
-    # sort by module
-    idx = np.argsort(h5f["data.neuron_module_id"][neurons])
+    idx = _argsort_neuron_ids_by_module(h5f, neurons)
     neurons = neurons[idx]
 
     mods = h5f["data.neuron_module_id"][neurons]
@@ -543,6 +550,8 @@ def plot_fluorescence_trace(
         if last_mod != m_id:
             offset -= 0.1
         last_mod = m_id
+
+        log.debug(f"neuron {n_id} module {m_id} at {offset}")
 
         if base_color is None:
             try:
@@ -2152,14 +2161,21 @@ def plot_distribution_dendritic_tree_size(
 
 
 @warntry
-def plot_axon_layout(h5f, ax=None, apply_formatting=True):
+def plot_axon_layout(
+    h5f, ax=None, apply_formatting=True, axon_kwargs=None, soma_kwargs=None
+):
     if ax is None:
         fig, ax = plt.subplots()
     else:
         fig = ax.get_figure()
 
-    _plot_soma(h5f, ax)
-    _plot_axons(h5f, ax)
+    if soma_kwargs is None:
+        soma_kwargs = dict()
+    _plot_soma(h5f, ax, **soma_kwargs)
+
+    if axon_kwargs is None:
+        axon_kwargs = dict()
+    _plot_axons(h5f, ax, **axon_kwargs)
     # _plot_dendrites(h5f, ax)
 
     if apply_formatting:
@@ -2170,6 +2186,8 @@ def plot_axon_layout(h5f, ax=None, apply_formatting=True):
         ax.set_aspect(1)
         ax.set_xlabel(f"Position $l\,[\mu m]$")
         fig.tight_layout()
+
+    return ax
 
 
 @warntry
@@ -2230,25 +2248,21 @@ def plot_connectivity_layout(h5f, ax=None, apply_formatting=True):
         fig.tight_layout()
 
 
-def _plot_soma(h5f, ax, n_R_s=7.5):
+def _plot_soma(h5f, ax, n_R_s=7.5, **soma_kwargs):
     n_x = h5f["data.neuron_pos_x"][:]
     n_y = h5f["data.neuron_pos_y"][:]
-    _circles(
-        n_x,
-        n_y,
-        n_R_s,
-        ax=ax,
-        fc="white",
-        ec="black",
-        alpha=1,
-        lw=0.25,
-        zorder=4,
-    )
+    kwargs = soma_kwargs.copy()
+    kwargs.setdefault("fc", "white")
+    kwargs.setdefault("ec", "black")
+    kwargs.setdefault("alpha", 1)
+    kwargs.setdefault("lw", 0.25)
+    kwargs.setdefault("zorder", 4)
+    _circles(n_x, n_y, n_R_s, ax=ax, **kwargs)
     # _circles(n_x, n_y, n_R_s, ax=ax, fc="white", ec="none", alpha=1, lw=0.5, zorder=4)
     # _circles(n_x, n_y, n_R_s, ax=ax, fc="none", ec="black", alpha=0.3, lw=0.5, zorder=5)
 
 
-def _plot_axons(h5f, ax):
+def _plot_axons(h5f, ax, **axon_kwargs):
     # axon segments
     # zero-or-nan-padded 2d arrays
     seg_x = h5f["data.neuron_axon_segments_x"][:]
@@ -2260,7 +2274,14 @@ def _plot_axons(h5f, ax):
     for n in range(len(seg_x)):
         m_id = h5f["data.neuron_module_id"][n]
         clr = h5f["ana.mod_colors"][m_id]
-        ax.plot(seg_x[n], seg_y[n], color=clr, lw=0.35, zorder=0, alpha=0.5)
+
+        kwargs = axon_kwargs.copy()
+        kwargs.setdefault("color", clr)
+        kwargs.setdefault("lw", 0.35)
+        kwargs.setdefault("zorder", 0)
+        kwargs.setdefault("alpha", 0.5)
+
+        ax.plot(seg_x[n], seg_y[n], **kwargs)
 
 
 def _plot_dendrites(h5f, ax):
@@ -2285,6 +2306,14 @@ def _plot_dendrites(h5f, ax):
 # helper
 # ------------------------------------------------------------------------------ #
 
+def _argsort_neuron_ids_by_module(h5f, neuron_ids):
+    """
+    return indices that would sort the provided list of neuron ids
+    according to module, and, secondly, neuron id
+    """
+    module_ids = h5f["data.neuron_module_id"][neuron_ids]
+    sort_idx = np.lexsort((neuron_ids, module_ids))
+    return sort_idx
 
 def _style_legend(leg):
     try:
