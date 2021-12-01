@@ -54,9 +54,9 @@ args = parser.parse_args()
 data, selected_dims = nh.load_and_choose_two_dims(args.input_path)
 dim1, dim2 = selected_dims
 
-observables = [obs for obs in data.keys() if not "_hbins_" in obs]
+observables_in_file = [obs for obs in data.keys() if not "_hbins_" in obs]
 observables = nh.choose(
-    observables,
+    observables_in_file,
     prompt="Choose at least one observable, press enter for all:",
     min=1,
     via_int=True,
@@ -230,8 +230,11 @@ for obs in observables:
         ax.set_ylabel("Probability")
         ax.legend(loc='upper center')
 
-
-    fig.canvas.manager.set_window_title(obs)
+    try:
+        odx = observables_in_file.index(obs)
+    except:
+        odx = ""
+    fig.canvas.manager.set_window_title(f"{odx} {obs}")
     # ax.legend()
     ax.xaxis.set_major_locator(mpl.ticker.MultipleLocator(20))
     ax.xaxis.set_minor_locator(mpl.ticker.MultipleLocator(5))
