@@ -47,12 +47,21 @@ except ImportError:
         return range(*args)
 
 
-class ModularTopology(object):
-    def __init__(self, num_bridging_axons=5):
+class BaseTopology(object):
+    def __init__(self, **kwargs):
+        """
+            all kwargs are assumed to be parameters and overwrite defaults.
+            to see what parameters are avaiable, you could check a default instance:
+            ```
+            BaseTopology().get_parameters()
+            ```
+
+        """
         self.set_default_parameters()
-        self.set_default_modules()
-        self.par_k_inter = num_bridging_axons
-        self.init_modular_topology()
+        self.update_parameters(**kwargs)
+        # per default, we have a quadratic substrate of size par_L
+        self._substrate = np.array([[0, self.par_L], [0, self.par_L]])
+        self.init_topology()
 
     def set_default_parameters(self):
         # lets define parameters of the algorithm.
@@ -93,16 +102,276 @@ class ModularTopology(object):
         # so the path is a bit more flexible. default: 5
         self.par_angle_mod = 5.0
 
+    def update_parameters(self, **kwargs):
+        available_pars = self.get_parameters().keys()
+        for key in kwargs.keys():
+            assert key in available_pars, f"Unrecognized parameter `{key}`"
+            setattr(self, key, kwargs[key])
+
+    def init_topology(self):
+        self.set_neuron_positions()
+
+        # it is convenient to have indices sorted by position
+        sort_idx = np.lexsort(
+            (
+                self.neuron_positions[:, 1],
+                self.neuron_positions[:, 0],
+            )
+        )
+        self.neuron_positions = self.neuron_positions[sort_idx]
+
+        # dendritic trees as circles
+        self.set_dendrite_radii()
+
+        # sparse connectivity matrix
+        aij_nested = [np.array([], dtype="int")] * self.par_N
+
+        # paths of all axons
+        axon_paths = [np.array([])] * self.par_N
+
+        # grow axons and get connections for all neurons
+        for n_id in range(0, self.par_N):
+
+            path = self.grow_axon(start=self.neuron_positions[n_id, :])
+            axon_paths[n_id] = path
+            cids = self.connections_for_neuron(n_id=n_id, axon_path=path)
+            aij_nested[n_id] = np.sort(cids)
+
+        # save the details as attributes
+        self.axon_paths = axon_paths
+        self.aij_nested = aij_nested
+        self.aij_sparse = _nested_lists_to_sparse(aij_nested)
+        self.k_in, self.k_out = _get_degrees(aij_nested)
+
+
+    def get_parameters(self):
+        res = self.__dict__
+        res = {key: res[key] for key in res.keys() if key[0:4] == "par_"}
+        return res
+
+    def get_everything_as_nested_dict(self, return_descriptions=False):
+        """get most relevant details of the topology as a benedict"""
+        # fmt: off
+        h5_data = benedict()
+        h5_desc = benedict()
+        h5_data["data.neuron_pos_x"] = self.neuron_positions[:, 0]
+        h5_data["data.neuron_pos_y"] = self.neuron_positions[:, 1]
+        h5_data["data.neuron_radius_dendritic_tree"] = self.dendritic_radii
+
+
+        h5_data["data.connectivity_matrix_sparse"] = self.aij_sparse
+        h5_desc["data.connectivity_matrix_sparse"] = "first column is the id of the source neuron, second column is the id of the target neuron"
+
+        h5_data["data.neuron_k_in"] = self.k_in
+        h5_data["data.neuron_k_out"] = self.k_out
+
+        # restructuring to a nan-padded 2d matrix allows us to save all the paths
+        # into one dataset. (the padding does not cost storage on disc when compressing.)
+        nan_padded_segments = _nested_lists_to_2d_nan_padded(self.axon_paths)
+        h5_data["data.neuron_axon_segments_x"] = nan_padded_segments[:, :, 0]
+        h5_data["data.neuron_axon_segments_y"] = nan_padded_segments[:, :, 1]
+
+        h5_data["data.neuron_axon_length"] = np.array(
+            [len(x) * self.par_del_l for x in self.axon_paths]
+        )
+        h5_data["data.neuron_axon_end_to_end_distance"] = _get_end_to_end_distances(
+            self.axon_paths
+        )
+
+        h5_data["meta.topology"] = "orlandi base topology"
+        h5_data["meta.topology_num_neur"] = self.par_N
+        h5_data["meta.topology_num_outgoing"] = np.mean(self.k_out)
+        h5_data["meta.topology_sys_size"] = self.par_L
+        h5_data["meta.topology_alpha"] = self.par_alpha
+        h5_data["meta.topology_alpha_is_weighted"] = int(self.par_alpha_path_weighted)
+        # fmt: on
+
+        if return_descriptions:
+            return h5_data, h5_desc
+        return h5_data
+
+    def set_neuron_positions(self):
+        """
+        make sure to set parameters correctly before calling this
+        """
+
+        rejections = 0
+
+        # a 2d np array with x, y poitions, soma_radius and dendritic_tree diameter
+        neuron_pos = np.ones(shape=(self.par_N, 2)) * -93288.0
+        neuron_rad = np.ones(shape=(self.par_N)) * self.par_R_s
+
+        for i in range(self.par_N):
+            placed = False
+            while not placed:
+                placed = True
+                x = np.random.uniform(0.0, self.par_L)
+                y = np.random.uniform(0.0, self.par_L)
+
+                # dont place out of bounds
+                if not self.is_within_substrate(x, y, self.par_R_s):
+                    placed = False
+                    rejections += 1
+                    continue
+
+                # dont overlap other neurons
+                if np.any(
+                    _are_intersecting_circles(
+                        neuron_pos[0:i], neuron_rad[0:i], x, y, self.par_R_s
+                    )
+                ):
+                    placed = False
+                    rejections += 1
+                    continue
+
+                neuron_pos[i, 0] = x
+                neuron_pos[i, 1] = y
+
+        self.neuron_positions = neuron_pos
+
+
+    # lets have some overloads so we can use the generic helper functions
+    # from class instances
+    def grow_axon(self, start, num_segments=None, start_phi=None):
+        return _grow_axon(
+            self.par_std_l,
+            self.par_del_l,
+            self.par_axon_retry,
+            self.par_std_phi,
+            self.par_angle_mod,
+            self.is_within_substrate,
+            start=start,
+            num_segments=num_segments,
+            start_phi=start_phi,
+        )
+
+    def grow_axon_to_target(self, start, target, termination_criterion):
+        return _grow_axon_to_target(
+            self.par_std_l,
+            self.par_del_l,
+            self.par_axon_retry,
+            self.par_std_phi,
+            start,
+            target,
+            termination_criterion,
+        )
+
+    def set_dendrite_radii(self):
+        self.dendritic_radii = np.random.normal(
+            loc=self.par_mu_d, scale=self.par_std_d, size=self.par_N
+        )
+
+    def is_within_substrate(self, x, y, r=0):
+        return _is_within_rect(x, y, r, self._substrate)
+
+    def connections_for_neuron(self, n_id, axon_path):
+        """
+        Get the connections due to a grown path
+        n_id : int
+            the id of the source neuron
+        axon_path : 2d array
+            positions of all axons segments growing from n_id
+
+        # Returns:
+        ids_to_connect_with : array
+            indices of neurons to form a connection with
+        """
+
+        num_intersections = np.zeros(self.par_N, "int")
+
+        for seg in axon_path:
+            if not self.is_within_substrate(seg[0], seg[1], r=0):
+                # we dont count intersection that occur out of our substrate,
+                # because we want dendritic trees to only be "on the substrate"
+                continue
+
+            intersecting_dendrites = _are_intersecting_circles(
+                ref_pos=self.neuron_positions,
+                ref_rad=self.dendritic_radii,
+                x=seg[0],
+                y=seg[1],
+            )
+
+            # only count intersections where valid and intersecting
+            num_intersections += intersecting_dendrites
+
+        # dont create self-connections:
+        num_intersections[n_id] = 0
+        idx = np.where(num_intersections > 0)[0]
+
+        if not self.par_alpha_path_weighted:
+            # flat probability, independent of the number of intersections
+            idx = idx[np.random.uniform(0, 1, size=len(idx)) < self.par_alpha]
+        else:
+            # probability is applied once, for every intersecting segment
+            jdx = []
+            for i in idx:
+                if np.any(
+                    np.random.uniform(0, 1, size=num_intersections[i])
+                    < self.par_alpha
+                ):
+                    jdx.append(i)
+            idx = np.array(jdx, dtype="int")
+
+        return idx
+
+class MergedTopology(BaseTopology):
+    def __init__(self, **kwargs):
+        """
+            The Base topology already largely does the job.
+            Make sure to have right system size and set artificial "module ids"
+            for the neurons that only depend on position, so we can better compare
+            to modular cultures
+        """
+        self.set_default_parameters()
+        self.update_parameters(**kwargs)
+        # per default, we have a quadratic substrate of size par_L
+        self._substrate = np.array([[0, self.par_L], [0, self.par_L]])
+        self.init_topology()
+
+        self.neuron_module_ids = np.zeros(self.par_N, dtype=int)
+
+    def set_default_parameters(self):
+        super().set_default_parameters()
+
+        self.par_L = 400
+
+        # to later use same code as for modular systems, use k_inter = -1 for merged
+        self.par_k_inter = -1
+
+    def get_everything_as_nested_dict(self, return_descriptions=False):
+
+        h5_data, h5_desc = super().get_everything_as_nested_dict(
+            return_descriptions=True
+        )
+
+        h5_data["data.neuron_module_id"] = self.neuron_module_ids[:]
+        h5_data["meta.topology"] = "orlandi merged topology"
+        h5_data["meta.topology_k_inter"] = self.par_k_inter
+
+        if return_descriptions:
+            return h5_data, h5_desc
+        return h5_data
+
+
+class ModularTopology(BaseTopology):
+    def __init__(self, **kwargs):
+        self.set_default_parameters()
+        self.update_parameters(**kwargs)
+        self.set_default_modules()
+        self.init_topology()
+
+    def set_default_parameters(self):
+        super().set_default_parameters()
+
+        # we have 2 200um modules with 200um space inbetween
+        self.par_L = 600
+
         # number of axons going from each module to its neighbours
         self.par_k_inter = 5
 
-    def init_modular_topology(self):
+    def init_topology(self):
         # only call this after initalizing parameters and modules!
-
-        # store everything in a nested dictionary, optionally with descriptions
-        # so we can save to disk later as hdf5
-        h5_data = benedict()
-        h5_desc = benedict()
 
         self.set_neuron_positions()
         self.set_neuron_module_ids()
@@ -168,51 +437,20 @@ class ModularTopology(object):
         self.aij_sparse = _nested_lists_to_sparse(aij_nested)
         self.k_in, self.k_out = _get_degrees(aij_nested)
 
-    def get_parameters(self):
-        res = self.__dict__
-        res = {key: res[key] for key in res.keys() if key[0:4] == "par_"}
-        return res
-
     def get_everything_as_nested_dict(self, return_descriptions=False):
-        """get most relevant details of the topology as a benedict"""
-        # fmt: off
-        h5_data = benedict()
-        h5_desc = benedict()
-        h5_data["data.neuron_pos_x"] = self.neuron_positions[:, 0]
-        h5_data["data.neuron_pos_y"] = self.neuron_positions[:, 1]
+
+        h5_data, h5_desc = super().get_everything_as_nested_dict(
+            return_descriptions=True
+        )
+
         h5_data["data.neuron_module_id"] = self.neuron_module_ids[:]
-        h5_data["data.neuron_radius_dendritic_tree"] = self.dendritic_radii
-
         h5_data["data.neuron_bridge_ids"] = self.neuron_bridge_ids
-        h5_desc["data.neuron_bridge_ids"] = "list of ids of neurons connecting two modules"
+        h5_desc[
+            "data.neuron_bridge_ids"
+        ] = "list of ids of neurons connecting two modules"
 
-        h5_data["data.connectivity_matrix_sparse"] = self.aij_sparse
-        h5_desc["data.connectivity_matrix_sparse"] = "first column is the id of the source neuron, second column is the id of the target neuron"
-
-        h5_data["data.neuron_k_in"] = self.k_in
-        h5_data["data.neuron_k_out"] = self.k_out
-
-        # restructuring to a nan-padded 2d matrix allows us to save all the paths
-        # into one dataset. (the padding does not cost storage on disc when compressing.)
-        nan_padded_segments = _nested_lists_to_2d_nan_padded(self.axon_paths)
-        h5_data["data.neuron_axon_segments_x"] = nan_padded_segments[:, :, 0]
-        h5_data["data.neuron_axon_segments_y"] = nan_padded_segments[:, :, 1]
-
-        h5_data["data.neuron_axon_length"] = np.array(
-            [len(x) * self.par_del_l for x in self.axon_paths]
-        )
-        h5_data["data.neuron_axon_end_to_end_distance"] = _get_end_to_end_distances(
-            self.axon_paths
-        )
-
-        h5_data["meta.topology"] = "orlandi modular"
-        h5_data["meta.topology_num_neur"] = self.par_N
-        h5_data["meta.topology_num_outgoing"] = np.mean(self.k_out)
-        h5_data["meta.topology_sys_size"] = self.par_L
-        h5_data["meta.topology_alpha"] = self.par_alpha
-        h5_data["meta.topology_alpha_is_weighted"] = int(self.par_alpha_path_weighted)
+        h5_data["meta.topology"] = "orlandi modular topology"
         h5_data["meta.topology_k_inter"] = self.par_k_inter
-        # fmt: on
 
         if return_descriptions:
             return h5_data, h5_desc
@@ -225,32 +463,6 @@ class ModularTopology(object):
         self.mods[1] = np.array([[0, 200], [400, 600]])
         self.mods[2] = np.array([[400, 600], [0, 200]])
         self.mods[3] = np.array([[400, 600], [400, 600]])
-
-    # lets have some overloads so we can use the generic helper functions
-    # from class instances
-    def grow_axon(self, start, num_segments=None, start_phi=None):
-        return _grow_axon(
-            self.par_std_l,
-            self.par_del_l,
-            self.par_axon_retry,
-            self.par_std_phi,
-            self.par_angle_mod,
-            self.is_within_substrate,
-            start=start,
-            num_segments=num_segments,
-            start_phi=start_phi,
-        )
-
-    def grow_axon_to_target(self, start, target, termination_criterion):
-        return _grow_axon_to_target(
-            self.par_std_l,
-            self.par_del_l,
-            self.par_axon_retry,
-            self.par_std_phi,
-            start,
-            target,
-            termination_criterion,
-        )
 
     def grow_bridging_axons(self, source_mod, target_mods):
 
@@ -382,11 +594,6 @@ class ModularTopology(object):
 
         self.neuron_positions = neuron_pos
 
-    def set_dendrite_radii(self):
-        self.dendritic_radii = np.random.normal(
-            loc=self.par_mu_d, scale=self.par_std_d, size=self.par_N
-        )
-
     def set_neuron_module_ids(self):
         """
         assign the module id of every neuron
@@ -442,6 +649,8 @@ class ModularTopology(object):
 
             # we also do not want to connect to a hypothetical super large tree
             # that comes from another module
+            # this additioanl check is the only difference to the function in the
+            # base class.
             seg_mod = self.mod_id_from_coordinate(*seg)
             valid_dendrites = self.neuron_module_ids == seg_mod
 
@@ -892,4 +1101,3 @@ def _connect_synapses_from(S, a_ij):
         log.error(e)
         log.info(f"Creating Synapses randomly.")
         S.connect(condition="i != j", p=0.01)
-

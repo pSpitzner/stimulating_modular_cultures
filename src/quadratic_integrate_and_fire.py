@@ -204,7 +204,7 @@ if args.stimulation_type != "off":
 # assert os.path.isfile(args.input_path), "Specify the right input path"
 # num_n, a_ij_sparse, mod_ids = topo._load_topology(args.input_path)
 # bridge_ids = topo._load_bridging_neurons(args.input_path)
-tp = topo.ModularTopology(num_bridging_axons=args.k_inter)
+tp = topo.ModularTopology(par_k_inter=args.k_inter)
 num_n = tp.par_N
 a_ij_sparse = tp.aij_sparse
 mod_ids = tp.neuron_module_ids

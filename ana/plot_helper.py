@@ -2272,8 +2272,11 @@ def _plot_axons(h5f, ax, **axon_kwargs):
 
     # iterate over neurons to plot axons
     for n in range(len(seg_x)):
-        m_id = h5f["data.neuron_module_id"][n]
-        clr = h5f["ana.mod_colors"][m_id]
+        try:
+            m_id = h5f["data.neuron_module_id"][n]
+            clr = h5f["ana.mod_colors"][m_id]
+        except:
+            clr = "black"
 
         kwargs = axon_kwargs.copy()
         kwargs.setdefault("color", clr)
