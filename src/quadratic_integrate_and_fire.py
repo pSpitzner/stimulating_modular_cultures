@@ -204,11 +204,16 @@ if args.stimulation_type != "off":
 # assert os.path.isfile(args.input_path), "Specify the right input path"
 # num_n, a_ij_sparse, mod_ids = topo._load_topology(args.input_path)
 # bridge_ids = topo._load_bridging_neurons(args.input_path)
-tp = topo.ModularTopology(par_k_inter=args.k_inter)
+
+if args.k_inter == -1:
+    tp = topo.MergedTopology()
+    bridge_ids = np.array([], dtype="int")
+else:
+    tp = topo.ModularTopology(par_k_inter=args.k_inter)
+    bridge_ids = tp.neuron_bridge_ids
 num_n = tp.par_N
 a_ij_sparse = tp.aij_sparse
 mod_ids = tp.neuron_module_ids
-bridge_ids = tp.neuron_bridge_ids
 
 
 # ------------------------------------------------------------------------------ #
@@ -263,14 +268,16 @@ t2b, b2t, inhib_ids, excit_ids, bridge_ids = topo.index_alignment(
 
 G_inh = G[t2b[inhib_ids]]
 G_exc = G[t2b[excit_ids]]
-G_bridge = G[t2b[bridge_ids]]
+if len(bridge_ids) > 0:
+    G_bridge = G[t2b[bridge_ids]]
 
 # initalize according to neuron type
 G.v = "vRef + 5*mV*(rand()-0.5)"
 G.j = 0  # the lines below should overwrite this, sanity check
 G_inh.j = jG
 G_exc.j = jA
-G_bridge.j *= args.bridge_weight
+if len(bridge_ids) > 0:
+    G_bridge.j *= args.bridge_weight
 
 assert np.all(G.j != 0)
 

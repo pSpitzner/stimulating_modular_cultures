@@ -9,7 +9,7 @@ os.chdir(os.path.dirname(__file__))
 seed = 6_000
 
 # parameters to scan, noise rate, ampa strength, and a few repetitons for statistics
-l_k_inter = np.array([1, 4, 5, 6, 10])
+l_k_inter = np.array([-1])
 l_mod = np.array(["off"])
 l_rep = np.arange(0, 50)
 l_jA = [45.0]
