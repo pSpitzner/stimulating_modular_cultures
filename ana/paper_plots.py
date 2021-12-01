@@ -20,6 +20,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+import palettable
 
 from benedict import benedict
 from tqdm import tqdm
@@ -108,6 +109,9 @@ colors["k=5"]["90.0 Hz"] = colors["stim"]
 colors["k=10"] = dict()
 colors["k=10"]["85.0 Hz"] = colors["pre"]
 colors["k=10"]["92.5 Hz"] = colors["stim"]
+colors["partial"] = dict()
+colors["partial"]["0.0 Hz"] = colors["pre"]
+colors["partial"]["20.0 Hz"] = colors["stim"]
 
 reference_coordinates = dict()
 reference_coordinates["jA"] = 45
@@ -164,10 +168,8 @@ def fig_1():
     fig_widths["1_KCl_0mM"] = 1.5
     fig_widths["2_KCl_2mM"] = 3.0
     time_ranges = dict()
-    time_ranges["1_KCl_0mM"] = [380, 380+120]
-    time_ranges["2_KCl_2mM"] = [300, 300+240]
-
-
+    time_ranges["1_KCl_0mM"] = [380, 380 + 120]
+    time_ranges["2_KCl_2mM"] = [300, 300 + 240]
 
     for idx, condition in enumerate(conditions):
         log.info(condition)
@@ -196,7 +198,135 @@ def fig_1():
         ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
         ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
         sns.despine(ax=ax, bottom=True, left=False, trim=True, offset=5)
-        ax.get_figure().savefig(f"./fig/paper/exp_chem_vs_opto_{obs}.pdf", dpi=300)
+        ax.get_figure().savefig(
+            f"./fig/paper/exp_chem_vs_opto_{obs}.pdf", dpi=300
+        )
+
+
+def fig_3():
+    # reproducing 2 module stimulation in simulations
+    # choosing noise rate in lower modules to maximize fc, ibi are somewhat off at 15hz
+
+    dfs = load_pd_hdf5("./dat/sim_partial_out_20/k=5.hdf5", ["bursts", "rij", "rij_paired"])
+    df = dfs["rij_paired"]
+
+    # ------------------------------------------------------------------------------ #
+    # violins
+    # ------------------------------------------------------------------------------ #
+
+    def apply_formatting(ax, ylim=True, trim=True):
+        if ylim:
+            ax.set_ylim(-0.05, 1.05)
+            ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
+            ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
+        sns.despine(ax=ax, bottom=True, left=False, trim=trim, offset=5)
+        ax.tick_params(bottom=False)
+        ax.set_xlabel(f"")
+        ax.set_ylabel(f"")
+        # ax.set_xticks([])
+        cc.set_size2(ax, 2, 2.0)
+
+    ax = custom_violins(
+        dfs["bursts"],
+        category="Condition",
+        observable="Fraction",
+        ylim=[0, 1],
+        num_swarm_points=250,
+        bw=0.2,
+        palette=colors["partial"],
+    )
+    apply_formatting(ax)
+    ax.set_xlabel("Burst size")
+    ax.get_figure().savefig(
+        f"./fig/paper/sim_partial_violins_fraction.pdf", dpi=300
+    )
+
+    ax = custom_violins(
+        dfs["rij"],
+        category="Condition",
+        observable="Correlation Coefficient",
+        ylim=[0, 1],
+        num_swarm_points=500,
+        bw=0.2,
+        palette=colors["partial"],
+    )
+    apply_formatting(ax)
+    ax.set_xlabel("Correlation")
+    ax.get_figure().savefig(
+        f"./fig/paper/sim_partial_violins_rij.pdf", dpi=300
+    )
+
+    # return
+
+    # ------------------------------------------------------------------------------ #
+    # pairwise rij plots
+    # ------------------------------------------------------------------------------ #
+
+    log.info("barplot rij paired for simulations")
+    ax = custom_rij_barplot(df, conditions=["0.0 Hz", "20.0 Hz"], recolor=True)
+
+    ax.set_ylim(0, 1)
+    cc.set_size3(ax, 3, 1.5)
+    ax.get_figure().savefig(f"./fig/paper/sim_rij_barplot.pdf", dpi=300)
+
+    log.info("scattered 2d rij paired for simulations")
+    ax = custom_rij_scatter(
+        df, max_sample_size=2500, scatter=True, kde_levels=[0.9, 0.95, 0.975]
+    )
+    cc.set_size3(ax, 3, 3)
+    ax.get_figure().savefig(f"./fig/paper/sim_2drij.pdf", dpi=300)
+
+
+
+
+
+def fig_4():
+    # simulations for varying k
+
+    coords = reference_coordinates.copy()
+    coords["k_inter"] = [1, 5, 10]
+
+    unit_observables = [
+        "sys_functional_complexity",
+        "sys_mean_participating_fraction",
+        "sys_mean_correlation",
+
+    ]
+    observables= [
+        "sys_median_any_ibis",
+        "any_num_spikes_in_bursts",
+    ] + unit_observables
+
+    # clrs = {k : colors[f"k={k}"]["base"] for k in [1, 5, 10]}
+
+    for odx, obs in enumerate(observables):
+        base_color = f"C{odx}"
+        clrs = dict()
+        for kdx, k in enumerate([10,5,1]):
+            clrs[k] = cc.alpha_to_solid_on_bg(base_color, 1.0/(kdx+1.0))
+
+        ax = sim_obs_vs_noise_for_all_k(
+            observable=obs,
+            path="./dat/the_last_one/k_sweep_rij500_with_depletion.hdf5",
+            simulation_coordinates=coords,
+            colors=clrs,
+        )
+        ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(10))
+        ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(5))
+        if obs in unit_observables:
+            ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
+            ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
+            ax.set_ylim(0, 1)
+
+        if obs == "sys_median_any_ibis":
+            ax.set_ylim(0, 70)
+        if obs == "any_num_spikes_in_bursts":
+            ax.set_ylim(0, 6)
+
+        cc.set_size3(ax, 3, 3)
+        ax.get_figure().savefig(f"./fig/paper/sim_ksweep_{obs}.pdf", dpi=300)
+
+
 
 
 # Fig 1
@@ -214,7 +344,6 @@ def exp_raster_plots(
 
     # description usable for annotating
     c_str = condition[2:]
-
 
     h5f = ah.load_experimental_files(
         path_prefix=f"{path}/{experiment}/", condition=condition
@@ -726,26 +855,6 @@ def exp_rij_for_layouts():
     return ax
 
 
-def sim_rij_paired():
-    df = load_pd_hdf5("./dat/sim_partial_out/k=5.hdf5", ["rij_paired"])
-    df = df["rij_paired"]
-    log.info("barplot rij paired for simulations")
-    ax = custom_rij_barplot(df, conditions=["0.0 Hz", "15.0 Hz"], recolor=True)
-
-    ax.set_ylim(0, 1)
-    cc.set_size3(ax, 3, 1.5)
-    ax.get_figure().savefig(f"./fig/paper/sim_rij_barplot.pdf", dpi=300)
-
-    log.info("scattered 2d rij paired for simulations")
-    ax = custom_rij_scatter(
-        df, max_sample_size=2500, scatter=True, kde_levels=[0.9, 0.95, 0.975]
-    )
-    cc.set_size3(ax, 3, 3)
-    ax.get_figure().savefig(f"./fig/paper/sim_2drij.pdf", dpi=300)
-
-    return df
-
-
 # Fig 3
 def sim_raster_plots(
     bs_large=20 / 1000,  # width of the gaussian kernel for rate
@@ -1054,7 +1163,82 @@ def sim_vs_exp_ibi(
     return ax
 
 
-def sim_obs_vs_noise_for_all_k(observable):
+def sim_obs_vs_noise_for_all_k(
+    path,
+    observable,
+    simulation_coordinates=reference_coordinates,
+    ax=None,
+    colors=None,
+    **kwargs,
+):
+    """
+    Plot selected observable as function of the noise (`rate`)
+    Select the k to plot via `k_inter` in `simulation_coordinates`
+
+    # Parameters:
+    colors : dict with k_inter values as key that match the ones in simulation_coords
+    """
+    ndim = nh.load_ndim_h5f(path)
+    ndim = ndim[observable]
+    for coord in simulation_coordinates.keys():
+        try:
+            ndim = ndim.sel({coord: simulation_coordinates[coord]})
+        except:
+            log.debug(f"Could not select {coord}")
+
+    log.debug(ndim.coords)
+    x = ndim.coords["rate"].to_numpy()
+    num_reps = len(ndim.coords["repetition"])
+
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.get_figure()
+
+    if colors is None:
+        colors = dict()
+        for kdx, k in enumerate(ndim.coords["k_inter"].to_numpy()):
+            colors[k] = f"C{kdx}"
+
+    for kdx, k in enumerate(ndim.coords["k_inter"].to_numpy()):
+        y = ndim.sel(k_inter=k).mean(dim="repetition")
+        yerr = ndim.sel(k_inter=k).std(dim="repetition") / np.sqrt(num_reps)
+        # 92.5 Hz was only simulated for k=10, so drop it
+        selects = np.where(x != 92.5)
+
+        plot_kwargs = kwargs.copy()
+        plot_kwargs.setdefault("color", colors[k])
+        plot_kwargs.setdefault("label", f"k={k}")
+        plot_kwargs.setdefault("fmt", "o")
+        plot_kwargs.setdefault("markersize", 1.5)
+        plot_kwargs.setdefault("elinewidth", 0.5)
+        plot_kwargs.setdefault("capsize", 1.5)
+        plot_kwargs.setdefault("zorder", 2)
+
+        ax.errorbar(
+            x=x[selects],
+            y=y[selects],
+            yerr=yerr[selects],
+            **plot_kwargs,
+        )
+
+        plot_kwargs.setdefault("lw", 0.5)
+        plot_kwargs.pop("label")
+        plot_kwargs.pop("fmt")
+        plot_kwargs.pop("markersize")
+        plot_kwargs.pop("elinewidth")
+        plot_kwargs.pop("capsize")
+        plot_kwargs["zorder"] -= 1
+        plot_kwargs["color"] = cc.alpha_to_solid_on_bg(
+            plot_kwargs["color"], .5
+        )
+
+        ax.plot(x[selects], y[selects], **plot_kwargs)
+
+        ax.set_xlabel("Noise Rate (Hz)")
+        ax.set_ylabel(observable)
+
+    return ax
 
 
 def controls_sim_vs_exp_ibi():
