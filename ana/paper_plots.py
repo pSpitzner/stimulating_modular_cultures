@@ -24,6 +24,7 @@ import palettable
 
 from benedict import benedict
 from tqdm import tqdm
+from scipy import stats
 
 import plot_helper as ph
 import ana_helper as ah
@@ -207,7 +208,9 @@ def fig_3():
     # reproducing 2 module stimulation in simulations
     # choosing noise rate in lower modules to maximize fc, ibi are somewhat off at 15hz
 
-    dfs = load_pd_hdf5("./dat/sim_partial_out_20/k=5.hdf5", ["bursts", "rij", "rij_paired"])
+    dfs = load_pd_hdf5(
+        "./dat/sim_partial_out_20/k=5.hdf5", ["bursts", "rij", "rij_paired"]
+    )
     df = dfs["rij_paired"]
 
     # ------------------------------------------------------------------------------ #
@@ -252,9 +255,7 @@ def fig_3():
     )
     apply_formatting(ax)
     ax.set_xlabel("Correlation")
-    ax.get_figure().savefig(
-        f"./fig/paper/sim_partial_violins_rij.pdf", dpi=300
-    )
+    ax.get_figure().savefig(f"./fig/paper/sim_partial_violins_rij.pdf", dpi=300)
 
     # return
 
@@ -277,9 +278,6 @@ def fig_3():
     ax.get_figure().savefig(f"./fig/paper/sim_2drij.pdf", dpi=300)
 
 
-
-
-
 def fig_4():
     # simulations for varying k
 
@@ -290,9 +288,8 @@ def fig_4():
         "sys_functional_complexity",
         "sys_mean_participating_fraction",
         "sys_mean_correlation",
-
     ]
-    observables= [
+    observables = [
         "sys_median_any_ibis",
         "any_num_spikes_in_bursts",
     ] + unit_observables
@@ -302,8 +299,8 @@ def fig_4():
     for odx, obs in enumerate(observables):
         base_color = f"C{odx}"
         clrs = dict()
-        for kdx, k in enumerate([10,5,1]):
-            clrs[k] = cc.alpha_to_solid_on_bg(base_color, 1.0/(kdx+1.0))
+        for kdx, k in enumerate([10, 5, 1]):
+            clrs[k] = cc.alpha_to_solid_on_bg(base_color, 1.0 / (kdx + 1.0))
 
         ax = sim_obs_vs_noise_for_all_k(
             observable=obs,
@@ -325,8 +322,6 @@ def fig_4():
 
         cc.set_size3(ax, 3, 3)
         ax.get_figure().savefig(f"./fig/paper/sim_ksweep_{obs}.pdf", dpi=300)
-
-
 
 
 # Fig 1
@@ -1230,7 +1225,7 @@ def sim_obs_vs_noise_for_all_k(
         plot_kwargs.pop("capsize")
         plot_kwargs["zorder"] -= 1
         plot_kwargs["color"] = cc.alpha_to_solid_on_bg(
-            plot_kwargs["color"], .5
+            plot_kwargs["color"], 0.5
         )
 
         ax.plot(x[selects], y[selects], **plot_kwargs)
@@ -2123,3 +2118,95 @@ def _draw_error_stick(
         ax.scatter(mid, center, s=np.square(linewidth * 2), **kwargs)
     else:
         ax.scatter(center, mid, s=np.square(linewidth * 2), **kwargs)
+
+
+# ------------------------------------------------------------------------------ #
+# statistical tests
+# ------------------------------------------------------------------------------ #
+
+
+def tinker():
+    observables = ["Mean Fraction", "Mean Correlation", "Functional Complexity"]
+    kwargs = dict(
+        observables = observables,
+        col = "Condition",
+    )
+
+    layouts = ["1b", "3b", "merged"]
+    for layout in layouts:
+        print(f"\n{layout}")
+        dfs = load_pd_hdf5(f"./dat/exp_out/{layout}.hdf5")
+        df = dfs["trials"]
+        _paired_sample_t_test(df, col_vals=["pre", "stim"], **kwargs)
+        _paired_sample_t_test(df, col_vals=["stim", "post"], **kwargs)
+
+    layout = "KCl_1b"
+    print(f"\n{layout}")
+    dfs = load_pd_hdf5(f"./dat/exp_out/{layout}.hdf5")
+    df = dfs["trials"]
+    _paired_sample_t_test(df, col_vals=["KCl_0mM", "KCl_2mM"], **kwargs)
+
+
+
+def _paired_sample_t_test(df, col, col_vals, observables=None):
+    """
+    # Parameters
+    df : dataframe
+    col : str, column label in which to check the `col_vals`
+    condtions : list
+
+    # Assumptions
+    - dependent variable is continuous
+        here: e.g. burst size or corr. coefficients.
+    - observarions are independent
+        here: observartions correspond to trials, measured independently.
+    - dependent variable should be normally distributed.
+        here: when using an observed variable in a trial, e.g. burst size,
+        the we look at the mean of means (or mean of medians),
+        hence central limit theorem applies.
+        Does not hold for functional complexity, though.
+    - no significant outliers
+
+    """
+
+    assert len(col_vals) == 2
+
+    # make sure we only have rows where the column values are relevant
+    # df = df.query(f"`{col}` == @col_vals")
+
+    # we want to do a pairwise test, where a pair is before vs after in col_vals
+    before = df.query(f"`{col}` == @col_vals[0]")
+    after = df.query(f"`{col}` == @col_vals[1]")
+    assert len(before) == len(after)
+
+    # log.debug(f"df.describe():\n{before.describe()}\n{after.describe()}")
+
+    # using shapiro test we could _reject_ the H0 that the obs are normally
+    # distributed
+    # print(stats.shapiro(before[observable]))
+
+    # focus on numeric values and do the test for selected observables
+    if observables is None:
+        before = before.select_dtypes(include="number")
+        after = after.select_dtypes(include="number")
+        observables = list(before.columns)
+
+    p_values = dict()
+
+    # H0 that two related and repeated samples have identical expectation value
+    for obs in observables:
+        ttest = stats.ttest_rel(before[obs], after[obs])
+        p_values[obs] = ttest.pvalue
+
+    p_str = (
+        p_values.__repr__()
+        .replace(",", "\n\t")
+        .replace("{", " ")
+        .replace("}", "")
+    )
+    print(
+        f"paired_sample_t_test for {col_vals}, {len(before)} samples."
+        f" p_values:\n\t{p_str}"
+    )
+
+    return p_values
