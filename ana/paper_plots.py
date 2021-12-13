@@ -10,6 +10,7 @@
 import os
 import sys
 import glob
+from ana.plot_helper import overview_burst_duration_and_isi
 import h5py
 import argparse
 import numbers
@@ -34,7 +35,7 @@ import hi5 as h5
 
 
 log = logging.getLogger(__name__)
-log.setLevel("DEBUG")
+log.setLevel("INFO")
 warnings.filterwarnings("ignore")  # suppress numpy warnings
 
 # select things to draw for every panel
@@ -126,7 +127,12 @@ reference_coordinates["k_inter"] = 5
 remove_outlier = True
 
 
-def fig_1():
+def fig_1(show_time_axis=False):
+
+    # set the global seed once for each figure to produce consistent results, when
+    # calling repeatedly.
+    # many panels rely on bootstrapping and drawing random samples
+    np.random.seed(811)
 
     # ------------------------------------------------------------------------------ #
     # Create raster plots
@@ -137,13 +143,15 @@ def fig_1():
     experiment = "210719_B"
     conditions = ["1_pre", "2_stim", "3_post"]
     fig_widths = dict()
-    fig_widths["1_pre"] = 1.5
-    fig_widths["2_stim"] = 4.5
-    fig_widths["3_post"] = 1.5
+    fig_widths["1_pre"] = 2.4
+    fig_widths["2_stim"] = 7.2
+    fig_widths["3_post"] = 2.4
     time_ranges = dict()
     time_ranges["1_pre"] = [60, 180]
-    time_ranges["2_stim"] = [60, 420]
+    time_ranges["2_stim"] = [58, 418]
     time_ranges["3_post"] = [100, 220]
+
+    # ph.log.setLevel("DEBUG")
 
     for idx, condition in enumerate(conditions):
         log.info(condition)
@@ -154,11 +162,16 @@ def fig_1():
             condition,
             time_range=time_ranges[condition],
             fig_width=fig_widths[condition] * 1.2 / 2.54,
-            show_fluorescence=True,
+            show_fluorescence=False,
         )
         # if we want axes to have the same size across figures,
         # we need to set the axes size again (as figures include padding for legends)
         cc.set_size(ax=fig.axes[0], w=fig_widths[condition], h=None)
+
+        if not show_time_axis:
+            fig.axes[-1].xaxis.set_visible(False)
+            sns.despine(ax=fig.axes[-1], bottom=True, left=False)
+
         fig.savefig(
             f"./fig/paper/exp_combined_{c_str}.pdf", dpi=300, transparent=False
         )
@@ -168,11 +181,11 @@ def fig_1():
     experiment = "210720_B"
     conditions = ["1_KCl_0mM", "2_KCl_2mM"]
     fig_widths = dict()
-    fig_widths["1_KCl_0mM"] = 1.5
-    fig_widths["2_KCl_2mM"] = 3.0
+    fig_widths["1_KCl_0mM"] = 2.4
+    fig_widths["2_KCl_2mM"] = 3.6
     time_ranges = dict()
-    time_ranges["1_KCl_0mM"] = [380, 380 + 120]
-    time_ranges["2_KCl_2mM"] = [300, 300 + 240]
+    time_ranges["1_KCl_0mM"] = [395, 395 + 120]
+    time_ranges["2_KCl_2mM"] = [295, 295 + 180]
 
     for idx, condition in enumerate(conditions):
         log.info(condition)
@@ -186,6 +199,11 @@ def fig_1():
             show_fluorescence=False,
         )
         cc.set_size(ax=fig.axes[0], w=fig_widths[condition], h=None)
+
+        if not show_time_axis:
+            fig.axes[-1].xaxis.set_visible(False)
+            sns.despine(ax=fig.axes[-1], bottom=True, left=False)
+
         fig.savefig(
             f"./fig/paper/exp_combined_{c_str}.pdf", dpi=300, transparent=False
         )
@@ -208,21 +226,45 @@ def fig_1():
 
 def fig_2(skip_plots=False):
 
+    # set the global seed once for each figure to produce consistent results, when
+    # calling repeatedly.
+    # many panels rely on bootstrapping and drawing random samples
+    np.random.seed(812)
+
     if not skip_plots:
         exp_violins_for_layouts()
         exp_rij_for_layouts()
-        exp_sticks_across_layouts(observable="Functional Complexity")
-        exp_sticks_across_layouts(observable="Mean Fraction")
+        exp_sticks_across_layouts(
+            observable="Functional Complexity", hide_labels=False
+        )
+        # we actually only show the sticks for other observables in the SM,
+        # but since the calls are similar we do this here
+        exp_sticks_across_layouts(observable="Mean Fraction", hide_labels=False)
+        exp_sticks_across_layouts(
+            observable="Mean Correlation", hide_labels=False
+        )
+        exp_sticks_across_layouts(
+            observable="Mean IBI", set_ylim=False, hide_labels=False
+        )
+        exp_sticks_across_layouts(
+            observable="Median IBI", set_ylim=False, hide_labels=False
+        )
 
     log.debug("\n\nPairwise tests for trials\n")
     exp_pairwise_tests_for_trials()
 
-    log.debug("\n\nTests for joint distributions\n")
-    exp_tests_for_joint_distributions(observables=["Fraction"])
-    exp_tests_for_joint_distributions(observables=["Correlation Coefficient"])
+    # log.debug("\n\nTests for joint distributions\n")
+    # exp_tests_for_joint_distributions(observables=["Fraction"])
+    # exp_tests_for_joint_distributions(observables=["Correlation Coefficient"])
 
 
 def fig_3():
+
+    # set the global seed once for each figure to produce consistent results, when
+    # calling repeatedly.
+    # many panels rely on bootstrapping and drawing random samples
+    np.random.seed(813)
+
     # reproducing 2 module stimulation in simulations
     # choosing noise rate in lower modules to maximize fc, ibi are somewhat off at 15hz
 
@@ -240,19 +282,21 @@ def fig_3():
             ax.set_ylim(-0.05, 1.05)
             ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
             ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
-        sns.despine(ax=ax, bottom=True, left=False, trim=trim, offset=5)
+        sns.despine(ax=ax, bottom=True, left=False, trim=trim, offset=2)
         ax.tick_params(bottom=False)
         ax.set_xlabel(f"")
         ax.set_ylabel(f"")
         # ax.set_xticks([])
-        cc.set_size2(ax, 2, 2.0)
+        cc.set_size2(ax, 1.5, 2.0)
 
+    log.info("")
+    log.info("# simulation with two targeted modules")
     ax = custom_violins(
         dfs["bursts"],
         category="Condition",
         observable="Fraction",
         ylim=[0, 1],
-        num_swarm_points=250,
+        num_swarm_points=300,
         bw=0.2,
         palette=colors["partial"],
     )
@@ -262,12 +306,13 @@ def fig_3():
         f"./fig/paper/sim_partial_violins_fraction.pdf", dpi=300
     )
 
+    log.info("")
     ax = custom_violins(
         dfs["rij"],
         category="Condition",
         observable="Correlation Coefficient",
         ylim=[0, 1],
-        num_swarm_points=500,
+        num_swarm_points=600,
         bw=0.2,
         palette=colors["partial"],
     )
@@ -275,7 +320,12 @@ def fig_3():
     ax.set_xlabel("Correlation")
     ax.get_figure().savefig(f"./fig/paper/sim_partial_violins_rij.pdf", dpi=300)
 
-    # return
+    # ------------------------------------------------------------------------------ #
+    # tests for violins
+    # ------------------------------------------------------------------------------ #
+
+    # sim_tests_stimulating_two_modules(observables=["Fraction"])
+    # sim_tests_stimulating_two_modules(observables=["Correlation Coefficient"])
 
     # ------------------------------------------------------------------------------ #
     # pairwise rij plots
@@ -295,8 +345,44 @@ def fig_3():
     cc.set_size3(ax, 3, 3)
     ax.get_figure().savefig(f"./fig/paper/sim_2drij.pdf", dpi=300)
 
+    # ------------------------------------------------------------------------------ #
+    # raster plots for 2 module stimulation
+    # ------------------------------------------------------------------------------ #
+
+    h5f = ph.ah.prepare_file(
+        "./dat/the_last_one/dyn/stim=02_k=5_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=80.0_stimrate=20.0_rep=000.hdf5"
+    )
+
+    fig, ax = plt.subplots()
+    ph.plot_raster(
+        h5f,
+        ax,
+        clip_on=True,
+        zorder=-2,
+        markersize=0.75,
+        alpha=0.5,
+        color="#333",
+    )
+
+    ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(180))
+    ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(60))
+    ax.xaxis.set_visible(False)
+    ax.yaxis.set_visible(False)
+    sns.despine(ax=ax, left=True, right=True, bottom=True, top=True)
+    ax.set_xlim(0,180)
+
+    cc.set_size(ax, 2.7, 0.9)
+
+    fig.savefig(f"./fig/paper/sim_raster_stim_02_20hz.pdf", dpi=900)
+
+
 
 def fig_4(skip_rasters=True):
+
+    # set the global seed once for each figure to produce consistent results, when
+    # calling repeatedly.
+    # many panels rely on bootstrapping and drawing random samples
+    np.random.seed(814)
 
     # ------------------------------------------------------------------------------ #
     # raster plots
@@ -336,6 +422,14 @@ def fig_4(skip_rasters=True):
 
     coords.append(dict(k=10, rate=92.5, rep=1))
     zooms.append(347.75)
+    times.append(0)
+
+    coords.append(dict(k=-1, rate=85.0, rep=1))
+    zooms.append(0)
+    times.append(0)
+
+    coords.append(dict(k=-1, rate=100.0, rep=1))
+    zooms.append(0)
     times.append(0)
 
     for idx in range(0, len(coords)):
@@ -405,13 +499,22 @@ def fig_4(skip_rasters=True):
     coords = reference_coordinates.copy()
     coords["k_inter"] = [1, 5, 10, -1]
 
+    base_colors = [
+        "#1D484F",
+        "#371D4F",
+        "#4F1D20",
+        "#4F481D",
+        "#333",
+    ]
+
     for odx, obs in enumerate(observables):
 
         # setup colors
         # base_color = f"C{odx}"
-        base_color = palettable.cartocolors.qualitative.Antique_5.hex_colors[
-            4 - odx
-        ]
+        # base_color = palettable.cartocolors.qualitative.Antique_5.hex_colors[
+        #     4 - odx
+        # ]
+        base_color = base_colors[odx]
         if obs == "sys_median_any_ibis":
             base_color = "#333"
         clrs = dict()
@@ -473,15 +576,19 @@ def exp_raster_plots(
     if fig_width is None:
         fig_width = 3.5 / 2.54
     fig, axes = plt.subplots(
-        nrows=3, ncols=1, sharex=True, figsize=[fig_width, 3 / 2.54]
+        nrows=3, ncols=1, sharex=True, figsize=[fig_width, 4 / 2.54]
     )
 
     # only show 4 neurons per module, starting with module 0 on top
-    n_per_mod = 4
-    npm = int(len(h5f["ana.neuron_ids"]) / len(h5f["ana.mods"]))
-    neurons_to_show = []
-    for m in range(0, len(h5f["ana.mods"])):
-        neurons_to_show.extend(np.arange(0, n_per_mod) + m * npm)
+    if show_fluorescence:
+        n_per_mod = 4
+        npm = int(len(h5f["ana.neuron_ids"]) / len(h5f["ana.mods"]))
+        neurons_to_show = []
+        for m in range(0, len(h5f["ana.mods"])):
+            neurons_to_show.extend(np.arange(0, n_per_mod) + m * npm)
+    else:
+        # show everything, we have space
+        neurons_to_show = None
 
     # ------------------------------------------------------------------------------ #
     # Fluorescence
@@ -507,11 +614,13 @@ def exp_raster_plots(
     # Raster
     # ------------------------------------------------------------------------------ #
 
+    # ph.log.setLevel("DEBUG")
     ax = axes[1]
     ph.plot_raster(
         h5f,
         ax,
-        base_color=colors[c_str],
+        # base_color=colors[c_str],
+        color=colors[c_str],
         sort_by_module=True,
         neuron_id_as_y=False,
         neurons=neurons_to_show,
@@ -529,7 +638,7 @@ def exp_raster_plots(
             color=colors[c_str],
         )
 
-    ax.set_ylim(-5, None)
+    ax.set_ylim(-3, len(h5f["ana.neuron_ids"]) + 1.5)
     sns.despine(ax=ax, left=True, bottom=True)
     ax.yaxis.set_visible(False)
     ax.xaxis.set_visible(False)
@@ -554,9 +663,9 @@ def exp_raster_plots(
 
     # ax.margins(x=0, y=0)
     if "KCl" in condition:
-        ax.set_ylim(0, 4.5)
+        ax.set_ylim(0, 5)
     else:
-        ax.set_ylim(0, 3.0)
+        ax.set_ylim(0, 5)
 
     ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(2))
     ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(1))
@@ -570,6 +679,8 @@ def exp_raster_plots(
     sns.despine(ax=ax, left=False, bottom=False, trim=False, offset=2)
     ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(180))
     ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(60))
+    # ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(60))
+    # ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(10))
 
     # tighten space between panels
     plt.subplots_adjust(hspace=0.001)
@@ -679,7 +790,7 @@ def exp_chemical_vs_opto2(observable="Functional Complexity"):
                 # marker="o",
                 # markersize=1,
                 lw=0.5,
-                color=cc.alpha_to_solid_on_bg(clr, 0.2),
+                color=cc.alpha_to_solid_on_bg(clr, 0.5),
                 # color=clr,
                 # alpha = 0.3,
                 label=trial,
@@ -721,8 +832,13 @@ def exp_chemical_vs_opto2(observable="Functional Complexity"):
     return ax
 
 
-def exp_sticks_across_layouts(observable="Functional Complexity"):
-
+def exp_sticks_across_layouts(
+    observable="Functional Complexity",
+    hide_labels=True,
+    set_ylim=True,
+):
+    log.info(f"")
+    log.info(f"# sticks for {observable}")
     layouts = ["1b", "3b", "merged"]
     conditions = ["pre", "stim", "post"]
     # we want the precalculated summary statistics of each trial
@@ -754,6 +870,11 @@ def exp_sticks_across_layouts(observable="Functional Complexity"):
     # opto
     for edx, etype in enumerate(layouts):
         # clr = f"C{edx}"
+        log.info(f"## {etype}")
+
+        log.info(f"| Condition | Mean (across trials) | Standard error of the mean | min observed | max observed |")
+        log.info(f"| --------- | -------------------- | -------------------------- | ------------ | ------------ |")
+
         clr = colors["pre"]
         trials = dfs[etype]["Trial"].unique()
         for trial in trials:
@@ -794,6 +915,15 @@ def exp_sticks_across_layouts(observable="Functional Complexity"):
             df_min = np.nanmin(df[observable])
             error = std / np.sqrt(len(trials))
 
+            p_str = ""
+            p_str += f"| {stim:>9} "
+            p_str += f"| {mid:20.5f} "
+            p_str += f"| {error:26.5f} "
+            p_str += f"| {df_min:12.5f} "
+            p_str += f"| {df_max:12.5f} |"
+
+            log.info(p_str)
+
             _draw_error_stick(
                 ax,
                 center=x_pos_sticks[etype][stim],
@@ -806,14 +936,18 @@ def exp_sticks_across_layouts(observable="Functional Complexity"):
                 color=colors[stim],
                 zorder=2,
             )
+        log.info(f"")
 
     # ax.legend()
-    ax.set_ylim(0, 1.0)
+    if set_ylim:
+        ax.set_ylim(0, 1.0)
+        ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
+        ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
     ax.set_xlim(-0.25, 3.5)
     sns.despine(ax=ax, bottom=True, left=False, trim=True, offset=5)
     ax.set_xticks([])
-    ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
-    ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
+    if not hide_labels:
+        ax.set_ylabel(f"{observable}")
 
     cc.set_size3(ax, 2.2, 2)
 
@@ -848,7 +982,7 @@ def exp_violins_for_layouts(remove_outlier_for_ibis=True):
 
     for layout in dfs.keys():
         log.info(f"")
-        log.info(f"{layout}")
+        log.info(f"# {layout}")
         ax = custom_violins(
             dfs[layout]["bursts"],
             category="Condition",
@@ -864,7 +998,7 @@ def exp_violins_for_layouts(remove_outlier_for_ibis=True):
 
     for layout in dfs.keys():
         log.info(f"")
-        log.info(f"{layout}")
+        log.info(f"# {layout}")
         ax = custom_violins(
             dfs[layout]["rij"],
             category="Condition",
@@ -880,7 +1014,7 @@ def exp_violins_for_layouts(remove_outlier_for_ibis=True):
 
     for layout in dfs.keys():
         log.info(f"")
-        log.info(f"{layout}")
+        log.info(f"# {layout}")
         ax = custom_violins(
             dfs[layout]["bursts"].query("`Trial` != '210405_C'")
             if remove_outlier_for_ibis and layout == "single_bond"
@@ -916,7 +1050,7 @@ def exp_rij_for_layouts():
         )
 
     for layout in dfs.keys():
-        log.info(f"{layout}")
+        log.debug(f"rijs for {layout}")
         pairings = None
         if layout == "merged":
             pairings = ["all"]
@@ -1082,6 +1216,7 @@ def sim_raster_plots(
     zoom_duration=0.25,
     bs_large=20 / 1000,  # width of the gaussian kernel for rate
     threshold_factor=2.5 / 100,  # fraction of max peak height for burst
+    **kwargs,
 ):
 
     total_width = (
@@ -1137,16 +1272,11 @@ def sim_raster_plots(
     # ------------------------------------------------------------------------------ #
     # raster
     # ------------------------------------------------------------------------------ #
-
+    kwargs = kwargs.copy()
     ax = axes[1]
     ax.set_rasterization_zorder(0)
     ph.plot_raster(
-        h5f,
-        ax,
-        clip_on=True,
-        zorder=-2,
-        markersize=0.75,
-        alpha=0.5,
+        h5f, ax, clip_on=True, zorder=-2, markersize=0.75, alpha=0.5, **kwargs
     )
     ax.set_ylim(-1, None)
     ax.xaxis.set_visible(False)
@@ -1159,7 +1289,7 @@ def sim_raster_plots(
 
     ax = axes[2]
     ph.plot_state_variable(
-        h5f, ax, variable="D", lw=0.5, apply_formatting=False
+        h5f, ax, variable="D", lw=0.5, apply_formatting=False, **kwargs
     )
     ax.margins(x=0, y=0)
     ax.set_ylim(0, 1)
@@ -1181,12 +1311,7 @@ def sim_raster_plots(
     ax = axes[-1]
     ax.set_rasterization_zorder(0)
     ph.plot_raster(
-        h5f,
-        ax,
-        clip_on=True,
-        zorder=-2,
-        markersize=1.0,
-        alpha=0.75,
+        h5f, ax, clip_on=True, zorder=-2, markersize=1.0, alpha=0.75, **kwargs
     )
     ylim = axes[1].get_ylim()
     ax.set_ylim(ylim[0] - 10, ylim[1] + 10)
@@ -1654,10 +1779,10 @@ def sim_modules_participating_in_bursts(
                 y=prev[selects] + nxt[selects],
                 yerr=ratio_errs[selects],
                 fmt="o",
-                markersize=3,
-                mfc=cc.alpha_to_solid_on_bg(clr, 0.2),
+                markersize=1.5,
+                # mfc=cc.alpha_to_solid_on_bg(clr, 0.2),
                 elinewidth=0.5,
-                capsize=2,
+                capsize=1.5,
                 label=f"{seq_len} module"
                 if seq_len == 1
                 else f"{seq_len} modules",
@@ -1802,14 +1927,28 @@ def sim_violins_for_all_k(ax_width=4):
 
 # todo
 def sim_layout_sketches_for_all_k(ax_width=1.5):
-    ax = ph.plot_axon_layout(
-        h5f, axon_kwargs=dict(color="gray"), soma_kwargs=dict(ec="None", lw=0)
-    )
-    cc.set_size2(ax, ax_width, ax_width)
-    ax.set_xlabel("")
-    ax.set_xticks([])
-    sns.despine(ax=ax, bottom=True, left=True)
-    # ax.tick_params(axis="both", which="both", bottom=False)
+
+    folder = "./dat/the_last_one/dyn/"
+    for k in [-1, 1, 5, 10]:
+        path = glob.glob(f"{folder}/*k={k}_*")[0]
+        log.info(path)
+        h5f = ph.ah.prepare_file(path)
+        ax = ph.plot_axon_layout(
+            h5f,
+            axon_kwargs=dict(color="gray", alpha=1, lw=0.1),
+            soma_kwargs=dict(ec="black", lw=0.1),
+        )
+        if k == -1:
+            cc.set_size2(ax, ax_width * 2 / 3, ax_width * 2 / 3)
+        else:
+            cc.set_size2(ax, ax_width, ax_width)
+        ax.set_xlabel("")
+        ax.set_xticks([])
+        sns.despine(ax=ax, bottom=True, left=True)
+        # ax.tick_params(axis="both", which="both", bottom=False)
+        ax.get_figure().savefig(
+            f"./fig/paper/sim_layout_sketch_{k}.png", dpi=600, transparent=True
+        )
 
 
 # ------------------------------------------------------------------------------ #
@@ -1863,7 +2002,11 @@ def custom_violins(
     **violin_kwargs,
 ):
 
-    log.info(f"Violins for {observable}")
+    # log.info(f'|{"":-^75}|')
+    log.info(f"## Pooled violins for {observable}")
+    # log.info(f'|{"":-^65}|')
+    log.info(f'| Condition | 2.5% percentile | 50% percentile | 97.5% percentile |')
+    log.info(f'| --------- | --------------- | -------------- | ---------------- |')
     violin_kwargs = violin_kwargs.copy()
 
     if ax is None:
@@ -1940,9 +2083,10 @@ def custom_violins(
 
         # custom error estimates
         df_for_cat = sub_dfs[cat]
-        log.info("bootstrapping")
+        log.debug("bootstrapping")
         try:
             raise KeyError
+            # we ended up not using nested bootstrapping
             mid, error, percentiles = ah.pd_nested_bootstrap(
                 df_for_cat,
                 grouping_col="Trial",
@@ -1954,8 +2098,8 @@ def custom_violins(
             )
         except:
             # log.warning("Nested bootstrap failed")
-            # this may happen when category variable is not defined.
-            mid, error, percentiles = ah.pd_bootstrap(
+            # this may also happen when category variable is not defined.
+            mid, std, percentiles = ah.pd_bootstrap(
                 df_for_cat,
                 obs=observable,
                 num_boot=500,
@@ -1963,10 +2107,14 @@ def custom_violins(
                 percentiles=[2.5, 50, 97.5],
             )
 
-        log.info(
-            f"{cat}: median {mid:.3g}, se {error:.3g}, percentiles:"
-            f" {percentiles}"
-        )
+        log.debug(f"{cat}: median {mid:.3g}, std {std:.3g}")
+
+        p_str  = f"| {cat:>9} "
+        p_str += f"| {percentiles[0]:15.4f} " # 2.5%
+        p_str += f"| {percentiles[1]:14.4f} " # 50%
+        p_str += f"| {percentiles[2]:16.4f} |" # 97.5%
+
+        log.info(p_str)
 
         _draw_error_stick(
             ax,
@@ -2047,6 +2195,8 @@ def custom_violins(
         log.debug(f"{cat}: {len(offsets)} points survived")
 
     ax.get_legend().set_visible(False)
+
+    # log.info(f'|{"":-^65}|')
 
     return ax
 
@@ -2256,7 +2406,7 @@ def custom_rij_scatter(
     ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
     ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
     ax.set_aspect(1)
-    ax.set_xlabel("Correlation stim")
+    ax.set_xlabel("Correlation pertb")
     ax.set_ylabel("Correlation pre")
     sns.despine(top=False, bottom=False, left=False, right=False)
 
@@ -2384,7 +2534,13 @@ def _draw_error_stick(
 
 def exp_pairwise_tests_for_trials():
     # observables = ["Mean Fraction", "Mean Correlation", "Functional Complexity"]
-    observables = ["Mean Fraction", "Functional Complexity"]
+    observables = [
+        "Mean Correlation",
+        "Mean IBI",
+        "Median IBI",
+        "Mean Fraction",
+        "Functional Complexity",
+    ]
     kwargs = dict(
         observables=observables,
         col="Condition",
@@ -2395,22 +2551,35 @@ def exp_pairwise_tests_for_trials():
         print(f"\n{layout}")
         dfs = load_pd_hdf5(f"./dat/exp_out/{layout}.hdf5")
         df = dfs["trials"]
-        _paired_sample_t_test(df, col_vals=["pre", "stim"], **kwargs)
-        _paired_sample_t_test(df, col_vals=["stim", "post"], **kwargs)
+        _paired_sample_t_test(
+            df, col_vals=["pre", "stim"], alternatives="one-sided", **kwargs
+        )
+        _paired_sample_t_test(
+            df, col_vals=["stim", "post"], alternatives="one-sided", **kwargs
+        )
+        _paired_sample_t_test(
+            df, col_vals=["pre", "post"], alternatives="two-sided", **kwargs
+        )
 
     layout = "KCl_1b"
     print(f"\n{layout}")
     dfs = load_pd_hdf5(f"./dat/exp_out/{layout}.hdf5")
     df = dfs["trials"]
-    _paired_sample_t_test(df, col_vals=["KCl_0mM", "KCl_2mM"], **kwargs)
+    _paired_sample_t_test(
+        df, col_vals=["KCl_0mM", "KCl_2mM"], alternatives="one-sided", **kwargs
+    )
 
 
-def _paired_sample_t_test(df, col, col_vals, observables=None):
+def _paired_sample_t_test(
+    df, col, col_vals, observables=None, alternatives=None
+):
     """
     # Parameters
     df : dataframe, each row an observable estimated over a whole trial (e.g. mean ibi)
     col : str, column label in which to check the `col_vals`
-    condtions : list
+    observables : list
+    alternatives : dict mapping observables to the alternative hypothesis:
+        values can be "less", "greater", "two-sided"
 
     # Assumptions
     - dependent variable is continuous
@@ -2448,22 +2617,34 @@ def _paired_sample_t_test(df, col, col_vals, observables=None):
         after = after.select_dtypes(include="number")
         observables = list(before.columns)
 
+    if alternatives is None:
+        alternatives = {obs: "two-sided" for obs in observables}
+    elif isinstance(alternatives, str):
+        alternatives = {obs: alternatives for obs in observables}
+
     p_values = dict()
 
     # H0 that two related and repeated samples have identical expectation value
     for obs in observables:
-        ttest = stats.ttest_rel(before[obs], after[obs])
-        p_values[obs] = ttest.pvalue
+        alternative = alternatives[obs]
+        if alternative == "one-sided":
+            alternative = "two-sided"
+        ttest = stats.ttest_rel(
+            before[obs], after[obs], alternative=alternative
+        )
+        p = ttest.pvalue
 
-    p_str = (
-        p_values.__repr__()
-        .replace(",", "\n\t")
-        .replace("{", " ")
-        .replace("}", "")
-    )
+        # this is a lazy workaround so we do not need to specify in which direction
+        # our alternative hypothesis goes - since this will be different for
+        # any of the passed observables!
+        if alternatives[obs] == "one-sided":
+            p /= 2.0
+
+        p_values[obs] = p
+
     print(
         f"paired_sample_t_test for {col_vals}, {len(before)} samples."
-        f" p_values:\n\t{p_str}"
+        f" p_values:\n{_p_str(p_values, alternatives)}"
     )
 
     return p_values
@@ -2501,6 +2682,12 @@ def exp_tests_for_joint_distributions(observables=["Fraction"], dfkind=None):
             _mann_whitney_u_test(
                 dfs[dfkind], col_vals=["stim", "post"], **kwargs
             )
+            # _mann_whitney_u_test(
+            #     dfs[dfkind], col_vals=["pre", "post"], **kwargs
+            # )
+            # _kolmogorov_smirnov_test(
+            #     dfs[dfkind], col_vals=["pre", "post"], **kwargs
+            # )
         elif dfkind == "rij":
             # groups are dependent
             _wilcoxon_signed_rank_test(
@@ -2509,6 +2696,12 @@ def exp_tests_for_joint_distributions(observables=["Fraction"], dfkind=None):
             _wilcoxon_signed_rank_test(
                 dfs[dfkind], col_vals=["stim", "post"], **kwargs
             )
+            # _wilcoxon_signed_rank_test(
+            #     dfs[dfkind], col_vals=["pre", "post"], **kwargs
+            # )
+            # _kolmogorov_smirnov_test(
+            #     dfs[dfkind], col_vals=["pre", "post"], **kwargs
+            # )
         else:
             raise NotImplementedError()
 
@@ -2567,15 +2760,9 @@ def _mann_whitney_u_test(df, col, col_vals, observables=None):
         utest = stats.mannwhitneyu(bf, af)
         p_values[obs] = utest.pvalue
 
-    p_str = (
-        p_values.__repr__()
-        .replace(",", "\n\t")
-        .replace("{", " ")
-        .replace("}", "")
-    )
     print(
         f"mann_whitney_u_test for {col_vals}, {len(bf)} and"
-        f" {len(af)} samples, respectively. p_values:\n\t{p_str}"
+        f" {len(af)} samples, respectively. p_values:\n{_p_str(p_values)}"
     )
 
     return p_values
@@ -2635,15 +2822,124 @@ def _wilcoxon_signed_rank_test(df, col, col_vals, observables=None):
         wtest = stats.wilcoxon(bf, af)
         p_values[obs] = wtest.pvalue
 
-    p_str = (
-        p_values.__repr__()
-        .replace(",", "\n\t")
-        .replace("{", " ")
-        .replace("}", "")
-    )
     print(
         f"wilcoxon_signed_rank for {col_vals}, {len(bf)} and"
-        f" {len(af)} samples, respectively. p_values:\n\t{p_str}"
+        f" {len(af)} samples, respectively. p_values:\n{_p_str(p_values)}"
     )
 
     return p_values
+
+
+def _kolmogorov_smirnov_test(df, col, col_vals, observables=None):
+    """ """
+
+    # we compare pre with stim, and stim with post
+    assert len(col_vals) == 2
+
+    # make sure we only have rows where the column values are relevant
+    # df = df.query(f"`{col}` == @col_vals")
+
+    # we want to do a pairwise test, where a pair is before vs after in col_vals
+    before = df.query(f"`{col}` == @col_vals[0]")
+    after = df.query(f"`{col}` == @col_vals[1]")
+
+    # paired observations
+    # assert len(before) == len(after)
+
+    # log.debug(f"df.describe():\n{before.describe()}\n{after.describe()}")
+
+    # focus on numeric values and do the test for selected observables
+    if observables is None:
+        before = before.select_dtypes(include="number")
+        after = after.select_dtypes(include="number")
+        observables = list(before.columns)
+
+    p_values = dict()
+
+    # H0 that two related and repeated samples have identical expectation value
+    for obs in observables:
+        bf = before[obs].to_numpy()
+        af = after[obs].to_numpy()
+
+        # filter out nans. correlation coefficients may become nan if no spikes
+        # were found for a neuron
+        try:
+            idx = np.where(np.isfinite(bf) & np.isfinite(af))[0]
+            bf = bf[idx]
+            af = af[idx]
+        except:
+            pass
+
+        kstest = stats.ks_2samp(data1=bf, data2=af)
+        p_values[obs] = kstest.pvalue
+
+    print(
+        f"kolmogorov_smirnov for {col_vals}, {len(bf)} and"
+        f" {len(af)} samples, respectively. p_values:\n{_p_str(p_values)}"
+    )
+
+    return p_values
+
+
+def sim_tests_stimulating_two_modules(observables=["Fraction"], dfkind=None):
+
+    kwargs = dict(
+        observables=observables,
+        col="Condition",
+    )
+
+    # depending on the observables, we may need a different dataframe.
+    # make sure to provide observables that are in the same dataframe
+    # try to find the right frame
+    if dfkind is None:
+        if "Fraction" in observables:
+            dfkind = "bursts"
+        elif "Correlation Coefficient":
+            dfkind = "rij"
+        else:
+            raise ValueError(f"could not determine df, provide `dfkind`")
+
+    layouts = ["k=5"]
+    for layout in layouts:
+        print(f"\n{layout}")
+        dfs = load_pd_hdf5(f"./dat/sim_partial_out_20/{layout}.hdf5")
+
+        # depending on dfkind, we need a different test
+        if dfkind == "bursts":
+            # groups are indpenendent
+            _mann_whitney_u_test(
+                dfs[dfkind], col_vals=["0.0 Hz", "20.0 Hz"], **kwargs
+            )
+        elif dfkind == "rij":
+            # groups are dependent
+            _wilcoxon_signed_rank_test(
+                dfs[dfkind], col_vals=["0.0 Hz", "20.0 Hz"], **kwargs
+            )
+        else:
+            raise NotImplementedError()
+
+
+def _p_str(p_values, alternatives=None):
+    """
+    # Parameters
+    p_values : dict, with observable as key and float p value
+    alternaives : None or dict, mapping observables (keys of `p_values`) to the
+        alternative hypothesis
+    """
+
+    p_str = "\n"
+    for obs in p_values.keys():
+        p_str += f"{obs:>34}: "
+        p = p_values[obs]
+        if p <= 0.01:
+            p_str += "** "
+        elif p <= 0.05:
+            p_str += "*  "
+        else:
+            p_str += "ns "
+        if alternatives is not None:
+            p_str += f"({p:.05f}, {alternatives[obs]})\n"
+        else:
+            p_str += f"({p:.05f})\n"
+
+    return p_str
