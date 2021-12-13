@@ -1,15 +1,37 @@
-Dynamics described in [Orlandi et al. 2013, DOI: 10.1038/nphys2686](https://dx.doi.org/10.1038/nphys2686).
+# Stimulating Modular Cultures
 
-Loads topologies from hdf5 and runs the simulations in brian2.
+The code is structured into folders as follows:
 
-A simple example can be found in `src/dynamics.py`
+- `./src/` contains simulation files to generate topologies and run neuron dynamics:
 
-We want to model optogenetic stimulation.
-Stimulation Example:
+    - `topology.py` for merged and modular topologies and the axons growth algorithm proposed by Orlandi et al.
 
-```
-python -it ./src/stimulate.py -i ./topologies/2x2_single.hdf5 -d 10 -o ./dat/test.hdf5 -stim
-python ./ana/create_spike_movie_stim.py -i ./dat/test.hdf5 -o ./dat/test.mov -l 10 -tmin 0 -tmax 10
-```
+    - `quadratic_integrate_and_fire.py` for brian2 code, neuron dynamics and generation of spiking data
 
+- `./run/` contains helpers to run the simulations from `src` on the cluster, and to create parameter combinations / sweeps that can be computed in serial.
+
+- `./ana/` contains all post processing (and many non-relevant files, which will be removed). The ones that are relevant are:
+
+    - `paper_plots.py` is the high-level wrapper that creates our figures.
+        * at the top, we find functions named `fig_x()` that call all lower-level plotting routines, and load analyzed data form disk. This is a good starting point to trace back what comes from where.
+        * statistical tests are implemented here, and use the dataframes produced by `process_conditions`
+
+    - `process_conditions.py` analyses the raw spiking data from either experiments or simulations
+        * provides pandas dataframes that are stored to a hdf5 file.
+        * Frontmost, these dataframes contain the analysed data used to plot violins, esp. Fig 2. Calls `ana_helper` for most tasks.
+
+    - `ndim_merge.py` is used only for simulation data
+        * runs more analysis than `process_conditions`, but (mostly) focusus on scalar observables rather than distributions.
+        * Produces the analyzed files need for Fig. 4 (some observable as a function of the simulated noise level). Calls `ana_helper` for most tasks.
+
+    - `ana_helper.py` contains all the low-level analysis functions that operate on spike times, importers of simulation and experimental data and much more.
+        * All analysis work on a nested dictionary, mostly  called `h5f`. Each `h5f` corresponds to one trial, and we attach all analysis results to this dict.
+        * The idea is that later functions (such as plotting) can use previous results. Note that this is done live, and that although we "add" to the `h5f`, nothing is written to disk.
+
+    - `plot_helper.py` provides various functions that take such a `h5f` dict and plot some aspect of it with consistent styling. Examples include timeseries, rasters, and distributions.
+
+# Further Notes:
+
+- Most code relies [my helpers](https://github.com/pSpitzner/pyhelpers), which I use across projects.
+- Paths are so far hard coded, and will be refactored before publication.
 
