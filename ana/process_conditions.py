@@ -77,7 +77,7 @@ def main():
     parser.add_argument(
         "-i",
         dest="input_base",
-        required=False,
+        required=True,
         help="Root directory for files, `./dat/exp_in/`",
     )
     parser.add_argument(
