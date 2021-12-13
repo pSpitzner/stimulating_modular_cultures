@@ -282,8 +282,9 @@ def plot_raster(
     mods = h5f["data.neuron_module_id"][:][neurons]
     last_mod = np.nan
     num_mods = len(h5f["ana.mod_ids"])
-    offset = len(neurons)
-    offset_add = offset / (len(neurons) + num_mods)
+    # offset = len(neurons)
+    offset = 0
+    offset_add = len(neurons) / (len(neurons) + num_mods)
 
     for ndx, n_id in enumerate(neurons):
         # if n_id > 1000:
@@ -298,9 +299,9 @@ def plot_raster(
         if neuron_id_as_y:
             offset = ndx
         else:
-            offset -= offset_add
+            offset += offset_add
             if last_mod != m_id:
-                offset -= offset_add
+                offset += offset_add
             last_mod = m_id
 
         log.debug(f"neuron {n_id} module {m_id} at {offset}")
@@ -546,9 +547,9 @@ def plot_fluorescence_trace(
         plot_kws = kwargs.copy()
         m_id = mods[ndx]
 
-        offset -= 0.15
+        offset += 0.15
         if last_mod != m_id:
-            offset -= 0.1
+            offset += 0.1
         last_mod = m_id
 
         log.debug(f"neuron {n_id} module {m_id} at {offset}")
