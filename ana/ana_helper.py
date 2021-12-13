@@ -212,65 +212,6 @@ def prepare_file(
     return h5f
 
 
-# depricating
-def _unused_load_experimental_files(path_prefix):
-    """
-        This data version had only the first burst detected.
-
-        helper to import experimental csv files from jordi into a compatible
-        h5f
-
-        # Parameters
-        path_prefix: str
-
-        # Returns
-        h5f: benedict with our needed strucuter
-    """
-
-    # assert os.path.isdir(path_prefix)
-
-    h5f = benedict()
-
-    # ROIs as neuron centers
-    rois = np.loadtxt(
-        f"{path_prefix}ROI_centers_everything.csv", delimiter=",", skiprows=1
-    )
-
-    h5f["data.neuron_pos_x"] = rois[:, 1].copy()
-    h5f["data.neuron_pos_y"] = rois[:, 2].copy()
-
-    spikes = np.loadtxt(f"{path_prefix}spikesData.csv", delimiter=",", skiprows=1)
-
-    # convert one to zero indexing
-    spikes[:, 0] -= 1
-
-    h5f["data.spiketimes_as_list"] = spikes.copy()
-    h5f["data.spiketimes"] = _spikes_as_list_to_spikes_2d(spikes)
-
-    # add some more stuff that is usually already in the meta data
-    num_n = len(h5f["data.neuron_pos_x"])
-    h5f["meta.topology_num_neur"] = num_n
-
-    # approximate module ids from position
-    # 0 lower left, 1 upper left, 2 lower right, 3 upper right
-    h5f["data.neuron_module_id"] = np.ones(num_n, dtype=int) * -1
-    for nid in range(0, num_n):
-        x = h5f["data.neuron_pos_x"][nid]
-        y = h5f["data.neuron_pos_y"][nid]
-
-        if x < 300 and y < 300:
-            h5f["data.neuron_module_id"][nid] = 0
-        elif x < 300 and y >= 300:
-            h5f["data.neuron_module_id"][nid] = 1
-        elif x >= 300 and y < 300:
-            h5f["data.neuron_module_id"][nid] = 2
-        elif x >= 300 and y >= 300:
-            h5f["data.neuron_module_id"][nid] = 3
-
-    h5f["meta.dynamics_simulation_duration"] = 600.0
-
-    return prepare_file(h5f)
-
 
 def load_experimental_files(path_prefix, condition="1_pre_"):
     """
@@ -2300,8 +2241,6 @@ def get_threshold_from_logisi_distribution(list_of_isi, area_fraction=0.3):
 # pandas data frame operations
 # ------------------------------------------------------------------------------ #
 
-
-# this is jonas recommendation
 def pd_bootstrap(
     df, obs, sample_size=None, num_boot=500, func=np.nanmean,
     percentiles=None
