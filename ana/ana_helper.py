@@ -87,24 +87,27 @@ except ImportError:
 
 
 def prepare_file(
-    h5f, mod_colors="auto", hot=True, skip=None,
+    h5f,
+    mod_colors="auto",
+    hot=True,
+    skip=None,
 ):
     """
-        modifies h5f in place! (not on disk, only in RAM)
+    modifies h5f in place! (not on disk, only in RAM)
 
-        # Parameters
-        h5f           : file path as str or existing h5f benedict
-        mod_colors    : "auto" or False (all back) or list of colors
-        hot           : wether to load data to ram (true) or fetch as needed (false)
-        skip          : lists of names of datasets of the h5file that are excluded,
-                        if `h5f` is a path
+    # Parameters
+    h5f           : file path as str or existing h5f benedict
+    mod_colors    : "auto" or False (all back) or list of colors
+    hot           : wether to load data to ram (true) or fetch as needed (false)
+    skip          : lists of names of datasets of the h5file that are excluded,
+                    if `h5f` is a path
 
-        # adds the following attributes:
-        h5f["ana.mod_sort"]   : function that maps from neuron_id to sorted id, by module
-        h5f["ana.mods"]       : list of unique module ids
-        h5f["ana.mod_colors"] : list of colors associated with each module
-        h5f["ana.neuron_ids"] : array of neurons, if we speciefied a sensor, this will
-                             only contain the recorded ones.
+    # adds the following attributes:
+    h5f["ana.mod_sort"]   : function that maps from neuron_id to sorted id, by module
+    h5f["ana.mods"]       : list of unique module ids
+    h5f["ana.mod_colors"] : list of colors associated with each module
+    h5f["ana.neuron_ids"] : array of neurons, if we speciefied a sensor, this will
+                         only contain the recorded ones.
     """
 
     log.debug("Preparing File")
@@ -190,9 +193,9 @@ def prepare_file(
         stim_str = "Off"
     else:
         try:
-            stim_neurons = np.unique(
-                h5f["data.stimulation_times_as_list"][:, 0]
-            ).astype(int)
+            stim_neurons = np.unique(h5f["data.stimulation_times_as_list"][:, 0]).astype(
+                int
+            )
             stim_mods = np.unique(h5f["data.neuron_module_id"][stim_neurons])
             stim_str = f"On {str(tuple(stim_mods)).replace(',)', ')')}"
         except Exception as e:
@@ -212,18 +215,17 @@ def prepare_file(
     return h5f
 
 
-
 def load_experimental_files(path_prefix, condition="1_pre_"):
     """
-        helper to import experimental csv files from jordi into a compatible
-        h5f
+    helper to import experimental csv files from jordi into a compatible
+    h5f
 
-        # Parameters
-        path_prefix: str
-        condition: str
+    # Parameters
+    path_prefix: str
+    condition: str
 
-        # Returns
-        h5f: benedict with our needed strucuter
+    # Returns
+    h5f: benedict with our needed strucuter
     """
 
     # assert os.path.isdir(path_prefix)
@@ -282,7 +284,7 @@ def load_experimental_files(path_prefix, condition="1_pre_"):
 
         # for each neuron, we have 4 columns, and want to use the 2nd one, "mean"
         # first col is time index, then we start counting neurons
-        fl_idx = np.arange(0, num_n, dtype="int")*4 + 2
+        fl_idx = np.arange(0, num_n, dtype="int") * 4 + 2
         fl_traces = fl_traces[:, fl_idx]
 
         # drop first 60 seconds due to artifacts at the beginning of the recording
@@ -309,26 +311,26 @@ def __find_bursts_from_rates(
     return_res=False,
 ):
     """
-        Based on module-level firing rates, find bursting events.
+    Based on module-level firing rates, find bursting events.
 
-        returns two benedicts, `bursts` and `rates`,
-        modifies `h5f`
+    returns two benedicts, `bursts` and `rates`,
+    modifies `h5f`
 
-        # Parameters
-        h5f : benedict, with our usual structure
-        bs_large : float, seconds, time bin size to smooth over (gaussian kernel)
-        bs_small : float, seconds, small bin size at which the rate is sampled
-        rate_threshold : float, Hz, above which we start detecting bursts
-        merge_threshold : float, seconds merge bursts if separated by less than this
-        system_bursts_from_modules : bool, whether the system-level bursts are
-            "stitched together" from individual modules or detected independently
-            from the system wide rate, using `rate_threshold`
+    # Parameters
+    h5f : benedict, with our usual structure
+    bs_large : float, seconds, time bin size to smooth over (gaussian kernel)
+    bs_small : float, seconds, small bin size at which the rate is sampled
+    rate_threshold : float, Hz, above which we start detecting bursts
+    merge_threshold : float, seconds merge bursts if separated by less than this
+    system_bursts_from_modules : bool, whether the system-level bursts are
+        "stitched together" from individual modules or detected independently
+        from the system wide rate, using `rate_threshold`
 
 
-        Note on smoothing: previously, we time-binned the activity on the module level
-        and convolve this series with a gaussian kernel to smooth.
-        Current, precise way is to convolve the spike-train of each neuron with
-        the kernel (thus, keeping the high precision of each spike time).
+    Note on smoothing: previously, we time-binned the activity on the module level
+    and convolve this series with a gaussian kernel to smooth.
+    Current, precise way is to convolve the spike-train of each neuron with
+    the kernel (thus, keeping the high precision of each spike time).
     """
 
     assert h5f["ana"] is not None, "`prepare_file(h5f)` first!"
@@ -358,11 +360,16 @@ def __find_bursts_from_rates(
         # if sensor is specified, we might get more neuron_module_id than were recorded
         selects = selects[np.isin(selects, h5f["ana.neuron_ids"])]
         pop_rate = population_rate_exact_smoothing(
-            spikes[selects], bin_size=bs_small, smooth_width=bs_large, length=duration,
+            spikes[selects],
+            bin_size=bs_small,
+            smooth_width=bs_large,
+            length=duration,
         )
 
         beg_time, end_time = burst_detection_pop_rate(
-            rate=pop_rate, bin_size=bs_small, rate_threshold=rate_threshold,
+            rate=pop_rate,
+            bin_size=bs_small,
+            rate_threshold=rate_threshold,
         )
 
         if len(beg_time) > 0:
@@ -380,18 +387,25 @@ def __find_bursts_from_rates(
         bursts[f"module_level.{m_dc}.rate_threshold"] = rate_threshold
 
     pop_rate = population_rate_exact_smoothing(
-        spikes[:], bin_size=bs_small, smooth_width=bs_large, length=duration,
+        spikes[:],
+        bin_size=bs_small,
+        smooth_width=bs_large,
+        length=duration,
     )
     rates["system_level"] = pop_rate
     rates["cv.system_level"] = np.nanstd(pop_rate) / np.nanmean(pop_rate)
 
     if system_bursts_from_modules:
         sys_begs, sys_ends, sys_seqs = system_burst_from_module_burst(
-            beg_times, end_times, threshold=merge_threshold,
+            beg_times,
+            end_times,
+            threshold=merge_threshold,
         )
     else:
         sys_begs, sys_ends = burst_detection_pop_rate(
-            rate=pop_rate, bin_size=bs_small, rate_threshold=rate_threshold,
+            rate=pop_rate,
+            bin_size=bs_small,
+            rate_threshold=rate_threshold,
         )
         # in this case, we dont get sequences for free. lets check the first spike
         # in each modules
@@ -446,13 +460,13 @@ def find_rates(
     return_res=False,
 ):
     """
-        Uses `population_rate_exact_smoothing` to find global system rate
-        and the rates within modules
+    Uses `population_rate_exact_smoothing` to find global system rate
+    and the rates within modules
 
-        Note on smoothing: previously, we time-binned the activity on the module level
-        and convolve this series with a gaussian kernel to smooth.
-        Current, precise way is to convolve the spike-train of each neuron with
-        the kernel (thus, keeping the high precision of each spike time).
+    Note on smoothing: previously, we time-binned the activity on the module level
+    and convolve this series with a gaussian kernel to smooth.
+    Current, precise way is to convolve the spike-train of each neuron with
+    the kernel (thus, keeping the high precision of each spike time).
     """
     assert h5f["ana"] is not None, "`prepare_file(h5f)` first!"
     assert write_to_h5f or return_res
@@ -475,14 +489,20 @@ def find_rates(
         selects = np.where(h5f["data.neuron_module_id"][:] == m_id)[0]
         selects = selects[np.isin(selects, h5f["ana.neuron_ids"])]
         pop_rate = population_rate_exact_smoothing(
-            spikes[selects], bin_size=bs_small, smooth_width=bs_large, length=duration,
+            spikes[selects],
+            bin_size=bs_small,
+            smooth_width=bs_large,
+            length=duration,
         )
 
         rates[f"module_level.{m_dc}"] = pop_rate
         rates[f"cv.module_level.{m_dc}"] = np.nanstd(pop_rate) / np.nanmean(pop_rate)
 
     pop_rate = population_rate_exact_smoothing(
-        spikes[:], bin_size=bs_small, smooth_width=bs_large, length=duration,
+        spikes[:],
+        bin_size=bs_small,
+        smooth_width=bs_large,
+        length=duration,
     )
     rates["system_level"] = pop_rate
     rates["cv.system_level"] = np.nanstd(pop_rate) / np.nanmean(pop_rate)
@@ -509,23 +529,23 @@ def find_system_bursts_from_module_bursts(
     return_res=False,
 ):
     """
-        Based on module-level firing rates, find bursting events.
+    Based on module-level firing rates, find bursting events.
 
-        optionally returns `bursts`
-        optionally modifies `h5f`
+    optionally returns `bursts`
+    optionally modifies `h5f`
 
-        # Parameters
-        h5f : benedict, with our usual structure
-        rate_threshold : float in Hz, above which we start detecting bursts
-        merge_threshold : float, seconds merge bursts if separated by less than this
+    # Parameters
+    h5f : benedict, with our usual structure
+    rate_threshold : float in Hz, above which we start detecting bursts
+    merge_threshold : float, seconds merge bursts if separated by less than this
 
-        # Adds to h5f if `write_to_h5f`:
-            h5f["ana.bursts.module_level.{m_dc}.beg_times"]
-            h5f["ana.bursts.module_level.{m_dc}.end_times"]
-            h5f["ana.bursts.module_level.{m_dc}.rate_threshold"]
-            h5f["ana.system_level.beg_times"]
-            h5f["ana.system_level.end_times"]
-            h5f["ana.system_level.module_sequences"]
+    # Adds to h5f if `write_to_h5f`:
+        h5f["ana.bursts.module_level.{m_dc}.beg_times"]
+        h5f["ana.bursts.module_level.{m_dc}.end_times"]
+        h5f["ana.bursts.module_level.{m_dc}.rate_threshold"]
+        h5f["ana.system_level.beg_times"]
+        h5f["ana.system_level.end_times"]
+        h5f["ana.system_level.module_sequences"]
 
     """
 
@@ -538,7 +558,9 @@ def find_system_bursts_from_module_bursts(
         m_dc = h5f["ana.mods"][mdx]
         rate = h5f[f"ana.rates.module_level.{m_dc}"]
         beg_time, end_time = burst_detection_pop_rate(
-            rate=rate, bin_size=rate_dt, rate_threshold=rate_threshold,
+            rate=rate,
+            bin_size=rate_dt,
+            rate_threshold=rate_threshold,
         )
         beg_time, end_time = merge_if_below_separation_threshold(
             beg_time, end_time, threshold=merge_threshold
@@ -551,7 +573,9 @@ def find_system_bursts_from_module_bursts(
         bursts[f"module_level.{m_dc}.rate_threshold"] = rate_threshold
 
     sys_begs, sys_ends, sys_seqs = system_burst_from_module_burst(
-        beg_times, end_times, threshold=merge_threshold,
+        beg_times,
+        end_times,
+        threshold=merge_threshold,
     )
 
     bursts["system_level.beg_times"] = sys_begs.copy()
@@ -580,27 +604,27 @@ def find_system_bursts_from_global_rate(
     **sequence_kwargs,
 ):
     """
-        Find global bursting events only based on the merged down rate.
-        To get sequences, uses `sequences_from_module_contribution` and
-        passes `sequence_kwargs`.
-        Per default, to count a module as "contributing" to a sequence,
-        at least _20%_ of the neurons of the module (but at least one neuron) have to
-        contribute at least _1_ spike
+    Find global bursting events only based on the merged down rate.
+    To get sequences, uses `sequences_from_module_contribution` and
+    passes `sequence_kwargs`.
+    Per default, to count a module as "contributing" to a sequence,
+    at least _20%_ of the neurons of the module (but at least one neuron) have to
+    contribute at least _1_ spike
 
-        optionally returns `bursts`
-        optionally modifies `h5f`
+    optionally returns `bursts`
+    optionally modifies `h5f`
 
-        Note: does not provide the
-        h5f["ana.bursts.module_level.{m_dc}"]
+    Note: does not provide the
+    h5f["ana.bursts.module_level.{m_dc}"]
 
-        # Parameters
-        h5f : benedict, with our usual structure
-        rate_threshold : float, Hz, above which we start detecting bursts
-        merge_threshold : float, seconds merge bursts if separated by less than this
+    # Parameters
+    h5f : benedict, with our usual structure
+    rate_threshold : float, Hz, above which we start detecting bursts
+    merge_threshold : float, seconds merge bursts if separated by less than this
 
-        # Adds to h5f if `write_to_h5f`:
-            h5f["ana.system_level.beg_times"]
-            h5f["ana.system_level.end_times"]
+    # Adds to h5f if `write_to_h5f`:
+        h5f["ana.system_level.beg_times"]
+        h5f["ana.system_level.end_times"]
     """
 
     bursts = benedict()
@@ -608,12 +632,13 @@ def find_system_bursts_from_global_rate(
     rate_dt = h5f["ana.rates.dt"]
 
     beg_times, end_times = burst_detection_pop_rate(
-        rate=rate, bin_size=rate_dt, rate_threshold=rate_threshold,
+        rate=rate,
+        bin_size=rate_dt,
+        rate_threshold=rate_threshold,
     )
     beg_times, end_times = merge_if_below_separation_threshold(
         beg_times, end_times, threshold=merge_threshold
     )
-
 
     if skip_sequences:
         sys_seqs = [tuple()] * len(beg_times)
@@ -646,7 +671,7 @@ def find_system_bursts_from_global_rate(
 
 def find_isis(h5f, write_to_h5f=True, return_res=False):
     """
-        What are the the inter-spike-intervals within and out of bursts?
+    What are the the inter-spike-intervals within and out of bursts?
     """
 
     assert write_to_h5f or return_res
@@ -667,7 +692,11 @@ def find_isis(h5f, write_to_h5f=True, return_res=False):
             b = None
             e = None
 
-        ll_isi = _inter_spike_intervals(spikes_2d, beg_times=b, end_times=e,)
+        ll_isi = _inter_spike_intervals(
+            spikes_2d,
+            beg_times=b,
+            end_times=e,
+        )
         isi[m_dc] = ll_isi
 
     if write_to_h5f:
@@ -679,7 +708,7 @@ def find_isis(h5f, write_to_h5f=True, return_res=False):
 
 def find_ibis(h5f, write_to_h5f=True, return_res=False):
     """
-        What are the the inter-burst-intervals? End-of-burst to start-of-burst
+    What are the the inter-burst-intervals? End-of-burst to start-of-burst
     """
     assert write_to_h5f or return_res
 
@@ -757,12 +786,12 @@ def find_ibis(h5f, write_to_h5f=True, return_res=False):
 
 def find_participating_fraction_in_bursts(h5f, write_to_h5f=True, return_res=False):
     """
-        Once we have found bursts, check what is the fraction of neurons participating
-        in every burst, and the total number of spikes.
+    Once we have found bursts, check what is the fraction of neurons participating
+    in every burst, and the total number of spikes.
 
-        adds `participating_fraction` to the bursts: fraction of unique neurons fired
-        a spike in the burst (relative to total number of neurons in module / system)
-        adds `num_spikes_in_bursts`: how many spikes per contributing neuron
+    adds `participating_fraction` to the bursts: fraction of unique neurons fired
+    a spike in the burst (relative to total number of neurons in module / system)
+    adds `num_spikes_in_bursts`: how many spikes per contributing neuron
     """
 
     assert "ana.bursts" in h5f.keypaths(), "run `find_bursts_from_rates` first"
@@ -786,9 +815,9 @@ def find_participating_fraction_in_bursts(h5f, write_to_h5f=True, return_res=Fal
         fraction = np.zeros(len(bt))
         num_spks = np.zeros(len(bt))
         for bdx in range(0, len(bt)):
-            n_ids = np.where(
-                (bt[bdx] <= spikes[selects]) & (spikes[selects] <= et[bdx])
-            )[0]
+            n_ids = np.where((bt[bdx] <= spikes[selects]) & (spikes[selects] <= et[bdx]))[
+                0
+            ]
             n_unk = len(np.unique(n_ids))
             fraction[bdx] = n_unk / len(selects)
             num_spks[bdx] = len(n_ids) / np.fmax(n_unk, 1)
@@ -815,9 +844,9 @@ def find_participating_fraction_in_bursts(h5f, write_to_h5f=True, return_res=Fal
 
 def find_onset_durations(h5f, write_to_h5f=True, return_res=False):
     """
-        Similar to the duration of a burst (start time to end time),
-        we can ask how long did it take from activating the first
-        to activating the last module
+    Similar to the duration of a burst (start time to end time),
+    we can ask how long did it take from activating the first
+    to activating the last module
     """
 
     assert "ana.bursts.system_level" in h5f.keypaths()
@@ -897,17 +926,17 @@ def find_rij(h5f=None, which="neurons", time_bin_size=200 / 1000):
 
 def find_rij_pairs(h5f, rij=None, pairing="within_modules", **kwargs):
     """
-        get a flat list of the rij values for pairs of neurons matching a criterium,
-        e.g. all neuron pairs within the same module.
+    get a flat list of the rij values for pairs of neurons matching a criterium,
+    e.g. all neuron pairs within the same module.
 
-        # Parameters
-        rij : 2d array, if already calculated, skip rij computation
-        pairing : str,
-            "within_modules" : only neuron pairs within the same module
-            "across_modules" : pairs spanning modules
-            "within_group_02" : instead of modules, use all pairs in this group of modules
-            "across_groups_02_13" : compare across the two sepcified groups
-        kwargs : passed to `find_rij()`
+    # Parameters
+    rij : 2d array, if already calculated, skip rij computation
+    pairing : str,
+        "within_modules" : only neuron pairs within the same module
+        "across_modules" : pairs spanning modules
+        "within_group_02" : instead of modules, use all pairs in this group of modules
+        "across_groups_02_13" : compare across the two sepcified groups
+    kwargs : passed to `find_rij()`
     """
 
     if rij is None:
@@ -991,8 +1020,8 @@ def find_functional_complexity(
 
 def find_state_variable(h5f, variable, write_to_h5f=True, return_res=False):
     """
-        from the neuron-level state variable,
-        calculate module-level state variables and some properties
+    from the neuron-level state variable,
+    calculate module-level state variables and some properties
     """
 
     assert f"data.state_vars_{variable}" in h5f.keypaths()
@@ -1030,8 +1059,8 @@ def find_state_variable(h5f, variable, write_to_h5f=True, return_res=False):
 
 def find_rij_within_across(h5f):
     """
-        We already have a nice way to get the rij in `find_functional_complexity`.
-        Lets use that and do the sorting according to modules afterwards.
+    We already have a nice way to get the rij in `find_functional_complexity`.
+    Lets use that and do the sorting according to modules afterwards.
     """
 
     # this gives us rij as a matrix, 2d np array
@@ -1134,25 +1163,25 @@ def batch_across_filenames(
     filenames, ana_function, merge="append", res=None, parallel=True
 ):
     """
-        function to generalize some analysis parts across multiple files.
+    function to generalize some analysis parts across multiple files.
 
-        Takes a list of `filenames` and applies `ana_function` on every one of them.
+    Takes a list of `filenames` and applies `ana_function` on every one of them.
 
-        # Parameters
-        filenames : str or list of strings, wildcards will be globbed
-        ana_function : function that needs to return
-            * the result
-            * for consistency, a check value that should be the same for every filename
-            * the filename
-        merge : default "append"  or function.
-            if not "append", merge(res, this_res) is called to combine results across
-            files, otherwise we append to a list
-        res : per default (None) we create a list and append to it. when `merge=np.add`
-            we want to provide res to be an empty zero array, e.g. `np.array([0])`
+    # Parameters
+    filenames : str or list of strings, wildcards will be globbed
+    ana_function : function that needs to return
+        * the result
+        * for consistency, a check value that should be the same for every filename
+        * the filename
+    merge : default "append"  or function.
+        if not "append", merge(res, this_res) is called to combine results across
+        files, otherwise we append to a list
+    res : per default (None) we create a list and append to it. when `merge=np.add`
+        we want to provide res to be an empty zero array, e.g. `np.array([0])`
 
-        # Returns
-        res : list or dtype that was provided to `res`
-        check : the value of the consistency check that was provided by the first file
+    # Returns
+    res : list or dtype that was provided to `res`
+    check : the value of the consistency check that was provided by the first file
 
 
     """
@@ -1221,14 +1250,14 @@ def batch_across_filenames(
 
 def batch_pd_sequence_length_probabilities(list_of_filenames):
     """
-        Create a pandas data frame (long form, every row corresponds to one sequence
-        length that occured - usually, 4 rows per realization).
-        Remaining columns include meta data, conditions etc.
-        This can be directly used for box plotting in seaborn.
+    Create a pandas data frame (long form, every row corresponds to one sequence
+    length that occured - usually, 4 rows per realization).
+    Remaining columns include meta data, conditions etc.
+    This can be directly used for box plotting in seaborn.
 
-        # Parameters:
-        list_of_filenames: list of str,
-            each str will be globbed and process
+    # Parameters:
+    list_of_filenames: list of str,
+        each str will be globbed and process
     """
 
     if isinstance(list_of_filenames, str):
@@ -1290,13 +1319,13 @@ def batch_pd_bursts(
     load_from_disk=False, list_of_filenames=None, df_path=None, client=None
 ):
     """
-        Create a pandas data frame (long form, every row corresponds to one burst.
-        Remaining columns include meta data, conditions etc.
-        This can be directly used for box plotting in seaborn.
+    Create a pandas data frame (long form, every row corresponds to one burst.
+    Remaining columns include meta data, conditions etc.
+    This can be directly used for box plotting in seaborn.
 
-        # Parameters:
-        list_of_filenames: list of str,
-            each str will be globbed and process
+    # Parameters:
+    list_of_filenames: list of str,
+        each str will be globbed and process
     """
     if list_of_filenames is None:
         list_of_filenames = [
@@ -1439,8 +1468,8 @@ def _dfs_from_realization(candidate):
 
 def batch_candidates_burst_times_and_isi(input_path, hot=False):
     """
-        get the burst times based on rate for every module and merge it down, so that
-        we have ensemble average statistics
+    get the burst times based on rate for every module and merge it down, so that
+    we have ensemble average statistics
     """
 
     candidates = glob.glob(input_path)
@@ -1576,14 +1605,14 @@ def batch_conditions():
 
 def _spikes_as_sparse_to_spikes_as_list(spikes_as_sparse, dt):
     """
-        # Parameters
-        spikes_as_sparse : 2d array with shape (num_timesteps, num_neurons)
-            columns correspond to neurons, rows to time bins of size dt.
-            each row has a 0 (no spike in that time bin) or 1 (if spiked).
+    # Parameters
+    spikes_as_sparse : 2d array with shape (num_timesteps, num_neurons)
+        columns correspond to neurons, rows to time bins of size dt.
+        each row has a 0 (no spike in that time bin) or 1 (if spiked).
 
-        # Returns
-        spikes_as_list : 2d array with shape: (num_spikes, 2)
-            first column is the neuron id, second column the spike time
+    # Returns
+    spikes_as_list : 2d array with shape: (num_spikes, 2)
+        first column is the neuron id, second column the spike time
     """
 
     times, neuron_ids = np.where(spikes_as_sparse)
@@ -1593,16 +1622,16 @@ def _spikes_as_sparse_to_spikes_as_list(spikes_as_sparse, dt):
 
 def _spikes_as_list_to_spikes_2d(spikes_as_list, num_n=None):
     """
-        convert a list of spiketimes to the 2d matrix representation
-        if num_n is not None, we will use 0 to num_n neurons
+    convert a list of spiketimes to the 2d matrix representation
+    if num_n is not None, we will use 0 to num_n neurons
 
-        # Parameters
-        spikes_as_list : 2d array with shape: (num_spikes, 2)
-            first column is the neuron id, second column the spike time
+    # Parameters
+    spikes_as_list : 2d array with shape: (num_spikes, 2)
+        first column is the neuron id, second column the spike time
 
-        # Returns
-        spikes_nan_padded : 2d array
-            with shape (num_neurons, max_number_spikes_for_single_neuron)
+    # Returns
+    spikes_nan_padded : 2d array
+        with shape (num_neurons, max_number_spikes_for_single_neuron)
     """
 
     unique, counts = np.unique(spikes_as_list[:, 0], return_counts=True)
@@ -1626,14 +1655,14 @@ def _spikes_as_list_to_spikes_2d(spikes_as_list, num_n=None):
 # turns out this is faster without numba
 def _inter_spike_intervals(spikes_2d, beg_times=None, end_times=None):
     """
-        Returns a dict with lists of initer spike intverals and the matching CVs.
-        Has the folliwing keys:
-            all,
-            in_bursts,
-            out_bursts,
-            cv_all,
-            cv_in_bursts,
-            cv_out_bursts,
+    Returns a dict with lists of initer spike intverals and the matching CVs.
+    Has the folliwing keys:
+        all,
+        in_bursts,
+        out_bursts,
+        cv_all,
+        cv_in_bursts,
+        cv_out_bursts,
     """
 
     isis_all = []
@@ -1751,24 +1780,24 @@ def _functional_complexity(rij, num_bins=20, bins=None):
 @jit(nopython=True, parallel=True, fastmath=False, cache=True)
 def binned_spike_count(spiketimes, bin_size, length=None):
     """
-        Similar to `population_rate`, but we get a number of spike counts, per neuron
-        as needed for e.g. cross-correlations.
+    Similar to `population_rate`, but we get a number of spike counts, per neuron
+    as needed for e.g. cross-correlations.
 
-        Parameters
-        ----------
-        spiketimes :
-            np array with first dim neurons, second dim spiketimes. nan-padded
-        bin_size :
-            float, in units of spiketimes
-        length :
-            duration of output trains, in units of spiketimes. Default: None,
-            uses last spiketime
+    Parameters
+    ----------
+    spiketimes :
+        np array with first dim neurons, second dim spiketimes. nan-padded
+    bin_size :
+        float, in units of spiketimes
+    length :
+        duration of output trains, in units of spiketimes. Default: None,
+        uses last spiketime
 
-        Returns
-        -------
-        counts : 2d array
-            time series of the counted number of spikes per bin,
-            one row for each neuron, in steps of bin_size
+    Returns
+    -------
+    counts : 2d array
+        time series of the counted number of spikes per bin,
+        one row for each neuron, in steps of bin_size
     """
 
     num_n = spiketimes.shape[0]
@@ -1796,25 +1825,25 @@ def binned_spike_count(spiketimes, bin_size, length=None):
 @jit(nopython=True, parallel=True, fastmath=False, cache=True)
 def population_rate(spiketimes, bin_size, length=None):
     """
-        Calculate the activity across the whole population. naive binning,
-        no sliding window.
-        normalization by bin_size is still required.
+    Calculate the activity across the whole population. naive binning,
+    no sliding window.
+    normalization by bin_size is still required.
 
-        Parameters
-        ----------
-        spiketimes :
-            np array with first dim neurons, second dim spiketimes. nan-padded
-        bin_size :
-            float, in units of spiketimes
-        length :
-            duration of output, in units of spiketimes. Default: None,
-            uses last spiketime
+    Parameters
+    ----------
+    spiketimes :
+        np array with first dim neurons, second dim spiketimes. nan-padded
+    bin_size :
+        float, in units of spiketimes
+    length :
+        duration of output, in units of spiketimes. Default: None,
+        uses last spiketime
 
-        Returns
-        -------
-        rate : 1d array
-            time series of the rate in number of spikes per bin,
-            normalized per-neuron, in steps of bin_size
+    Returns
+    -------
+    rate : 1d array
+        time series of the rate in number of spikes per bin,
+        normalized per-neuron, in steps of bin_size
     """
 
     num_n = spiketimes.shape[0]
@@ -1845,25 +1874,25 @@ def population_rate(spiketimes, bin_size, length=None):
 @jit(nopython=True, parallel=False, fastmath=False, cache=True)
 def population_rate_exact_smoothing(spiketimes, bin_size, smooth_width, length=None):
     """
-        Applies a gaussian kernel to every spike time, and keeps full precision of the
-        peak. Time binning is only used for the result. This should be a bit more
-        precise than e.g. `smooth_rate(population_rate(...))`.
+    Applies a gaussian kernel to every spike time, and keeps full precision of the
+    peak. Time binning is only used for the result. This should be a bit more
+    precise than e.g. `smooth_rate(population_rate(...))`.
 
-        Provide all arguments in seconds to get resulting `rate` in Hz
+    Provide all arguments in seconds to get resulting `rate` in Hz
 
-        # Parameters
-        spiketimes :  2d nan-padded ndarray, neurons x spiketimes
-        bin_size   : size of the time step, in same units as `spiketimes`
-        smooth_width : standard deviation (width) of the gaussian kernel
-        length : float or None, how long the resulting time series should be (same
-                   unit as `spiketimes` and `bin_size`)
+    # Parameters
+    spiketimes :  2d nan-padded ndarray, neurons x spiketimes
+    bin_size   : size of the time step, in same units as `spiketimes`
+    smooth_width : standard deviation (width) of the gaussian kernel
+    length : float or None, how long the resulting time series should be (same
+               unit as `spiketimes` and `bin_size`)
 
-        #Returns
-        rate : 1d array
-            time series of the rate in 1/(unit of `spiketimes`), normalized per-neuron,
-            in steps of `bin_size`.
-            if `spiketimes` are provided in seconds, rates is in Hz. normalization by
-            `bin_size` is NOT required.
+    #Returns
+    rate : 1d array
+        time series of the rate in 1/(unit of `spiketimes`), normalized per-neuron,
+        in steps of `bin_size`.
+        if `spiketimes` are provided in seconds, rates is in Hz. normalization by
+        `bin_size` is NOT required.
     """
 
     sigma = smooth_width
@@ -1903,14 +1932,18 @@ def population_rate_exact_smoothing(spiketimes, bin_size, smooth_width, length=N
 
 
 def burst_detection_pop_rate(
-    rate, bin_size, rate_threshold, extend=False, return_series=False,
+    rate,
+    bin_size,
+    rate_threshold,
+    extend=False,
+    return_series=False,
 ):
     """
-        given a population `rate` with `bin_size` define a burst when exceeding a
-        `rate_threshold`
+    given a population `rate` with `bin_size` define a burst when exceeding a
+    `rate_threshold`
 
-        # Returns
-        beg_time, end_time : list
+    # Returns
+    beg_time, end_time : list
     """
 
     # work on index level of the `above` array. equivalent to time in steps of bin_size
@@ -1962,20 +1995,20 @@ def burst_detection_pop_rate(
 def merge_if_below_separation_threshold(beg_time, end_time, threshold):
 
     """
-        If the `beg_time` of a new burst is closer than `threshold`
-        to the `end_time` of a previous burst, merge them.
+    If the `beg_time` of a new burst is closer than `threshold`
+    to the `end_time` of a previous burst, merge them.
 
-        Parameters
-        ----------
-        beg_time, end_time : 1d np array
-            sorted, same length!
+    Parameters
+    ----------
+    beg_time, end_time : 1d np array
+        sorted, same length!
 
-        threshold : float
-            in units used in beg_time and end_time
+    threshold : float
+        in units used in beg_time and end_time
 
-        Returns
-        -------
-        beg_time, end_time : list
+    Returns
+    -------
+    beg_time, end_time : list
     """
     beg_res = []
     end_res = []
@@ -2059,29 +2092,29 @@ def arg_merge_if_below_separation_threshold(beg_time, end_time, threshold):
 
 def system_burst_from_module_burst(beg_times, end_times, threshold, modules=None):
     """
-        From the burst times (begin, end) of the modules, calculate
-        the system-wide bursts.
+    From the burst times (begin, end) of the modules, calculate
+    the system-wide bursts.
 
 
-        Parameters
-        ----------
-        beg_times, end_times: list of 1d np array
-            for every module, the lists should have one 1d np array
+    Parameters
+    ----------
+    beg_times, end_times: list of 1d np array
+        for every module, the lists should have one 1d np array
 
-        threshold : float
-            bursts that are less apart than this will be merged (across modules)
+    threshold : float
+        bursts that are less apart than this will be merged (across modules)
 
-        modules : list
-            the module label that corresponds to the first dim of beg_times
+    modules : list
+        the module label that corresponds to the first dim of beg_times
 
-        Returns
-        -------
-        all_begs, all_ends :  1d np arrays
-            containing the start and end times of system-wide bursts.
+    Returns
+    -------
+    all_begs, all_ends :  1d np arrays
+        containing the start and end times of system-wide bursts.
 
-        sequences : list of tuples
-            that correspond to the sequence of module activation for a
-            particular burst
+    sequences : list of tuples
+        that correspond to the sequence of module activation for a
+        particular burst
     """
 
     if modules is None:
@@ -2145,41 +2178,41 @@ def system_burst_from_module_burst(beg_times, end_times, threshold, modules=None
 
 def smooth_rate(rate, clock_dt, window="gaussian", width=None):
     """
-        Return a smooth version of the population rate.
-        Taken from brian2 population rate monitor
-        https://brian2.readthedocs.io/en/2.0rc/_modules/brian2/monitors/ratemonitor.html#PopulationRateMonitor
+    Return a smooth version of the population rate.
+    Taken from brian2 population rate monitor
+    https://brian2.readthedocs.io/en/2.0rc/_modules/brian2/monitors/ratemonitor.html#PopulationRateMonitor
 
-        Parameters
-        ----------
-        rate : ndarray
-            in hz
-        clock_dt : time in seconds that entries in rate are apart (sampling frequency)
-        window : str, ndarray
-            The window to use for smoothing. Can be a string to chose a
-            predefined window(``'flat'`` for a rectangular, and ``'gaussian'``
-            for a Gaussian-shaped window). In this case the width of the window
-            is determined by the ``width`` argument. Note that for the Gaussian
-            window, the ``width`` parameter specifies the standard deviation of
-            the Gaussian, the width of the actual window is ``4*width + dt``
-            (rounded to the nearest dt). For the flat window, the width is
-            rounded to the nearest odd multiple of dt to avoid shifting the rate
-            in time.
-            Alternatively, an arbitrary window can be given as a numpy array
-            (with an odd number of elements). In this case, the width in units
-            of time depends on the ``dt`` of the simulation, and no ``width``
-            argument can be specified. The given window will be automatically
-            normalized to a sum of 1.
-        width : `Quantity`, optional
-            The width of the ``window`` in seconds (for a predefined window).
+    Parameters
+    ----------
+    rate : ndarray
+        in hz
+    clock_dt : time in seconds that entries in rate are apart (sampling frequency)
+    window : str, ndarray
+        The window to use for smoothing. Can be a string to chose a
+        predefined window(``'flat'`` for a rectangular, and ``'gaussian'``
+        for a Gaussian-shaped window). In this case the width of the window
+        is determined by the ``width`` argument. Note that for the Gaussian
+        window, the ``width`` parameter specifies the standard deviation of
+        the Gaussian, the width of the actual window is ``4*width + dt``
+        (rounded to the nearest dt). For the flat window, the width is
+        rounded to the nearest odd multiple of dt to avoid shifting the rate
+        in time.
+        Alternatively, an arbitrary window can be given as a numpy array
+        (with an odd number of elements). In this case, the width in units
+        of time depends on the ``dt`` of the simulation, and no ``width``
+        argument can be specified. The given window will be automatically
+        normalized to a sum of 1.
+    width : `Quantity`, optional
+        The width of the ``window`` in seconds (for a predefined window).
 
-        Returns
-        -------
-        rate : ndarrayy
-            The population rate in Hz, smoothed with the given window. Note that
-            the rates are smoothed and not re-binned, i.e. the length of the
-            returned array is the same as the length of the ``rate`` attribute
-            and can be plotted against the `PopulationRateMonitor` 's ``t``
-            attribute.
+    Returns
+    -------
+    rate : ndarrayy
+        The population rate in Hz, smoothed with the given window. Note that
+        the rates are smoothed and not re-binned, i.e. the length of the
+        returned array is the same as the length of the ``rate`` attribute
+        and can be plotted against the `PopulationRateMonitor` 's ``t``
+        attribute.
     """
     if width is None and isinstance(window, str):
         raise TypeError("Need a width when using a predefined window.")
@@ -2214,9 +2247,9 @@ def smooth_rate(rate, clock_dt, window="gaussian", width=None):
         except TypeError:
             raise TypeError("Cannot use a window of type %s" % type(window))
         if window.ndim != 1:
-            raise TypeError("The provided window has to be " "one-dimensional.")
+            raise TypeError("The provided window has to be one-dimensional.")
         if len(window) % 2 != 1:
-            raise TypeError("The window has to have an odd number of " "values.")
+            raise TypeError("The window has to have an odd number of values.")
     return np.convolve(rate, window * 1.0 / sum(window), mode="same")
 
 
@@ -2224,10 +2257,10 @@ def get_threshold_from_snr_between_bursts(
     rate, rate_dt, merge_threshold, std_offset=3, itermax=1000
 ):
     """
-        Find an ideal threshold `theta = mean + std_offset*std`,
-        where mean and std are evaluated inbetween bursts.
+    Find an ideal threshold `theta = mean + std_offset*std`,
+    where mean and std are evaluated inbetween bursts.
 
-        Iterates burst detection at a given threshold with lowering the threshold.
+    Iterates burst detection at a given threshold with lowering the threshold.
     """
 
     # init
@@ -2241,7 +2274,9 @@ def get_threshold_from_snr_between_bursts(
 
     for iteration in range(0, 1000):
         beg_times, end_times = burst_detection_pop_rate(
-            rate=rate, bin_size=rate_dt, rate_threshold=theta_old,
+            rate=rate,
+            bin_size=rate_dt,
+            rate_threshold=theta_old,
         )
         beg_times, end_times = merge_if_below_separation_threshold(
             beg_times, end_times, threshold=merge_threshold
@@ -2302,28 +2337,28 @@ def get_threshold_from_logisi_distribution(list_of_isi, area_fraction=0.3):
 # pandas data frame operations
 # ------------------------------------------------------------------------------ #
 
+
 def pd_bootstrap(
-    df, obs, sample_size=None, num_boot=500, func=np.nanmean,
-    percentiles=None
+    df, obs, sample_size=None, num_boot=500, func=np.nanmean, percentiles=None
 ):
     """
-        bootstrap across all rows of a dataframe to get the mean across
-        many samples and standard error of this estimate.
-        query the dataframe first to filter for the right conditions.
+    bootstrap across all rows of a dataframe to get the mean across
+    many samples and standard error of this estimate.
+    query the dataframe first to filter for the right conditions.
 
-        # Parameters:
-        obs : str, the column to estimate for
-        sample_size: int or None, default (None) for samples that are as large
-            as the original dataframe (number of rows)
-        num_boot : int, how many bootstrap samples to generate
-        func : function, default np.nanmean is used to calculate the estimate
-            for each sample
-        percentiles : list of floats
-            the percentiles to return. default is [2.5, 50, 97.5]
+    # Parameters:
+    obs : str, the column to estimate for
+    sample_size: int or None, default (None) for samples that are as large
+        as the original dataframe (number of rows)
+    num_boot : int, how many bootstrap samples to generate
+    func : function, default np.nanmean is used to calculate the estimate
+        for each sample
+    percentiles : list of floats
+        the percentiles to return. default is [2.5, 50, 97.5]
 
-        # Returns:
-        mean : mean across all drawn bootstrap samples
-        std : std
+    # Returns:
+    mean : mean across all drawn bootstrap samples
+    std : std
 
     """
 
@@ -2333,19 +2368,14 @@ def pd_bootstrap(
     if percentiles is None:
         percentiles = [2.5, 50, 97.5]
 
-
     # drop nans, i.e. for ibis we have one nan-row at the end of every burst
     df = df.query(f"`{obs}` == `{obs}`")
 
     resampled_estimates = []
     for idx in range(0, num_boot):
-        sample_df = df.sample(
-            n=sample_size, replace=True, ignore_index=True
-        )
+        sample_df = df.sample(n=sample_size, replace=True, ignore_index=True)
 
-        resampled_estimates.append(
-            func(sample_df[obs])
-        )
+        resampled_estimates.append(func(sample_df[obs]))
 
     mean = np.mean(resampled_estimates)
     std = np.std(resampled_estimates, ddof=1)
@@ -2353,34 +2383,42 @@ def pd_bootstrap(
 
     return mean, std, q
 
-def pd_nested_bootstrap(df, grouping_col, obs, num_boot=500, func=np.nanmean, resample_group_col = False,
-    percentiles=None):
+
+def pd_nested_bootstrap(
+    df,
+    grouping_col,
+    obs,
+    num_boot=500,
+    func=np.nanmean,
+    resample_group_col=False,
+    percentiles=None,
+):
 
     """
-        bootstrap across rows of a dataframe to get the mean across
-        many samples and standard error of this estimate.
+    bootstrap across rows of a dataframe to get the mean across
+    many samples and standard error of this estimate.
 
-        uses `grouping_col` to filter the dataframe into subframes and permute
-        in those groups, see below.
+    uses `grouping_col` to filter the dataframe into subframes and permute
+    in those groups, see below.
 
-        # Parameters:
-        obs : str, the column to estimate for
-        grouping_col : str,
-            bootstrap samples are generated independantly for every unique entry
-            of this column.
-        resample_group_col : bool, default False.
-            Per default, we draw for each "experiment" in `grouping_col` as many
-            rows as in the original frame, and create one large list of rows from
-            all those experiments. on this list, the bs estimator is calculated.
-            When True, we also draw with replacement the experiments. This should
-            yield the most conservative error estimate.
-        num_boot : int, how many bootstrap samples to generate
-        func : function, default np.nanmean is used to calculate the estimate
-            for each sample
+    # Parameters:
+    obs : str, the column to estimate for
+    grouping_col : str,
+        bootstrap samples are generated independantly for every unique entry
+        of this column.
+    resample_group_col : bool, default False.
+        Per default, we draw for each "experiment" in `grouping_col` as many
+        rows as in the original frame, and create one large list of rows from
+        all those experiments. on this list, the bs estimator is calculated.
+        When True, we also draw with replacement the experiments. This should
+        yield the most conservative error estimate.
+    num_boot : int, how many bootstrap samples to generate
+    func : function, default np.nanmean is used to calculate the estimate
+        for each sample
 
-        # Returns:
-        mean : mean across all drawn bootstrap samples
-        std : std
+    # Returns:
+    mean : mean across all drawn bootstrap samples
+    std : std
     """
 
     if percentiles is None:
@@ -2402,7 +2440,9 @@ def pd_nested_bootstrap(df, grouping_col, obs, num_boot=500, func=np.nanmean, re
         merged_obs = []
 
         if resample_group_col:
-            candidates_resampled = np.random.choice(candidates, size=len(candidates), replace=True)
+            candidates_resampled = np.random.choice(
+                candidates, size=len(candidates), replace=True
+            )
         else:
             candidates_resampled = candidates
 
@@ -2413,12 +2453,10 @@ def pd_nested_bootstrap(df, grouping_col, obs, num_boot=500, func=np.nanmean, re
             log.debug(f"{candidate}: {sample_size} entries for {obs}")
 
             # make sure to use different seeds
-            sample_df = sub_df.sample(
-                n=sample_size, replace=True, ignore_index=True
-            )
+            sample_df = sub_df.sample(n=sample_size, replace=True, ignore_index=True)
             merged_obs.extend(sample_df[obs])
 
-        estimate=func(merged_obs)
+        estimate = func(merged_obs)
         resampled_estimates.append(estimate)
 
     log.debug(resampled_estimates)
@@ -2430,7 +2468,6 @@ def pd_nested_bootstrap(df, grouping_col, obs, num_boot=500, func=np.nanmean, re
     return mean, sem, q
 
 
-
 # ------------------------------------------------------------------------------ #
 # sequences
 # ------------------------------------------------------------------------------ #
@@ -2438,8 +2475,8 @@ def pd_nested_bootstrap(df, grouping_col, obs, num_boot=500, func=np.nanmean, re
 
 def remove_bursts_with_sequence_length_null(h5f):
     """
-        modifies h5f!
-        redo ibi detection, afterwards!
+    modifies h5f!
+    redo ibi detection, afterwards!
     """
 
     assert "ana.bursts.system_level" in h5f.keypaths()
@@ -2462,22 +2499,22 @@ def sequences_from_module_contribution(
     h5f, sys_begs, sys_ends, min_spikes=1, min_neurons=1
 ):
     """
-        Another way to detect whether a module was involved in a burst is to check
-        how many spikes were contributed per neuron.
+    Another way to detect whether a module was involved in a burst is to check
+    how many spikes were contributed per neuron.
 
-        # Parameters
-        sys_begs, sys_ends: list or array
-            system-wide begin/end times
-        min_spikes: number
-            at least this many spikes must occur in a module during the system-wide
-            burst time to qualify as "contributing"
-        min_neurons: number
-            at least this many neurons from a module must fire at least `min_spikes`
-            during the system-wide burst time to qualify as "contributing"
+    # Parameters
+    sys_begs, sys_ends: list or array
+        system-wide begin/end times
+    min_spikes: number
+        at least this many spikes must occur in a module during the system-wide
+        burst time to qualify as "contributing"
+    min_neurons: number
+        at least this many neurons from a module must fire at least `min_spikes`
+        during the system-wide burst time to qualify as "contributing"
 
-        # Returns
-        sequences : list of tuples
-            Note that we might get empty tuples, if no module met our requirements
+    # Returns
+    sequences : list of tuples
+        Note that we might get empty tuples, if no module met our requirements
     """
     spikes = h5f["data.spiketimes"]
 
@@ -2511,13 +2548,14 @@ def sequences_from_module_contribution(
 
     return sys_seqs
 
+
 def sequence_histogram(ids, sequences=None):
 
     """
-        create a histogram for every occuring sequences.
-        If no `sequences` are provided, only gives the possible combinations (based on
-        `ids`) that could have occured.
-        sequnces should be a list of tuples (or arrays?)
+    create a histogram for every occuring sequences.
+    If no `sequences` are provided, only gives the possible combinations (based on
+    `ids`) that could have occured.
+    sequnces should be a list of tuples (or arrays?)
     """
 
     labels = []
@@ -2552,17 +2590,15 @@ def sequence_labels_to_strings(labels):
     return res
 
 
-def sequence_conditional_probabilities(
-    sequences, mod_ids=[0, 1, 2, 3], only_first=True
-):
+def sequence_conditional_probabilities(sequences, mod_ids=[0, 1, 2, 3], only_first=True):
     """
-        calculate the conditional probabilites, e.g.
-        p(mod2 bursts | mod 1bursted)
-        excludes jumps over other modules!
+    calculate the conditional probabilites, e.g.
+    p(mod2 bursts | mod 1bursted)
+    excludes jumps over other modules!
 
-        # Parameters
-        sequences : list of tuples of ints
-        mod_ids : list of ints, from 0 to number modules
+    # Parameters
+    sequences : list of tuples of ints
+    mod_ids : list of ints, from 0 to number modules
     """
 
     num_mods = mod_ids[-1] + 1
@@ -2595,12 +2631,12 @@ def sequence_conditional_probabilities(
 
 def sequence_length_histogram_from_list(list_of_sequences, mods=[0, 1, 2, 3]):
     """
-        Provide a list of sequences as tuples and get a histogram of sequence lengths.
+    Provide a list of sequences as tuples and get a histogram of sequence lengths.
 
-        # Returns
-        catalog : nd array with the sequences
-        probs : nd array with probabilities of each sequence (normalized counts)
-        total : int, number of total histogram entries
+    # Returns
+    catalog : nd array with the sequences
+    probs : nd array with probabilities of each sequence (normalized counts)
+    total : int, number of total histogram entries
     """
     seq_labs, seq_hist = sequence_histogram(mods, list_of_sequences)
 
@@ -2636,13 +2672,13 @@ def sequence_length_histogram_from_list(list_of_sequences, mods=[0, 1, 2, 3]):
 
 def sequence_length_histogram_from_pd_df(df, keepcols=[]):
     """
-        Provide a data frame where each row is a burst, and that has a column
-        named `Sequence length` and `Repetition`.
-        All remaining columns are not considered, make sure to `query` correctly!
+    Provide a data frame where each row is a burst, and that has a column
+    named `Sequence length` and `Repetition`.
+    All remaining columns are not considered, make sure to `query` correctly!
 
-        # Retruns
-        A pandas data frame (long form) where every row corresponds to one sequence-
-        length that occured, ~4 rows per realization.
+    # Retruns
+    A pandas data frame (long form) where every row corresponds to one sequence-
+    length that occured, ~4 rows per realization.
     """
     assert isinstance(keepcols, list)
 
@@ -2689,7 +2725,8 @@ def sequence_length_histogram_from_pd_df(df, keepcols=[]):
         for col in keepcols:
             if not _pd_are_row_entries_the_same(df[col].iloc[idx]):
                 log.warning(
-                    "Filter (query) before calling this! If entries missmatch for one repetition, this will give a nonsensical histogram."
+                    "Filter (query) before calling this! If entries missmatch for one"
+                    " repetition, this will give a nonsensical histogram."
                 )
             val = df[col].iloc[idx[0]]
             keepcol_entries.append(val)
