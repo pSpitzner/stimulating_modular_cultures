@@ -2156,6 +2156,77 @@ def plot_distribution_dendritic_tree_size(
     return ax
 
 
+def qnd():
+    h5f1 = ah.prepare_file("/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/the_last_one/dyn/stim=off_k=5_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=80.0_rep=001.hdf5")
+    h5f2 = ah.prepare_file("/Users/paul/mpi/simulation/brian_modular_cultures/_latest/dat/the_last_one/dyn/stim=off_k=5_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=90.0_rep=001.hdf5")
+
+    bs_large=20 / 1000  # width of the gaussian kernel for rate
+    threshold_factor=2.5 / 100  # fraction of max peak height for burst
+
+    ah.find_rates(h5f1, bs_large=bs_large)
+    ah.find_rates(h5f2, bs_large=bs_large)
+
+
+    # bins = np.logspace(start=-1, stop=2, base=10)
+    bins = np.arange(0, 101) - 0.5
+    ax = _plot_distribution_from_series(h5f1["ana.rates.system_level"], bins=bins, alpha=0.3, color="C0", label="80Hz")
+    ax = _plot_distribution_from_series(h5f2["ana.rates.system_level"], bins=bins, alpha=0.3, color="C1", label="90Hz", ax=ax)
+    ax.set_xlim(0, 80)
+    ax.set_yscale("log")
+    ax.legend(loc="upper right")
+    ax.set_xlabel("Populaton Rate (Hz)")
+    ax.set_ylabel("Probability")
+    cc.set_size2(ax, 3.5, 3.5)
+    cc._fix_log_ticks(ax.yaxis, every=1, hide_label_condition = lambda idx: idx % 2 == 1)
+
+    # adapt1 = np.nanmean(h5f1["data.state_vars_D"], axis=0)
+    # adapt2 = np.nanmean(h5f2["data.state_vars_D"], axis=0)
+
+    # using all ~160 neurons blows up the histogram
+    selects = np.sort(np.random.choice(h5f1["ana.neuron_ids"], size=20, replace=False))
+    adapt1 = h5f1["data.state_vars_D"][selects, :].flatten()
+    adapt2 = h5f2["data.state_vars_D"][selects, :].flatten()
+    ax = _plot_distribution_from_series(adapt1, alpha=0.3, color="C0", binwidth=0.02, label="80Hz")
+    ax = _plot_distribution_from_series(adapt2, alpha=0.3, color="C1", binwidth=0.02, label="90Hz", ax=ax)
+    ax.set_xlim(0, 1)
+    ax.set_xlabel("Synaptic Resources")
+    ax.set_ylabel("Probability")
+    ax.legend(loc="upper left")
+    cc.set_size2(ax, 3.5, 3.5)
+
+def _plot_distribution_from_series(series, ax=None, **kwargs):
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.get_figure()
+
+    default_kwargs = {
+        "ax": ax,
+        # "stat": "density",
+        "binwidth" : 1,
+        "stat": "probability",
+        # 'multiple' : 'stack',
+        "element": "poly",
+    }
+
+    plot_kwargs = dict(default_kwargs)
+    plot_kwargs.update(kwargs)
+    if "bins" in kwargs.keys():
+        plot_kwargs.pop("binwidth")
+    # if "bins" not in plot_kwargs.keys():
+    #     min_val = np.floor(np.nanmin(series))
+    #     max_val = np.ceil(np.nanmax(series))
+    #     plot_kwargs["bins"] = np.arange(min_val-0.5, max_val+0.51, 1)
+
+    # print(plot_kwargs)
+
+    sns.histplot(series, **plot_kwargs)
+
+    return ax
+
+
+
+
 # ------------------------------------------------------------------------------ #
 # topology
 # ------------------------------------------------------------------------------ #
