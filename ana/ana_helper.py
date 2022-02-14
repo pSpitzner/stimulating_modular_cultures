@@ -1064,6 +1064,67 @@ def find_rij_within_across(h5f):
     return rij, rij_within, rij_across
 
 
+def find_resource_order_parameters(h5f, which="all"):
+    """
+    Calculate various order paramters of synaptic resources.
+    Needs the h5f["data.state_vars_D"] entry (a 2d array,
+    with dims [neuron_id, val_as_func_of_time])
+
+    # Parameters
+    which : list of str, which order parameters to calculate. default "all" does everything
+        - "fano_neuron": fano factor for every neuron, then average across neurons
+        - "fano_population": fano factor of the population resources (avg neurons first)
+        - "baseline_neuron": max resources found per neuron
+        - "baseline_population": max resources on population average
+
+    # Returns
+    mean : dict, with order parameters specified in `which` as keys
+    std : dict, std of the order parameter across neurons, when possible
+    """
+
+    assert "data.state_vars_D" in h5f.keypaths(), "Resource variable not found in h5f"
+
+    # resource variable, dims [neuron_id, value_as_f_of_time]
+    data = h5f["data.state_vars_D"]
+
+    if which == "all":
+        which = [
+            "fano_neuron",
+            "fano_population",
+            "baseline_neuron",
+            "baseline_population",
+        ]
+
+    res_mean = dict()
+    res_std = dict()
+
+    if np.any(["_population" in key for key in which]):
+        pop_resources = np.mean(data, axis=0)
+
+    if "fano_neuron" in which:
+        ffs = np.var(data, axis=1) / np.mean(data, axis=1)
+        res_mean["fano_neuron"] = np.mean(ffs)
+        res_std["fano_neuron"] = np.std(ffs)
+
+    if "fano_population" in which:
+        res_mean["fano_population"] = np.var(pop_resources) / np.mean(pop_resources)
+        res_std["fano_population"] = np.nan
+
+    if "baseline_neuron" in which:
+        # bls = np.percentile(data, q=0.95, axis=1)
+        bls = np.nanmax(data, axis=1)
+        res_mean["baseline_neuron"] = np.mean(bls)
+        res_std["baseline_neuron"] = np.std(bls)
+
+    if "baseline_population" in which:
+        # res_mean["baseline_population"] = np.percentile(pop_resources, q=0.95)
+        res_mean["baseline_population"] = np.nanmax(pop_resources)
+        res_std["baseline_population"] = np.nan
+
+    return res_mean, res_std
+
+
+
 # ------------------------------------------------------------------------------ #
 # batch processing across realization
 # ------------------------------------------------------------------------------ #
