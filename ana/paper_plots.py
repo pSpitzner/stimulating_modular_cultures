@@ -363,6 +363,33 @@ def fig_3():
 
     fig.savefig(f"./fig/paper/sim_raster_stim_02_20hz.pdf", dpi=900)
 
+    # and again, without stimulation
+    h5f = ph.ah.prepare_file(
+        "./dat/the_last_one/dyn/stim=02_k=5_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=80.0_stimrate=0.0_rep=000.hdf5"
+    )
+
+    fig, ax = plt.subplots()
+    ph.plot_raster(
+        h5f,
+        ax,
+        clip_on=True,
+        zorder=-2,
+        markersize=0.75,
+        alpha=0.5,
+        color="#333",
+    )
+
+    ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(180))
+    ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(60))
+    ax.xaxis.set_visible(False)
+    ax.yaxis.set_visible(False)
+    sns.despine(ax=ax, left=True, right=True, bottom=True, top=True)
+    ax.set_xlim(0, 180)
+
+    cc.set_size(ax, 2.7, 0.9)
+
+    fig.savefig(f"./fig/paper/sim_raster_stim_02_0hz.pdf", dpi=900)
+
 
 def fig_4(skip_rasters=True):
 
