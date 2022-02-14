@@ -56,7 +56,7 @@ d_obs["rate"] = "/meta/dynamics_rate"
 d_obs["tD"] = "/meta/dynamics_tD"
 # d_obs["alpha"] = "/meta/topology_alpha"
 d_obs["k_inter"] = "/meta/topology_k_inter"
-d_obs["stim_rate"] = "/meta/dynamics_stimulation_rate"
+# d_obs["stim_rate"] = "/meta/dynamics_stimulation_rate"
 # d_obs["k_frac"] = "/meta/dynamics_k_frac"
 
 threshold_factor = 2.5 / 100
@@ -105,6 +105,10 @@ def all_in_one(candidate=None):
         res["sys_median_participating_fraction"] = 1
         res["sys_participating_fraction_complexity"] = 1
         res["any_num_spikes_in_bursts"] = 1
+        res["sys_orderpar_fano_neuron"] = 1
+        res["sys_orderpar_fano_population"] = 1
+        res["sys_orderpar_baseline_neuron"] = 1
+        res["sys_orderpar_baseline_population"] = 1
 
         # histograms, use "vec" prefix to indicate that higher dimensional data
         res["vec_sys_hbins_participating_fraction"] = 21
@@ -292,6 +296,14 @@ def all_in_one(candidate=None):
     except:
         C = np.nan
     res["mod_num_spikes_in_bursts_1"] = C
+
+    # order parameters
+    ops, ops_std = ah.find_resource_order_parameters(h5f)
+    res["sys_orderpar_fano_neuron"] = ops["fano_neuron"]
+    res["sys_orderpar_fano_population"] = ops["fano_population"]
+    res["sys_orderpar_baseline_neuron"] = ops["baseline_neuron"]
+    res["sys_orderpar_baseline_population"] = ops["baseline_population"]
+
 
     h5.close_hot(h5f)
     h5f.clear()
