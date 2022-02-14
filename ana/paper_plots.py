@@ -172,9 +172,7 @@ def fig_1(show_time_axis=False):
             fig.axes[-1].xaxis.set_visible(False)
             sns.despine(ax=fig.axes[-1], bottom=True, left=False)
 
-        fig.savefig(
-            f"./fig/paper/exp_combined_{c_str}.pdf", dpi=300, transparent=False
-        )
+        fig.savefig(f"./fig/paper/exp_combined_{c_str}.pdf", dpi=300, transparent=False)
 
     # chemical
     path = "./dat/exp_in/KCl_1b"
@@ -204,9 +202,7 @@ def fig_1(show_time_axis=False):
             fig.axes[-1].xaxis.set_visible(False)
             sns.despine(ax=fig.axes[-1], bottom=True, left=False)
 
-        fig.savefig(
-            f"./fig/paper/exp_combined_{c_str}.pdf", dpi=300, transparent=False
-        )
+        fig.savefig(f"./fig/paper/exp_combined_{c_str}.pdf", dpi=300, transparent=False)
 
     # ------------------------------------------------------------------------------ #
     # Stick plots for optogenetic vs chemical
@@ -219,9 +215,7 @@ def fig_1(show_time_axis=False):
         ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
         ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
         sns.despine(ax=ax, bottom=True, left=False, trim=True, offset=5)
-        ax.get_figure().savefig(
-            f"./fig/paper/exp_chem_vs_opto_{obs}.pdf", dpi=300
-        )
+        ax.get_figure().savefig(f"./fig/paper/exp_chem_vs_opto_{obs}.pdf", dpi=300)
 
 
 def fig_2(skip_plots=False):
@@ -234,15 +228,11 @@ def fig_2(skip_plots=False):
     if not skip_plots:
         exp_violins_for_layouts()
         exp_rij_for_layouts()
-        exp_sticks_across_layouts(
-            observable="Functional Complexity", hide_labels=False
-        )
+        exp_sticks_across_layouts(observable="Functional Complexity", hide_labels=False)
         # we actually only show the sticks for other observables in the SM,
         # but since the calls are similar we do this here
         exp_sticks_across_layouts(observable="Mean Fraction", hide_labels=False)
-        exp_sticks_across_layouts(
-            observable="Mean Correlation", hide_labels=False
-        )
+        exp_sticks_across_layouts(observable="Mean Correlation", hide_labels=False)
         exp_sticks_across_layouts(
             observable="Mean IBI", set_ylim=False, hide_labels=False
         )
@@ -302,9 +292,7 @@ def fig_3():
     )
     apply_formatting(ax)
     ax.set_xlabel("Burst size")
-    ax.get_figure().savefig(
-        f"./fig/paper/sim_partial_violins_fraction.pdf", dpi=300
-    )
+    ax.get_figure().savefig(f"./fig/paper/sim_partial_violins_fraction.pdf", dpi=300)
 
     log.info("")
     ax = custom_violins(
@@ -369,12 +357,11 @@ def fig_3():
     ax.xaxis.set_visible(False)
     ax.yaxis.set_visible(False)
     sns.despine(ax=ax, left=True, right=True, bottom=True, top=True)
-    ax.set_xlim(0,180)
+    ax.set_xlim(0, 180)
 
     cc.set_size(ax, 2.7, 0.9)
 
     fig.savefig(f"./fig/paper/sim_raster_stim_02_20hz.pdf", dpi=900)
-
 
 
 def fig_4(skip_rasters=True):
@@ -396,9 +383,7 @@ def fig_4(skip_rasters=True):
 
     coords = []
     times = []  # start time for the large time window of ~ 180 seconds
-    zooms = (
-        []
-    )  # start time for an interesting 250 ms time window showing a burst
+    zooms = []  # start time for an interesting 250 ms time window showing a burst
 
     coords.append(dict(k=1, rate=75, rep=1))
     zooms.append(299.5)
@@ -519,9 +504,7 @@ def fig_4(skip_rasters=True):
             base_color = "#333"
         clrs = dict()
         for kdx, k in enumerate([1, 5, 10, -1]):
-            clrs[k] = cc.alpha_to_solid_on_bg(
-                base_color, cc.fade(kdx, 4, invert=True)
-            )
+            clrs[k] = cc.alpha_to_solid_on_bg(base_color, cc.fade(kdx, 4, invert=True))
 
         ax = sim_obs_vs_noise_for_all_k(
             observable=obs,
@@ -575,9 +558,7 @@ def exp_raster_plots(
 
     if fig_width is None:
         fig_width = 3.5 / 2.54
-    fig, axes = plt.subplots(
-        nrows=3, ncols=1, sharex=True, figsize=[fig_width, 4 / 2.54]
-    )
+    fig, axes = plt.subplots(nrows=3, ncols=1, sharex=True, figsize=[fig_width, 4 / 2.54])
 
     # only show 4 neurons per module, starting with module 0 on top
     if show_fluorescence:
@@ -872,8 +853,14 @@ def exp_sticks_across_layouts(
         # clr = f"C{edx}"
         log.info(f"## {etype}")
 
-        log.info(f"| Condition | Mean (across trials) | Standard error of the mean | min observed | max observed |")
-        log.info(f"| --------- | -------------------- | -------------------------- | ------------ | ------------ |")
+        log.info(
+            f"| Condition | Mean (across trials) | Standard error of the mean | min"
+            f" observed | max observed |"
+        )
+        log.info(
+            f"| --------- | -------------------- | -------------------------- |"
+            f" ------------ | ------------ |"
+        )
 
         clr = colors["pre"]
         trials = dfs[etype]["Trial"].unique()
@@ -951,9 +938,7 @@ def exp_sticks_across_layouts(
 
     cc.set_size3(ax, 2.2, 2)
 
-    ax.get_figure().savefig(
-        f"./fig/paper/exp_layouts_sticks_{observable}.pdf", dpi=300
-    )
+    ax.get_figure().savefig(f"./fig/paper/exp_layouts_sticks_{observable}.pdf", dpi=300)
 
     return ax
 
@@ -992,9 +977,7 @@ def exp_violins_for_layouts(remove_outlier_for_ibis=True):
             bw=0.2,
         )
         apply_formatting(ax)
-        ax.get_figure().savefig(
-            f"./fig/paper/exp_violins_fraction_{layout}.pdf", dpi=300
-        )
+        ax.get_figure().savefig(f"./fig/paper/exp_violins_fraction_{layout}.pdf", dpi=300)
 
     for layout in dfs.keys():
         log.info(f"")
@@ -1008,9 +991,7 @@ def exp_violins_for_layouts(remove_outlier_for_ibis=True):
             bw=0.2,
         )
         apply_formatting(ax)
-        ax.get_figure().savefig(
-            f"./fig/paper/exp_violins_rij_{layout}.pdf", dpi=300
-        )
+        ax.get_figure().savefig(f"./fig/paper/exp_violins_rij_{layout}.pdf", dpi=300)
 
     for layout in dfs.keys():
         log.info(f"")
@@ -1029,9 +1010,7 @@ def exp_violins_for_layouts(remove_outlier_for_ibis=True):
         apply_formatting(ax, ylim=False, trim=False)
         ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(20))
         ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(10))
-        ax.get_figure().savefig(
-            f"./fig/paper/exp_violins_ibi_{layout}.pdf", dpi=300
-        )
+        ax.get_figure().savefig(f"./fig/paper/exp_violins_ibi_{layout}.pdf", dpi=300)
 
     return ax
 
@@ -1069,9 +1048,7 @@ def exp_rij_for_layouts():
         ax.set_xlabel("")
         ax.set_ylabel("")
         cc.set_size3(ax, 3, 1.5)
-        ax.get_figure().savefig(
-            f"./fig/paper/exp_rij_barplot_{layout}.pdf", dpi=300
-        )
+        ax.get_figure().savefig(f"./fig/paper/exp_rij_barplot_{layout}.pdf", dpi=300)
 
     return ax
 
@@ -1151,9 +1128,7 @@ def sim_raster_plots_old(
         ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(40))
         ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(20))
         if rate == 90:
-            ax.yaxis.set_major_locator(
-                matplotlib.ticker.FixedLocator(([0, 40]))
-            )
+            ax.yaxis.set_major_locator(matplotlib.ticker.FixedLocator(([0, 40])))
             ax.yaxis.set_minor_locator(matplotlib.ticker.FixedLocator(([20])))
         sns.despine(ax=ax, left=False, bottom=False, trim=True, offset=0)
         ax.tick_params(axis="x", which="both", bottom=False)
@@ -1164,9 +1139,7 @@ def sim_raster_plots_old(
 
         # fig, ax = plt.subplots()
         ax = axes[2]
-        ph.plot_state_variable(
-            h5f, ax, variable="D", lw=0.5, apply_formatting=False
-        )
+        ph.plot_state_variable(h5f, ax, variable="D", lw=0.5, apply_formatting=False)
 
         ax.margins(x=0, y=0)
         ax.set_xlim(0, 360)
@@ -1191,12 +1164,8 @@ def sim_raster_plots_old(
             elif rate == 90:
                 x_ref = 288.05
             for ax in [axes[0], axes[2]]:
-                sns.despine(
-                    ax=ax, left=True, bottom=False, trim=False, offset=0
-                )
-                ax.tick_params(
-                    axis="both", which="both", left=False, bottom=False
-                )
+                sns.despine(ax=ax, left=True, bottom=False, trim=False, offset=0)
+                ax.tick_params(axis="both", which="both", left=False, bottom=False)
             ax.set_xlim(x_ref, x_ref + 0.25)
             ax.get_figure().savefig(
                 f"./fig/paper/sim_ts_combined_zoom_{c_str}.pdf",
@@ -1219,9 +1188,7 @@ def sim_raster_plots(
     **kwargs,
 ):
 
-    total_width = (
-        main_width + 0.7 + 0.8
-    )  # 7mm for labels on the left, 8mm for zoom
+    total_width = main_width + 0.7 + 0.8  # 7mm for labels on the left, 8mm for zoom
     fig = plt.figure(figsize=[(total_width) / 2.54, 3.5 / 2.54])
     # fig, axes = plt.subplots(nrows=3, ncols=1, sharex=True, figsize=figsize)
     axes = []
@@ -1275,9 +1242,7 @@ def sim_raster_plots(
     kwargs = kwargs.copy()
     ax = axes[1]
     ax.set_rasterization_zorder(0)
-    ph.plot_raster(
-        h5f, ax, clip_on=True, zorder=-2, markersize=0.75, alpha=0.5, **kwargs
-    )
+    ph.plot_raster(h5f, ax, clip_on=True, zorder=-2, markersize=0.75, alpha=0.5, **kwargs)
     ax.set_ylim(-1, None)
     ax.xaxis.set_visible(False)
     ax.yaxis.set_visible(False)
@@ -1310,9 +1275,7 @@ def sim_raster_plots(
 
     ax = axes[-1]
     ax.set_rasterization_zorder(0)
-    ph.plot_raster(
-        h5f, ax, clip_on=True, zorder=-2, markersize=1.0, alpha=0.75, **kwargs
-    )
+    ph.plot_raster(h5f, ax, clip_on=True, zorder=-2, markersize=1.0, alpha=0.75, **kwargs)
     ylim = axes[1].get_ylim()
     ax.set_ylim(ylim[0] - 10, ylim[1] + 10)
     ax.set_xlim(zoom_time, zoom_time + zoom_duration)
@@ -1359,9 +1322,7 @@ def sim_vs_exp_violins(**kwargs):
     # burst size
     df = pd.concat(
         [
-            dfs["exp"]["bursts"].query(
-                "Condition == 'pre' | Condition == 'stim'"
-            ),
+            dfs["exp"]["bursts"].query("Condition == 'pre' | Condition == 'stim'"),
             dfs["sim"]["bursts"],
         ]
     )
@@ -1378,9 +1339,7 @@ def sim_vs_exp_violins(**kwargs):
     ax.tick_params(bottom=False)
     ax.set_xlabel(f"")
     cc.set_size2(ax, 3, 3.5)
-    ax.get_figure().savefig(
-        f"./fig/paper/sim_vs_exp_violins_fraction.pdf", dpi=300
-    )
+    ax.get_figure().savefig(f"./fig/paper/sim_vs_exp_violins_fraction.pdf", dpi=300)
 
     # correlation coefficients
     df = pd.concat(
@@ -1407,9 +1366,7 @@ def sim_vs_exp_violins(**kwargs):
     # ibis
     df = pd.concat(
         [
-            dfs["exp"]["bursts"].query(
-                "Condition == 'pre' | Condition == 'stim'"
-            ),
+            dfs["exp"]["bursts"].query("Condition == 'pre' | Condition == 'stim'"),
             dfs["sim"]["bursts"],
         ]
     )
@@ -1577,9 +1534,7 @@ def sim_obs_vs_noise_for_all_k(
 
         # 92.5 Hz was only simulated for k=10, so drop it
         selects = np.where(
-            (x != 92.5)
-            & (x >= noise_range_to_show[0])
-            & (x <= noise_range_to_show[1])
+            (x != 92.5) & (x >= noise_range_to_show[0]) & (x <= noise_range_to_show[1])
         )
 
         plot_kwargs = kwargs.copy()
@@ -1783,9 +1738,7 @@ def sim_modules_participating_in_bursts(
                 # mfc=cc.alpha_to_solid_on_bg(clr, 0.2),
                 elinewidth=0.5,
                 capsize=1.5,
-                label=f"{seq_len} module"
-                if seq_len == 1
-                else f"{seq_len} modules",
+                label=f"{seq_len} module" if seq_len == 1 else f"{seq_len} modules",
                 color=clr,
                 clip_on=True,
             )
@@ -1852,9 +1805,7 @@ def sim_violins_for_all_k(ax_width=4):
         apply_formatting(ax)
         ax.set_ylabel("Burst size")
         ax.set_xlabel(f"{k}")
-        ax.get_figure().savefig(
-            f"./fig/paper/sim_violins_fraction_{k}.pdf", dpi=300
-        )
+        ax.get_figure().savefig(f"./fig/paper/sim_violins_fraction_{k}.pdf", dpi=300)
 
         # correlation coefficients
         log.debug("rij")
@@ -1919,9 +1870,7 @@ def sim_violins_for_all_k(ax_width=4):
         log.info("")
         log.info(k)
         log.info("Loading data")
-        df = load_pd_hdf5(
-            f"./dat/sim_out/{k}.hdf5", keys=["bursts", "rij", "drij"]
-        )
+        df = load_pd_hdf5(f"./dat/sim_out/{k}.hdf5", keys=["bursts", "rij", "drij"])
         render_plots()
 
 
@@ -2005,8 +1954,8 @@ def custom_violins(
     # log.info(f'|{"":-^75}|')
     log.info(f"## Pooled violins for {observable}")
     # log.info(f'|{"":-^65}|')
-    log.info(f'| Condition | 2.5% percentile | 50% percentile | 97.5% percentile |')
-    log.info(f'| --------- | --------------- | -------------- | ---------------- |')
+    log.info(f"| Condition | 2.5% percentile | 50% percentile | 97.5% percentile |")
+    log.info(f"| --------- | --------------- | -------------- | ---------------- |")
     violin_kwargs = violin_kwargs.copy()
 
     if ax is None:
@@ -2071,9 +2020,7 @@ def custom_violins(
         sub_dfs[cat] = df_for_cat
 
         # for the swarm plot, fetch max height so we could tweak number of points and size
-        hist, bins = np.histogram(
-            df_for_cat[observable], _unit_bins(ylim[0], ylim[1])
-        )
+        hist, bins = np.histogram(df_for_cat[observable], _unit_bins(ylim[0], ylim[1]))
         max_points = np.max([max_points, np.max(hist)])
 
     for idx, cat in enumerate(categories):
@@ -2109,10 +2056,10 @@ def custom_violins(
 
         log.debug(f"{cat}: median {mid:.3g}, std {std:.3g}")
 
-        p_str  = f"| {cat:>9} "
-        p_str += f"| {percentiles[0]:15.4f} " # 2.5%
-        p_str += f"| {percentiles[1]:14.4f} " # 50%
-        p_str += f"| {percentiles[2]:16.4f} |" # 97.5%
+        p_str = f"| {cat:>9} "
+        p_str += f"| {percentiles[0]:15.4f} "  # 2.5%
+        p_str += f"| {percentiles[1]:14.4f} "  # 50%
+        p_str += f"| {percentiles[2]:16.4f} |"  # 97.5%
 
         log.info(p_str)
 
@@ -2201,9 +2148,7 @@ def custom_violins(
     return ax
 
 
-def custom_pointplot(
-    df, category, observable, hue="Trial", ax=None, **point_kwargs
-):
+def custom_pointplot(df, category, observable, hue="Trial", ax=None, **point_kwargs):
     if ax is None:
         fig, ax = plt.subplots()
     else:
@@ -2230,9 +2175,7 @@ def custom_pointplot(
     return ax
 
 
-def custom_rij_barplot(
-    df, ax=None, conditions=None, pairings=None, recolor=True
-):
+def custom_rij_barplot(df, ax=None, conditions=None, pairings=None, recolor=True):
     """
     query the layout of df first!
     provide a rij_paired dataframe
@@ -2344,9 +2287,7 @@ def custom_rij_scatter(
         except:
             scatter_kwargs.setdefault("color", f"C{pdx}")
 
-        scatter_kwargs["color"] = cc.alpha_to_solid_on_bg(
-            scatter_kwargs["color"], 0.2
-        )
+        scatter_kwargs["color"] = cc.alpha_to_solid_on_bg(scatter_kwargs["color"], 0.2)
 
         # scatter_kwargs.setdefault("alpha", .02)
         scatter_kwargs.setdefault("label", pairing)
@@ -2433,9 +2374,7 @@ def _rij_pairs_from_trials(df_paired):
         # df_before = df_trial.query(f"`Condition` == 'pre'")
         # df_after = df_trial.query(f"`Condition` == 'stim'")
 
-        assert np.all(
-            df_before["Pair ID"].to_numpy() == df_after["Pair ID"].to_numpy()
-        )
+        assert np.all(df_before["Pair ID"].to_numpy() == df_after["Pair ID"].to_numpy())
 
         rijs["before"].extend(df_before["Correlation Coefficient"].to_list())
         rijs["after"].extend(df_after["Correlation Coefficient"].to_list())
@@ -2570,9 +2509,7 @@ def exp_pairwise_tests_for_trials():
     )
 
 
-def _paired_sample_t_test(
-    df, col, col_vals, observables=None, alternatives=None
-):
+def _paired_sample_t_test(df, col, col_vals, observables=None, alternatives=None):
     """
     # Parameters
     df : dataframe, each row an observable estimated over a whole trial (e.g. mean ibi)
@@ -2629,9 +2566,7 @@ def _paired_sample_t_test(
         alternative = alternatives[obs]
         if alternative == "one-sided":
             alternative = "two-sided"
-        ttest = stats.ttest_rel(
-            before[obs], after[obs], alternative=alternative
-        )
+        ttest = stats.ttest_rel(before[obs], after[obs], alternative=alternative)
         p = ttest.pvalue
 
         # this is a lazy workaround so we do not need to specify in which direction
@@ -2676,12 +2611,8 @@ def exp_tests_for_joint_distributions(observables=["Fraction"], dfkind=None):
         # depending on dfkind, we need a different test
         if dfkind == "bursts":
             # groups are indpenendent
-            _mann_whitney_u_test(
-                dfs[dfkind], col_vals=["pre", "stim"], **kwargs
-            )
-            _mann_whitney_u_test(
-                dfs[dfkind], col_vals=["stim", "post"], **kwargs
-            )
+            _mann_whitney_u_test(dfs[dfkind], col_vals=["pre", "stim"], **kwargs)
+            _mann_whitney_u_test(dfs[dfkind], col_vals=["stim", "post"], **kwargs)
             # _mann_whitney_u_test(
             #     dfs[dfkind], col_vals=["pre", "post"], **kwargs
             # )
@@ -2690,12 +2621,8 @@ def exp_tests_for_joint_distributions(observables=["Fraction"], dfkind=None):
             # )
         elif dfkind == "rij":
             # groups are dependent
-            _wilcoxon_signed_rank_test(
-                dfs[dfkind], col_vals=["pre", "stim"], **kwargs
-            )
-            _wilcoxon_signed_rank_test(
-                dfs[dfkind], col_vals=["stim", "post"], **kwargs
-            )
+            _wilcoxon_signed_rank_test(dfs[dfkind], col_vals=["pre", "stim"], **kwargs)
+            _wilcoxon_signed_rank_test(dfs[dfkind], col_vals=["stim", "post"], **kwargs)
             # _wilcoxon_signed_rank_test(
             #     dfs[dfkind], col_vals=["pre", "post"], **kwargs
             # )
@@ -2907,9 +2834,7 @@ def sim_tests_stimulating_two_modules(observables=["Fraction"], dfkind=None):
         # depending on dfkind, we need a different test
         if dfkind == "bursts":
             # groups are indpenendent
-            _mann_whitney_u_test(
-                dfs[dfkind], col_vals=["0.0 Hz", "20.0 Hz"], **kwargs
-            )
+            _mann_whitney_u_test(dfs[dfkind], col_vals=["0.0 Hz", "20.0 Hz"], **kwargs)
         elif dfkind == "rij":
             # groups are dependent
             _wilcoxon_signed_rank_test(
