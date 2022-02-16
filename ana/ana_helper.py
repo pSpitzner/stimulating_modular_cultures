@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2021-11-12 21:50:11
+# @Last Modified: 2022-02-16 11:27:05
 # ------------------------------------------------------------------------------ #
 
 
@@ -846,7 +846,9 @@ def find_onset_durations(h5f, write_to_h5f=True, return_res=False):
     """
     Similar to the duration of a burst (start time to end time),
     we can ask how long did it take from activating the first
-    to activating the last module
+    to activating the last module.
+
+    where "activating" means the first spike of a module
     """
 
     assert "ana.bursts.system_level" in h5f.keypaths()
@@ -878,6 +880,68 @@ def find_onset_durations(h5f, write_to_h5f=True, return_res=False):
 
     if return_res:
         return onset_durations
+
+
+def find_burst_core_delays(h5f, write_to_h5f=True, return_res=False):
+    """
+    Only looking at the first spike of a module may be misleading as bursts
+    have very different durations and often start with individual neurons firing
+    before reaching a burst "core"
+
+    Here we find the delay between burst cores:
+    - consider time window between system level burst start and end time
+    - find the peak position of each modules' population rate, the "core"
+    - only consider modules that are contributing to the burst (via sequences)
+    - propagation delay is the mean time difference between cores
+    - delay is nan if only one module contributes
+    """
+
+    assert "ana.rates.system_level" in h5f.keypaths(), "system-level rate is needed"
+    assert "ana.rates.module_level" in h5f.keypaths(), "module-level rates are needed"
+    assert "ana.bursts.system_level" in h5f.keypaths(), "system-level bursts are needed"
+    assert "ana.bursts.system_level.module_sequences" in h5f.keypaths(), "module sequences are needed"
+
+    beg_times = h5f["ana.bursts.system_level.beg_times"]
+    end_times = h5f["ana.bursts.system_level.end_times"]
+    sequences = h5f["ana.bursts.system_level.module_sequences"]
+    sys_rate = h5f["ana.rates.system_level"]
+    mod_rates = h5f["ana.rates.module_level"]
+    rate_time = np.arange(len(sys_rate)) * h5f["ana.rates.dt"]
+
+    delays = []
+    for idx in range(0, len(beg_times)):
+        beg = beg_times[idx]
+        end = end_times[idx]
+        seq = sequences[idx]
+        tidx = np.where((rate_time >= beg) & (rate_time <= end))[0]
+
+        cores = []
+        # so far, we do not consider double activations of a module in the same burst
+        for mod_id in np.unique(seq):
+            mr = mod_rates[f"mod_{mod_id}"]
+            core_tidx = np.argmax(mr[tidx])
+            core_tidx = tidx[core_tidx]
+            core_time = rate_time[core_tidx]
+            cores.append(core_time)
+        if len(cores) <= 1:
+            # in rare situations when the threshold is _barely_ crossed,
+            # we might detect burst boundaries but all spikes
+            # are out of the detected interval, due to gaussian smoothing
+            delays.append(np.array([np.nan]))
+        else:
+            delays.append(np.diff(np.sort(cores)))
+
+        # if idx < 10:
+        #     print(f"burst {idx}")
+        #     for mdx, mod_id in enumerate(np.unique(seq)):
+        #         print(f"\t{mod_id} | {beg} > {cores[mdx]} > {end}")
+
+    if write_to_h5f:
+        h5f["ana.bursts.system_level.core_delays"] = delays
+        h5f["ana.bursts.system_level.core_delays_mean"] = [np.mean(d) for d in delays]
+
+    if return_res:
+        return delays
 
 
 def find_rij(h5f=None, which="neurons", time_bin_size=200 / 1000):

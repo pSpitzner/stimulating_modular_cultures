@@ -109,6 +109,7 @@ def all_in_one(candidate=None):
         res["sys_orderpar_fano_population"] = 1
         res["sys_orderpar_baseline_neuron"] = 1
         res["sys_orderpar_baseline_population"] = 1
+        res["sys_mean_core_delay"] = 1
 
         # histograms, use "vec" prefix to indicate that higher dimensional data
         res["vec_sys_hbins_participating_fraction"] = 21
@@ -193,6 +194,14 @@ def all_in_one(candidate=None):
         res["any_ibis"] = np.nanmean(ibis_module)
     except KeyError as e:
         log.debug(e)
+
+    try:
+        ah.find_burst_core_delays(h5f)
+        res["sys_mean_core_delay"] = np.nanmean(
+            h5f["ana.bursts.system_level.core_delays_mean"]
+        )
+    except Exception as e:
+        log.error(e)
 
     # correlation coefficients
     try:
