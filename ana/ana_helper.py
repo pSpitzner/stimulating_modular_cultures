@@ -1217,6 +1217,8 @@ def find_resource_order_parameters(h5f, which="all"):
             mod_resources.append(np.mean(h5f["data.state_vars_D"][n_ids, :], axis=0))
         mod_resources = np.hstack(mod_resources)
         res["dist_low_end"] = np.percentile(mod_resources, q=5)
+        res["dist_low_mid"] = np.percentile(mod_resources, q=25)
+        res["dist_high_mid"] = np.percentile(mod_resources, q=75)
         res["dist_high_end"] = np.percentile(mod_resources, q=95)
         res["dist_median"] = np.percentile(mod_resources, q=50)
         hist, edges = np.histogram(mod_resources, bins=100, range=(0,1))

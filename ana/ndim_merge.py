@@ -111,6 +111,8 @@ def all_in_one(candidate=None):
         res["sys_orderpar_baseline_population"] = 1
         res["sys_mean_core_delay"] = 1
         res["sys_orderpar_dist_low_end"] = 1
+        res["sys_orderpar_dist_low_mid"] = 1
+        res["sys_orderpar_dist_high_mid"] = 1
         res["sys_orderpar_dist_high_end"] = 1
         res["sys_orderpar_dist_median"] = 1
         res["sys_orderpar_dist_max"] = 1
@@ -318,6 +320,8 @@ def all_in_one(candidate=None):
     res["sys_orderpar_baseline_population"] = ops["baseline_population"]
 
     res["sys_orderpar_dist_low_end"] = ops["dist_low_end"]
+    res["sys_orderpar_dist_low_mid"] = ops["dist_low_mid"]
+    res["sys_orderpar_dist_high_mid"] = ops["dist_high_mid"]
     res["sys_orderpar_dist_high_end"] = ops["dist_high_end"]
     res["sys_orderpar_dist_median"] = ops["dist_median"]
     res["sys_orderpar_dist_max"] = ops["dist_max"]

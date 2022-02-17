@@ -1665,7 +1665,9 @@ def sim_resource_dist_vs_noise_for_all_k(
 
 
     for kdx, k in enumerate(ndim.coords["k_inter"].to_numpy()):
-        fig, ax = plt.subplots()
+        if k in [4, 6]:
+            continue
+        fig, ax2 = plt.subplots()
         y = np.squeeze(ndim.sel(k_inter=k).mean(dim="repetition"))
         yh = np.squeeze(ndims["sys_orderpar_dist_high_end"].sel(k_inter=k).mean(dim="repetition"))
         yl = np.squeeze(ndims["sys_orderpar_dist_low_end"].sel(k_inter=k).mean(dim="repetition"))
@@ -1676,12 +1678,19 @@ def sim_resource_dist_vs_noise_for_all_k(
             (x != 92.5) & (x >= noise_range_to_show[0]) & (x <= noise_range_to_show[1])
         )
 
-        ax.plot(x[selects], y[selects], lw=0.5, color=colors[k])
-        ax.fill_between(x[selects], yl[selects], yh[selects], color=colors[k], alpha=0.3, lw=0)
+        ax2.plot(x[selects], y[selects], lw=0.5, color=colors[k])
+        ax2.fill_between(x[selects], yl[selects], yh[selects], color=colors[k], alpha=0.3, lw=0)
 
-        ax.set_title(k)
+        ax.plot(x[selects], y[selects], lw=0.5, color=colors[k], label=k)
+        ax.plot(x[selects], yl[selects], ls=':', lw=0.5, color=colors[k])
+        ax.plot(x[selects], yh[selects], ls=':', lw=0.5, color=colors[k])
+
+        ax2.set_title(k)
+        ax2.set_xlabel("Synaptic noise rate (Hz)")
+        ax2.set_ylabel("Distribution")
         ax.set_xlabel("Synaptic noise rate (Hz)")
         ax.set_ylabel("Distribution")
+        ax.legend()
 
     return ax
 
