@@ -1622,6 +1622,69 @@ def sim_obs_vs_noise_for_all_k(
 
     return ax
 
+def sim_resource_dist_vs_noise_for_all_k(
+    path,
+    simulation_coordinates=reference_coordinates,
+    ax=None,
+    colors=None,
+    **kwargs,
+):
+    """
+    similar to above, but now we want some fancier plotting than just a line.
+    we have a low and high perecentiles, and peak position for the distribution
+    fo resources.
+
+    # Parameters
+    par1 : type, description
+    """
+    ndims = nh.load_ndim_h5f(path)
+    for obs in ndims.keys():
+        for coord in simulation_coordinates.keys():
+            try:
+                ndim[obs] = ndim[obs].sel({coord: simulation_coordinates[coord]})
+            except:
+                log.debug(f"Could not select {coord}")
+
+    ndim = ndims["sys_orderpar_dist_max"]
+
+    log.debug(ndim.coords)
+    x = ndim.coords["rate"].to_numpy()
+    num_reps = len(ndim.coords["repetition"])
+
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.get_figure()
+
+    if colors is None:
+        colors = dict()
+        for kdx, k in enumerate(ndim.coords["k_inter"].to_numpy()):
+            colors[k] = f"C{kdx}"
+
+
+
+
+    for kdx, k in enumerate(ndim.coords["k_inter"].to_numpy()):
+        fig, ax = plt.subplots()
+        y = np.squeeze(ndim.sel(k_inter=k).mean(dim="repetition"))
+        yh = np.squeeze(ndims["sys_orderpar_dist_high_end"].sel(k_inter=k).mean(dim="repetition"))
+        yl = np.squeeze(ndims["sys_orderpar_dist_low_end"].sel(k_inter=k).mean(dim="repetition"))
+
+        noise_range_to_show = [-np.inf, 100.0]
+        # 92.5 Hz was only simulated for k=10, so drop it
+        selects = np.where(
+            (x != 92.5) & (x >= noise_range_to_show[0]) & (x <= noise_range_to_show[1])
+        )
+
+        ax.plot(x[selects], y[selects], lw=0.5, color=colors[k])
+        ax.fill_between(x[selects], yl[selects], yh[selects], color=colors[k], alpha=0.3, lw=0)
+
+        ax.set_title(k)
+        ax.set_xlabel("Synaptic noise rate (Hz)")
+        ax.set_ylabel("Distribution")
+
+    return ax
+
 
 def controls_sim_vs_exp_ibi():
     fig, ax = plt.subplots()
