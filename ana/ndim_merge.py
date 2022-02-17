@@ -110,6 +110,10 @@ def all_in_one(candidate=None):
         res["sys_orderpar_baseline_neuron"] = 1
         res["sys_orderpar_baseline_population"] = 1
         res["sys_mean_core_delay"] = 1
+        res["sys_orderpar_dist_low_end"] = 1
+        res["sys_orderpar_dist_high_end"] = 1
+        res["sys_orderpar_dist_median"] = 1
+        res["sys_orderpar_dist_max"] = 1
 
         # histograms, use "vec" prefix to indicate that higher dimensional data
         res["vec_sys_hbins_participating_fraction"] = 21
@@ -307,11 +311,17 @@ def all_in_one(candidate=None):
     res["mod_num_spikes_in_bursts_1"] = C
 
     # order parameters
-    ops, ops_std = ah.find_resource_order_parameters(h5f)
+    ops = ah.find_resource_order_parameters(h5f)
     res["sys_orderpar_fano_neuron"] = ops["fano_neuron"]
     res["sys_orderpar_fano_population"] = ops["fano_population"]
     res["sys_orderpar_baseline_neuron"] = ops["baseline_neuron"]
     res["sys_orderpar_baseline_population"] = ops["baseline_population"]
+
+    res["sys_orderpar_dist_low_end"] = ops["dist_low_end"]
+    res["sys_orderpar_dist_high_end"] = ops["dist_high_end"]
+    res["sys_orderpar_dist_median"] = ops["dist_median"]
+    res["sys_orderpar_dist_max"] = ops["dist_max"]
+
 
 
     h5.close_hot(h5f)

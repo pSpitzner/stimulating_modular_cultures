@@ -1917,44 +1917,65 @@ def sim_prob_dist_rates_and_resources():
 
     # bins = np.logspace(start=-1, stop=2, base=10)
     bins = np.arange(0, 101) - 0.5
-    ax = ph._plot_distribution_from_series(
-        h5f1["ana.rates.system_level"], bins=bins, alpha=0.3, color="C0", label="80Hz"
-    )
-    ax = ph._plot_distribution_from_series(
-        h5f2["ana.rates.system_level"],
-        bins=bins,
-        alpha=0.3,
-        color="C1",
-        label="90Hz",
-        ax=ax,
-    )
-    ax.set_xlim(0, 80)
-    ax.set_yscale("log")
-    ax.legend(loc="upper right")
-    ax.set_xlabel("Populaton Rate (Hz)")
-    ax.set_ylabel("Probability")
-    cc.set_size2(ax, 3.0, 3.0)
-    cc._fix_log_ticks(ax.yaxis, every=1, hide_label_condition=lambda idx: idx % 2 == 1)
+    # ax = ph._plot_distribution_from_series(
+    #     h5f1["ana.rates.system_level"], bins=bins, alpha=0.3, color="C0", label="80Hz"
+    # )
+    # ax = ph._plot_distribution_from_series(
+    #     h5f2["ana.rates.system_level"],
+    #     bins=bins,
+    #     alpha=0.3,
+    #     color="C1",
+    #     label="90Hz",
+    #     ax=ax,
+    # )
+    # ax.set_xlim(0, 80)
+    # ax.set_yscale("log")
+    # ax.legend(loc="upper right")
+    # ax.set_xlabel("Populaton Rate (Hz)")
+    # ax.set_ylabel("Probability")
+    # cc.set_size2(ax, 3.0, 3.0)
+    # cc._fix_log_ticks(ax.yaxis, every=1, hide_label_condition=lambda idx: idx % 2 == 1)
 
     # adapt1 = np.nanmean(h5f1["data.state_vars_D"], axis=0)
     # adapt2 = np.nanmean(h5f2["data.state_vars_D"], axis=0)
 
-    # using all ~160 neurons blows up the histogram
-    selects = np.sort(np.random.choice(h5f1["ana.neuron_ids"], size=20, replace=False))
-    adapt1 = h5f1["data.state_vars_D"][selects, :].flatten()
-    adapt2 = h5f2["data.state_vars_D"][selects, :].flatten()
-    ax = ph._plot_distribution_from_series(
-        adapt1, alpha=0.3, color="C0", binwidth=0.02, label="80Hz"
-    )
-    ax = ph._plot_distribution_from_series(
-        adapt2, alpha=0.3, color="C1", binwidth=0.02, label="90Hz", ax=ax
-    )
+    # random neurons
+    # selects = np.sort(np.random.choice(h5f1["ana.neuron_ids"], size=20, replace=False))
+    # adapt1 = h5f1["data.state_vars_D"][selects, :].flatten()
+    # adapt2 = h5f2["data.state_vars_D"][selects, :].flatten()
+    # ax = ph._plot_distribution_from_series(
+    #     adapt1, alpha=0.3, color="C0", binwidth=0.02, label="80Hz"
+    # )
+    # ax = ph._plot_distribution_from_series(
+    #     adapt2, alpha=0.3, color="C1", binwidth=0.02, label="90Hz", ax=ax
+    # )
+
+    # we want to use the adaptation as we have plotted it the rasters -> per module
+    ax = None
+    for hdx, h5f in enumerate([h5f1, h5f2]):
+        mod_adapts = []
+        for mod_id in np.unique(h5f["data.neuron_module_id"]):
+            n_ids = np.where(h5f["data.neuron_module_id"] == mod_id)[0]
+            mod_adapts.append(np.mean(h5f["data.state_vars_D"][n_ids, :], axis=0))
+        mod_adapts = np.hstack(mod_adapts)
+
+        if hdx == 0:
+            ax = ph._plot_distribution_from_series(
+                mod_adapts, alpha=0.3, color="C0", binwidth=0.01, label="80Hz", ax=ax
+            )
+            print(ah.find_resource_order_parameters(h5f, which="dist_percentiles"))
+        else:
+            ax = ph._plot_distribution_from_series(
+                mod_adapts, alpha=0.3, color="C1", binwidth=0.01, label="90Hz", ax=ax
+            )
+            print(ah.find_resource_order_parameters(h5f, which="dist_percentiles"))
     ax.set_xlim(0, 1)
     ax.set_xlabel("Synaptic Resources")
     ax.set_ylabel("Probability")
     ax.legend(loc="upper left")
     cc.set_size2(ax, 3.0, 3.0)
 
+    return mod_adapts
 
 # todo
 def sim_layout_sketches_for_all_k(ax_width=1.5):

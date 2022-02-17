@@ -1186,35 +1186,44 @@ def find_resource_order_parameters(h5f, which="all"):
             "fano_population",
             "baseline_neuron",
             "baseline_population",
+            "dist_percentiles"
         ]
 
-    res_mean = dict()
-    res_std = dict()
+    res = dict()
 
     if np.any(["_population" in key for key in which]):
         pop_resources = np.mean(data, axis=0)
 
     if "fano_neuron" in which:
         ffs = np.var(data, axis=1) / np.mean(data, axis=1)
-        res_mean["fano_neuron"] = np.mean(ffs)
-        res_std["fano_neuron"] = np.std(ffs)
+        res["fano_neuron"] = np.mean(ffs)
 
     if "fano_population" in which:
-        res_mean["fano_population"] = np.var(pop_resources) / np.mean(pop_resources)
-        res_std["fano_population"] = np.nan
+        res["fano_population"] = np.var(pop_resources) / np.mean(pop_resources)
 
     if "baseline_neuron" in which:
         # bls = np.percentile(data, q=0.95, axis=1)
         bls = np.nanmax(data, axis=1)
-        res_mean["baseline_neuron"] = np.mean(bls)
-        res_std["baseline_neuron"] = np.std(bls)
+        res["baseline_neuron"] = np.mean(bls)
 
     if "baseline_population" in which:
-        # res_mean["baseline_population"] = np.percentile(pop_resources, q=0.95)
-        res_mean["baseline_population"] = np.nanmax(pop_resources)
-        res_std["baseline_population"] = np.nan
+        # res["baseline_population"] = np.percentile(pop_resources, q=0.95)
+        res["baseline_population"] = np.nanmax(pop_resources)
 
-    return res_mean, res_std
+    if "dist_percentiles" in which:
+        mod_resources = []
+        for mod_id in np.unique(h5f["data.neuron_module_id"]):
+            n_ids = np.where(h5f["data.neuron_module_id"] == mod_id)[0]
+            mod_resources.append(np.mean(h5f["data.state_vars_D"][n_ids, :], axis=0))
+        mod_resources = np.hstack(mod_resources)
+        res["dist_low_end"] = np.percentile(mod_resources, q=5)
+        res["dist_high_end"] = np.percentile(mod_resources, q=95)
+        res["dist_median"] = np.percentile(mod_resources, q=50)
+        hist, edges = np.histogram(mod_resources, bins=100, range=(0,1))
+        idx = np.argmax(hist)
+        res["dist_max"] = (edges[idx] + edges[idx + 1])/2
+
+    return res
 
 
 
