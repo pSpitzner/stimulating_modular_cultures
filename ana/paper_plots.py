@@ -320,6 +320,7 @@ def fig_3():
     # ------------------------------------------------------------------------------ #
 
     log.info("barplot rij paired for simulations")
+
     ax = custom_rij_barplot(df, conditions=["0.0 Hz", "20.0 Hz"], recolor=True)
 
     ax.set_ylim(0, 1)
@@ -499,6 +500,12 @@ def fig_4(skip_rasters=True):
     observables = unit_observables + [
         "any_num_spikes_in_bursts",
         "sys_median_any_ibis",
+        # testing order parameters
+        "sys_orderpar_fano_neuron",
+        "sys_orderpar_fano_population",
+        "sys_orderpar_baseline_neuron",
+        "sys_orderpar_baseline_population",
+        "sys_mean_core_delay"
     ]
 
     ylabels = dict()
@@ -507,6 +514,11 @@ def fig_4(skip_rasters=True):
     ylabels["sys_functional_complexity"] = "Functional\ncomplexity"
     ylabels["any_num_spikes_in_bursts"] = "Spikes\nper neuron"
     ylabels["sys_median_any_ibis"] = "Inter-event-interval\n(seconds)"
+    ylabels["sys_orderpar_fano_neuron"] = "fano neuron"
+    ylabels["sys_orderpar_fano_population"] = "fano population"
+    ylabels["sys_orderpar_baseline_neuron"] = "baseline neuron"
+    ylabels["sys_orderpar_baseline_population"] = "baseline population"
+    ylabels["sys_mean_core_delay"] = "delay between burst cores (seconds)"
 
     coords = reference_coordinates.copy()
     coords["k_inter"] = [1, 5, 10, -1]
@@ -526,7 +538,10 @@ def fig_4(skip_rasters=True):
         # base_color = palettable.cartocolors.qualitative.Antique_5.hex_colors[
         #     4 - odx
         # ]
-        base_color = base_colors[odx]
+        try:
+            base_color = base_colors[odx]
+        except:
+            base_color = "#333"
         if obs == "sys_median_any_ibis":
             base_color = "#333"
         clrs = dict()
@@ -542,6 +557,7 @@ def fig_4(skip_rasters=True):
         )
         ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(10))
         ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(5))
+        ax.set_xlim(62.5, 112.5)
         if obs in unit_observables:
             ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
             ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
@@ -551,6 +567,10 @@ def fig_4(skip_rasters=True):
             ax.set_ylim(0, 70)
         if obs == "any_num_spikes_in_bursts":
             ax.set_ylim(0, 10)
+        if "sys_orderpar_baseline" in obs:
+            ax.set_ylim(0, 1.05)
+        if "sys_orderpar_fano" in obs:
+            ax.set_ylim(0, 0.1)
 
         ax.set_ylabel(ylabels[obs])
         cc.set_size3(ax, 3, 2)
@@ -1310,26 +1330,28 @@ def sim_raster_plots(
     ax.yaxis.set_visible(False)
     sns.despine(ax=ax, left=True, right=True, bottom=True, top=True)
 
-    # replot the rate as a background to the raster, rescaling
-    ylim_raster = axes[1].get_ylim()
-    ylim_rate = axes[0].get_ylim()
+    rate_as_background_in_zoomin = False
+    if rate_as_background_in_zoomin:
+        # replot the rate as a background to the raster, rescaling
+        ylim_raster = axes[1].get_ylim()
+        ylim_rate = axes[0].get_ylim()
 
-    rate = h5f["ana.rates.system_level"].copy()
-    # rescale to go from 0 to 1
-    rate = (rate - ylim_rate[0]) / (ylim_rate[1] - ylim_rate[0])
-    # rescale to match yrange of raster
-    rate = rate * (ylim_raster[1] - ylim_raster[0]) + ylim_raster[0]
-    h5f["ana.rates.system_level"] = rate
-    ph.plot_system_rate(
-        h5f,
-        ax,
-        mark_burst_threshold=False,
-        color=cc.alpha_to_solid_on_bg("#333", 0.5),
-        apply_formatting=False,
-        clip_on=True,
-        lw=0.5,
-        zorder=-3,
-    )
+        rate = h5f["ana.rates.system_level"].copy()
+        # rescale to go from 0 to 1
+        rate = (rate - ylim_rate[0]) / (ylim_rate[1] - ylim_rate[0])
+        # rescale to match yrange of raster
+        rate = rate * (ylim_raster[1] - ylim_raster[0]) + ylim_raster[0]
+        h5f["ana.rates.system_level"] = rate
+        ph.plot_system_rate(
+            h5f,
+            ax,
+            mark_burst_threshold=False,
+            color=cc.alpha_to_solid_on_bg("#333", 0.5),
+            apply_formatting=False,
+            clip_on=True,
+            lw=0.5,
+            zorder=-3,
+        )
 
     h5.close_hot()
 
@@ -1547,6 +1569,7 @@ def sim_obs_vs_noise_for_all_k(
         "sys_mean_participating_fraction",
         "any_num_spikes_in_bursts",
         "sys_median_any_ibis",
+        "sys_mean_core_delay",
     ]
 
     for kdx, k in enumerate(ndim.coords["k_inter"].to_numpy()):
@@ -2450,7 +2473,7 @@ def custom_rij_scatter(
     ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
     ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
     ax.set_aspect(1)
-    ax.set_xlabel("Correlation pertb")
+    ax.set_xlabel("Correlation stim")
     ax.set_ylabel("Correlation pre")
     sns.despine(top=False, bottom=False, left=False, right=False)
 
