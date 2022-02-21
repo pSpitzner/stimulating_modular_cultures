@@ -2545,8 +2545,8 @@ def custom_rij_scatter(
     ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
     ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
     ax.set_aspect(1)
-    ax.set_xlabel("Correlation stim")
-    ax.set_ylabel("Correlation pre")
+    ax.set_xlabel("Correlation pre")
+    ax.set_ylabel("Correlation stim")
     sns.despine(top=False, bottom=False, left=False, right=False)
 
     return ax
