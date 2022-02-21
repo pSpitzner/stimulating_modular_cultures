@@ -1216,12 +1216,14 @@ def find_resource_order_parameters(h5f, which="all"):
             n_ids = np.where(h5f["data.neuron_module_id"] == mod_id)[0]
             mod_resources.append(np.mean(h5f["data.state_vars_D"][n_ids, :], axis=0))
         mod_resources = np.hstack(mod_resources)
-        res["dist_low_end"] = np.percentile(mod_resources, q=5)
+        res["dist_low_end"] = np.percentile(mod_resources, q=0.5)
         res["dist_low_mid"] = np.percentile(mod_resources, q=25)
         res["dist_high_mid"] = np.percentile(mod_resources, q=75)
-        res["dist_high_end"] = np.percentile(mod_resources, q=95)
+        res["dist_high_end"] = np.percentile(mod_resources, q=99.5)
         res["dist_median"] = np.percentile(mod_resources, q=50)
         hist, edges = np.histogram(mod_resources, bins=100, range=(0,1))
+        res["dist_hist"] = hist
+        res["dist_edges"] = edges
         idx = np.argmax(hist)
         res["dist_max"] = (edges[idx] + edges[idx + 1])/2
 

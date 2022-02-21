@@ -125,6 +125,9 @@ def all_in_one(candidate=None):
         res["vec_sys_hbins_depletion_correlation_coefficients"] = 21
         res["vec_sys_hvals_depletion_correlation_coefficients"] = 20
 
+        res["vec_sys_hbins_resource_dist"] = 101
+        res["vec_sys_hval_resource_dist"] = 100
+
         # correlation coefficients, within
         for mod in [0, 1, 2, 3]:
             # 40 neurons per module, count pairs only once, exclude 20 self-to-self
@@ -326,7 +329,8 @@ def all_in_one(candidate=None):
     res["sys_orderpar_dist_median"] = ops["dist_median"]
     res["sys_orderpar_dist_max"] = ops["dist_max"]
 
-
+    res["vec_sys_hbins_resource_dist"] = ops["dist_edges"]
+    res["vec_sys_hval_resource_dist"] = ops["dist_hist"]
 
     h5.close_hot(h5f)
     h5f.clear()
