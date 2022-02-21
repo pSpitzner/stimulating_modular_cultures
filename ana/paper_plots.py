@@ -1684,6 +1684,8 @@ def sim_resource_dist_vs_noise_for_all_k(
         ax.plot(x[selects], y[selects], lw=0.5, color=colors[k], label=k)
         ax.plot(x[selects], yl[selects], ls=':', lw=0.5, color=colors[k])
         ax.plot(x[selects], yh[selects], ls=':', lw=0.5, color=colors[k])
+        ax.set_ylim(0, 1)
+        ax2.set_ylim(0, 1)
 
         ax2.set_title(k)
         ax2.set_xlabel("Synaptic noise rate (Hz)")
@@ -1691,6 +1693,7 @@ def sim_resource_dist_vs_noise_for_all_k(
         ax.set_xlabel("Synaptic noise rate (Hz)")
         ax.set_ylabel("Distribution")
         ax.legend()
+        cc.set_size2(ax2, 4, 3)
 
     return ax
 
@@ -1996,16 +1999,29 @@ def sim_violins_for_all_k(ax_width=4):
         render_plots()
 
 
-def sim_prob_dist_rates_and_resources():
-    h5f1 = ah.prepare_file(
-        "./dat/the_last_one/dyn/stim=off_k=5_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=80.0_rep=001.hdf5"
-    )
-    h5f2 = ah.prepare_file(
-        "./dat/the_last_one/dyn/stim=off_k=5_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=90.0_rep=001.hdf5"
-    )
+def sim_prob_dist_rates_and_resources(k=5):
+    if k == 5:
+        h5f1 = ah.prepare_file(
+            "./dat/the_last_one/dyn/stim=off_k=5_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=80.0_rep=001.hdf5"
+        )
+        h5f2 = ah.prepare_file(
+            "./dat/the_last_one/dyn/stim=off_k=5_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=90.0_rep=001.hdf5"
+        )
+    elif k == -1:
+        h5f1 = ah.prepare_file(
+            "./dat/the_last_one/dyn/stim=off_k=-1_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=85.0_rep=001.hdf5"
+        )
+        h5f2 = ah.prepare_file(
+            "./dat/the_last_one/dyn/stim=off_k=-1_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=100.0_rep=001.hdf5"
+        )
+    else:
+        raise NotImplementedError
 
     bs_large = 20 / 1000  # width of the gaussian kernel for rate
     threshold_factor = 2.5 / 100  # fraction of max peak height for burst
+
+    # ph.overview_dynamic(h5f1)
+    # ph.overview_dynamic(h5f2)
 
     ah.find_rates(h5f1, bs_large=bs_large)
     ah.find_rates(h5f2, bs_large=bs_large)
@@ -2056,12 +2072,12 @@ def sim_prob_dist_rates_and_resources():
 
         if hdx == 0:
             ax = ph._plot_distribution_from_series(
-                mod_adapts, alpha=0.3, color="C0", binwidth=0.01, label="80Hz", ax=ax
+                mod_adapts, alpha=0.3, color="C0", binwidth=0.01, label="low noise", ax=ax
             )
             print(ah.find_resource_order_parameters(h5f, which="dist_percentiles"))
         else:
             ax = ph._plot_distribution_from_series(
-                mod_adapts, alpha=0.3, color="C1", binwidth=0.01, label="90Hz", ax=ax
+                mod_adapts, alpha=0.3, color="C1", binwidth=0.01, label="high noise", ax=ax
             )
             print(ah.find_resource_order_parameters(h5f, which="dist_percentiles"))
     ax.set_xlim(0, 1)
