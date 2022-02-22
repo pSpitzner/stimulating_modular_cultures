@@ -126,7 +126,7 @@ def all_in_one(candidate=None):
         res["vec_sys_hvals_depletion_correlation_coefficients"] = 20
 
         res["vec_sys_hbins_resource_dist"] = 101
-        res["vec_sys_hval_resource_dist"] = 100
+        res["vec_sys_hvals_resource_dist"] = 100
 
         # correlation coefficients, within
         for mod in [0, 1, 2, 3]:

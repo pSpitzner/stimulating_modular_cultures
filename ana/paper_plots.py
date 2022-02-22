@@ -1661,16 +1661,17 @@ def sim_resource_dist_vs_noise_for_all_k(
         for kdx, k in enumerate(ndim.coords["k_inter"].to_numpy()):
             colors[k] = f"C{kdx}"
 
-
-
-
     for kdx, k in enumerate(ndim.coords["k_inter"].to_numpy()):
         if k in [4, 6]:
             continue
         fig, ax2 = plt.subplots()
         y = np.squeeze(ndim.sel(k_inter=k).mean(dim="repetition"))
-        yh = np.squeeze(ndims["sys_orderpar_dist_high_end"].sel(k_inter=k).mean(dim="repetition"))
-        yl = np.squeeze(ndims["sys_orderpar_dist_low_end"].sel(k_inter=k).mean(dim="repetition"))
+        yh = np.squeeze(
+            ndims["sys_orderpar_dist_high_end"].sel(k_inter=k).mean(dim="repetition")
+        )
+        yl = np.squeeze(
+            ndims["sys_orderpar_dist_low_end"].sel(k_inter=k).mean(dim="repetition")
+        )
 
         noise_range_to_show = [-np.inf, 100.0]
         # 92.5 Hz was only simulated for k=10, so drop it
@@ -1679,11 +1680,13 @@ def sim_resource_dist_vs_noise_for_all_k(
         )
 
         ax2.plot(x[selects], y[selects], lw=0.5, color=colors[k])
-        ax2.fill_between(x[selects], yl[selects], yh[selects], color=colors[k], alpha=0.3, lw=0)
+        ax2.fill_between(
+            x[selects], yl[selects], yh[selects], color=colors[k], alpha=0.3, lw=0
+        )
 
         ax.plot(x[selects], y[selects], lw=0.5, color=colors[k], label=k)
-        ax.plot(x[selects], yl[selects], ls=':', lw=0.5, color=colors[k])
-        ax.plot(x[selects], yh[selects], ls=':', lw=0.5, color=colors[k])
+        ax.plot(x[selects], yl[selects], ls=":", lw=0.5, color=colors[k])
+        ax.plot(x[selects], yh[selects], ls=":", lw=0.5, color=colors[k])
         ax.set_ylim(0, 1)
         ax2.set_ylim(0, 1)
 
@@ -1696,6 +1699,67 @@ def sim_resource_dist_vs_noise_for_all_k(
         cc.set_size2(ax2, 4, 3)
 
     return ax
+
+
+def sim_resource_density_vs_noise_for_all_k(
+    path,
+    simulation_coordinates=reference_coordinates,
+    ax=None,
+    colors=None,
+    **kwargs,
+):
+    ndims = nh.load_ndim_h5f(path)
+    for obs in ndims.keys():
+        for coord in simulation_coordinates.keys():
+            try:
+                ndim[obs] = ndim[obs].sel({coord: simulation_coordinates[coord]})
+            except:
+                log.debug(f"Could not select {coord}")
+
+    ndim = np.squeeze(ndims["vec_sys_hvals_resource_dist"])
+    ndim_edges = np.squeeze(ndims["vec_sys_hbins_resource_dist"])[0, 0, 0, :]
+
+    ndim = ndim.sel(k_inter=1)
+    # ndim = ndim.sel(k_inter=5)
+    # ndim_edges.sel(k_inter=5)
+
+    log.debug(ndim.coords)
+    x = ndim.coords["rate"].to_numpy()
+    num_reps = len(ndim.coords["repetition"])
+
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.get_figure()
+
+    ndim /= ndim.sum(dim="vector_observable")
+
+    noise_range_to_show = [-np.inf, 120.0]
+    selects = np.where(
+        (x != 92.5) & (x >= noise_range_to_show[0]) & (x <= noise_range_to_show[1])
+    )
+    ndim = ndim[selects].mean(dim="repetition")
+    # ndim /= ndim.max(dim="vector_observable")
+
+    # ndim = ndim.sel(rate=80)
+    # for rdx, rep in enumerate(ndim.coords["repetition"]):
+    #     ax.plot(ndim_edges[0:-1], ndim[rdx, :])
+
+    centroids = ndim_edges[0:-1] + (ndim_edges[1] - ndim_edges[0])/2
+    print(centroids)
+
+    ndim = ndim.assign_coords(vector_observable=centroids.to_numpy())
+
+    # ax.plot(ndim_edges[0:-1], ndim.mean(dim="repetition"), color="black")
+    # ndim.groupby_bins("vector_observable", np.arange(0, 110, 5)).sum().plot.contourf(
+    #     x="rate", cmap="Blues", vmin=0, vmax=0.4
+    # )
+
+    ndim.plot.imshow(
+        x="rate", cmap="Blues", norm=matplotlib.colors.LogNorm(vmin=0.001, vmax=0.2)
+    )
+
+    return ndim
 
 
 def controls_sim_vs_exp_ibi():
