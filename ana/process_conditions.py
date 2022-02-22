@@ -218,10 +218,21 @@ def main():
                 ibis = h5f["ana.ibi.system_level.any_module"]
                 ibis.extend([np.nan] * (len(blen) - len(ibis)))
 
+                # propagation delay: how long to go from peak to peak of the module-level
+                # population rate
+                ah.find_burst_core_delays(h5f)
+                delays = np.array(
+                    [
+                        np.mean(x)
+                        for x in h5f["ana.bursts.system_level.core_delays_mean"]
+                    ]
+                )
+
                 df = pd.DataFrame(
                     {
                         "Duration": blen,
                         "Sequence length": slen,
+                        "Core delay": delays,
                         "Fraction": fracs,
                         "Onset duration": olen,
                         "Inter-burst-interval": ibis,
@@ -332,6 +343,8 @@ def main():
                         "Median IBI": [np.nanmedian(ibis)],
                         "Mean Fraction": [np.nanmean(fracs)],
                         "Median Fraction": [np.nanmedian(fracs)],
+                        "Mean Core delays": [np.nanmean(delays)],
+                        "Median Core delays": [np.nanmedian(delays)],
                         "Functional Complexity": [fc],
                         "Condition": condition_string,
                         "Trial": trial,

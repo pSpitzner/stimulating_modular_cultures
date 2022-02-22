@@ -239,6 +239,9 @@ def fig_2(skip_plots=False):
         exp_sticks_across_layouts(
             observable="Median IBI", set_ylim=False, hide_labels=False
         )
+        exp_sticks_across_layouts(
+            observable="Mean Core delays", set_ylim=False, hide_labels=False
+        )
 
     log.debug("\n\nPairwise tests for trials\n")
     exp_pairwise_tests_for_trials()
@@ -505,7 +508,7 @@ def fig_4(skip_rasters=True):
         "sys_orderpar_fano_population",
         "sys_orderpar_baseline_neuron",
         "sys_orderpar_baseline_population",
-        "sys_mean_core_delay"
+        "sys_mean_core_delay",
     ]
 
     ylabels = dict()
@@ -1058,6 +1061,30 @@ def exp_violins_for_layouts(remove_outlier_for_ibis=True):
         ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(20))
         ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(10))
         ax.get_figure().savefig(f"./fig/paper/exp_violins_ibi_{layout}.pdf", dpi=300)
+
+    for layout in dfs.keys():
+        # if layout == "merged":
+        #     # for the merged system, we do not have modules, but the analysis still works
+        #     # by using quadrants of the merged substrate.
+        #     continue
+
+        log.info(f"")
+        log.info(f"# {layout}")
+        ax = custom_violins(
+            dfs[layout]["bursts"].query("`Trial` != '210405_C'")
+            if remove_outlier_for_ibis and layout == "single_bond"
+            else dfs[layout]["bursts"],
+            category="Condition",
+            observable="Core delay",
+            ylim=[0, .4],
+            num_swarm_points=250,
+            bw=0.2,
+        )
+        # apply_formatting(ax)
+        # ax.set_yscale("log")
+        ax.set_title(f"{layout}")
+        ax.set_ylim(0, .4)
+        ax.get_figure().savefig(f"./fig/paper/exp_violins_core_delay_{layout}.pdf", dpi=300)
 
     return ax
 
@@ -1622,6 +1649,7 @@ def sim_obs_vs_noise_for_all_k(
 
     return ax
 
+
 def sim_resource_dist_vs_noise_for_all_k(
     path,
     simulation_coordinates=reference_coordinates,
@@ -2141,7 +2169,12 @@ def sim_prob_dist_rates_and_resources(k=5):
             print(ah.find_resource_order_parameters(h5f, which="dist_percentiles"))
         else:
             ax = ph._plot_distribution_from_series(
-                mod_adapts, alpha=0.3, color="C1", binwidth=0.01, label="high noise", ax=ax
+                mod_adapts,
+                alpha=0.3,
+                color="C1",
+                binwidth=0.01,
+                label="high noise",
+                ax=ax,
             )
             print(ah.find_resource_order_parameters(h5f, which="dist_percentiles"))
     ax.set_xlim(0, 1)
@@ -2151,6 +2184,7 @@ def sim_prob_dist_rates_and_resources(k=5):
     cc.set_size2(ax, 3.0, 3.0)
 
     return mod_adapts
+
 
 # todo
 def sim_layout_sketches_for_all_k(ax_width=1.5):
