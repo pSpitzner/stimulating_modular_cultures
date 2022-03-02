@@ -10,6 +10,7 @@
 import os
 import sys
 import glob
+import re
 from ana.plot_helper import overview_burst_duration_and_isi
 import h5py
 import argparse
@@ -413,6 +414,7 @@ def fig_4(skip_rasters=True):
     # ------------------------------------------------------------------------------ #
 
     def path(k, rate, rep):
+        # path = f"./dat/the_last_one/dyn/highres_stim=off"
         path = f"./dat/the_last_one/dyn/stim=off"
         path += f"_k={k:d}_jA=45.0_jG=50.0_jM=15.0_tD=20.0"
         path += f"_rate={rate:.1f}_rep={rep:03d}.hdf5"
@@ -422,38 +424,64 @@ def fig_4(skip_rasters=True):
     times = []  # start time for the large time window of ~ 180 seconds
     zooms = []  # start time for an interesting 250 ms time window showing a burst
 
+    same_rates_for_all_topos = True
+    if same_rates_for_all_topos:
+        coords.append(dict(k=1, rate=80, rep=1))
+        zooms.append(343.95)
+        times.append(0)
+        coords.append(dict(k=1, rate=90, rep=1))
+        zooms.append(343.95)
+        times.append(0)
 
-    coords.append(dict(k=1, rate=75, rep=1))
-    zooms.append(299.5)
-    times.append(0)
+        coords.append(dict(k=5, rate=80, rep=1))
+        zooms.append(298.35)
+        times.append(0)
+        coords.append(dict(k=5, rate=90, rep=1))
+        zooms.append(288.05)
+        times.append(0)
 
-    coords.append(dict(k=1, rate=85, rep=1))
-    zooms.append(333.95)
-    times.append(0)
+        coords.append(dict(k=10, rate=80, rep=1))
+        zooms.append(313.95)
+        times.append(0)
+        coords.append(dict(k=10, rate=90, rep=1))
+        zooms.append(314.5)
+        times.append(0)
 
-    coords.append(dict(k=5, rate=80, rep=1))
-    zooms.append(298.35)
-    times.append(0)
+        coords.append(dict(k=-1, rate=80, rep=1))
+        zooms.append(333.40)
+        times.append(0)
+        coords.append(dict(k=-1, rate=90, rep=1))
+        zooms.append(338.45)
+        times.append(0)
+    else:
+        # these points give roughly matching IEI across realizations
+        coords.append(dict(k=1, rate=75, rep=1))
+        zooms.append(299.5)
+        times.append(0)
+        coords.append(dict(k=1, rate=85, rep=1))
+        zooms.append(333.95)
+        times.append(0)
 
-    coords.append(dict(k=5, rate=90, rep=1))
-    zooms.append(288.05)
-    times.append(0)
+        coords.append(dict(k=5, rate=80, rep=1))
+        zooms.append(298.35)
+        times.append(0)
+        coords.append(dict(k=5, rate=90, rep=1))
+        zooms.append(288.05)
+        times.append(0)
 
-    coords.append(dict(k=10, rate=85, rep=1))
-    zooms.append(347.85)
-    times.append(0)
+        coords.append(dict(k=10, rate=85, rep=1))
+        zooms.append(347.85)
+        times.append(0)
+        coords.append(dict(k=10, rate=92.5, rep=1))
+        zooms.append(347.75)
+        times.append(0)
 
-    coords.append(dict(k=10, rate=92.5, rep=1))
-    zooms.append(347.75)
-    times.append(0)
-
-    coords.append(dict(k=-1, rate=85.0, rep=1))
-    zooms.append(0)
-    times.append(0)
-
-    coords.append(dict(k=-1, rate=100.0, rep=1))
-    zooms.append(0)
-    times.append(0)
+        coords.append(dict(k=-1, rate=85.0, rep=1))
+        zooms.append(0)
+        times.append(0)
+        coords.append(dict(k=-1, rate=100.0, rep=1))
+        zooms.append(0)
+        times.append(0)
 
     for idx in range(0, len(coords)):
         if skip_rasters:
@@ -464,14 +492,21 @@ def fig_4(skip_rasters=True):
             path=path(**cs),
             time_range=(times[idx], times[idx] + 360),
             zoom_time=zooms[idx],
+            mark_zoomin_location=True,
         )
         # update to get exact axes width
         ax = fig.axes[0]
+        if cs["k"] == 10:
+            ax.set_ylim(0, 120)
+        elif cs["k"] == -1:
+            ax.set_ylim(0, 160)
+
         cc.set_size(ax=ax, w=3.5, h=None)
+        k_str = f"merged" if cs["k"] == -1 else f"k={cs['k']}"
         ax.text(
             0.5,
             0.98,
-            f"k={cs['k']}    {cs['rate']}Hz",
+            f"{k_str}    {cs['rate']}Hz",
             va="center",
             ha="center",
             transform=ax.transAxes,
@@ -481,6 +516,41 @@ def fig_4(skip_rasters=True):
             dpi=900,  # use higher res to get rasters smooth
             transparent=False,
         )
+
+        # do we want a schematic of the topology?
+        sim_layout_sketch(
+            in_path=path(**cs),
+            out_path=f"./fig/paper/sim_layout_sketch_{cs['k']}_{cs['rate']}Hz.png",
+        )
+
+    # ------------------------------------------------------------------------------ #
+    # panel h, resource cycles
+    # ------------------------------------------------------------------------------ #
+
+    if not skip_rasters:
+        # sim_resource_cycles(apply_formatting=True, k_list=[-1, 5])
+        # for main manuscript, defaults above are fine, but for SI bigger overview:
+        axes = sim_resource_cycles(apply_formatting=False, k_list=[-1, 1, 5, 10])
+        for k in axes.keys():
+            for rate in axes[k].keys():
+                ax = axes[k][f"{rate}.0"]
+                k_str = f"merged" if k == "-1" else f"k={k}"
+                ax.set_title(f"{k_str}    {rate}Hz")
+                cc.set_size3(ax, 1.6, 1.4)
+                ax.set_xlim(0.0, 1.0)
+                if k == "-1":
+                    ax.set_ylim(0, 200)
+                else:
+                    ax.set_ylim(0, 200)
+                ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1.0))
+                ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.2))
+                ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(100))
+                ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(50))
+                cc.detick(ax.yaxis, keep_ticks=True)
+                ax.get_figure().savefig(
+                    f"./fig/paper/sim_resource_cycle_{k_str}_{rate}Hz.pdf",
+                    transparent=False,
+                )
 
     # ------------------------------------------------------------------------------ #
     # Number of modules over which bursts / events extend
@@ -585,12 +655,6 @@ def fig_4(skip_rasters=True):
         ax.set_ylabel(ylabels[obs])
         cc.set_size3(ax, 3, 2)
         ax.get_figure().savefig(f"./fig/paper/sim_ksweep_{obs}.pdf", dpi=300)
-
-    # ------------------------------------------------------------------------------ #
-    # panel h, resource cycles
-    # ------------------------------------------------------------------------------ #
-
-    sim_resource_cycles()
 
 
 # Fig 1
@@ -1275,6 +1339,7 @@ def sim_raster_plots(
     zoom_duration=0.25,
     bs_large=20 / 1000,  # width of the gaussian kernel for rate
     threshold_factor=2.5 / 100,  # fraction of max peak height for burst
+    mark_zoomin_location=False,
     **kwargs,
 ):
 
@@ -1323,7 +1388,7 @@ def sim_raster_plots(
     ax.set_ylim(0, 80)
     ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(40))
     ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(20))
-    sns.despine(ax=ax, left=False, bottom=True, trim=True, offset=2)
+    sns.despine(ax=ax, left=False, bottom=True, trim=False, offset=2)
     ax.xaxis.set_visible(False)
 
     # ------------------------------------------------------------------------------ #
@@ -1394,6 +1459,16 @@ def sim_raster_plots(
             clip_on=True,
             lw=0.5,
             zorder=-3,
+        )
+
+    if mark_zoomin_location:
+        ph._plot_bursts_into_timeseries(
+            ax=axes[2],
+            beg_times=[zoom_time],
+            end_times=[zoom_time + zoom_duration],
+            style="markers",
+            y_offset=0.05,
+            markersize=1.5,
         )
 
     h5.close_hot()
@@ -2202,45 +2277,44 @@ def sim_prob_dist_rates_and_resources(k=5):
     return mod_adapts
 
 
-# todo
-def sim_layout_sketches_for_all_k(ax_width=1.5):
+def sim_layout_sketch(in_path, out_path, ax_width=1.5):
 
-    folder = "./dat/the_last_one/dyn/"
-    for k in [-1, 1, 5, 10]:
-        path = glob.glob(f"{folder}/*k={k}_*")[0]
-        log.info(path)
-        h5f = ph.ah.prepare_file(path)
-        ax = ph.plot_axon_layout(
-            h5f,
-            axon_kwargs=dict(color="gray", alpha=1, lw=0.1),
-            soma_kwargs=dict(ec="black", lw=0.1),
-        )
-        if k == -1:
-            cc.set_size2(ax, ax_width * 2 / 3, ax_width * 2 / 3)
-        else:
-            cc.set_size2(ax, ax_width, ax_width)
-        ax.set_xlabel("")
-        ax.set_xticks([])
-        sns.despine(ax=ax, bottom=True, left=True)
-        # ax.tick_params(axis="both", which="both", bottom=False)
-        ax.get_figure().savefig(
-            f"./fig/paper/sim_layout_sketch_{k}.png", dpi=600, transparent=True
-        )
+    h5f = ph.ah.prepare_file(in_path)
+    ax = ph.plot_axon_layout(
+        h5f,
+        axon_kwargs=dict(color="gray", alpha=1, lw=0.1),
+        soma_kwargs=dict(ec="black", lw=0.1),
+    )
+    k = re.search("_k=(-*\d+)", in_path, re.IGNORECASE).group(1)
+    if k == "-1":
+        cc.set_size2(ax, ax_width * 2 / 3, ax_width * 2 / 3)
+    else:
+        cc.set_size2(ax, ax_width, ax_width)
+    ax.set_xlabel("")
+    ax.set_xticks([])
+    sns.despine(ax=ax, bottom=True, left=True)
+    # ax.tick_params(axis="both", which="both", bottom=False)
+    ax.get_figure().savefig(f"{out_path}", dpi=600, transparent=True)
 
 
-def sim_resource_cycles():
+def sim_resource_cycles(apply_formatting=True, k_list=None):
     """
     wrapper that creates the resource plots, fig. 4 h.
 
     this is horribly slow: we import and analyse the files (rate and burst detection)
+
+    returns a nested benedict containing the matplotlib axes elements
     """
     axes = benedict()
 
-    for k in [-1, 5]:
+    if k_list is None:
+        k_list = [-1, 5]
+
+    for k in k_list:
         axes[str(k)] = benedict()
-        for rate in ["80.0", "90.0"]:
+        for rate in ["80", "90"]:
             log.info(f"Resource cycle for k={k} at {rate} Hz")
-            path = f"./dat/the_last_one/dyn/highres_stim=off_k={k}_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate={rate}_rep=001.hdf5"
+            path = f"./dat/the_last_one/dyn/highres_stim=off_k={k}_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate={rate}.0_rep=001.hdf5"
             try:
                 h5f = ah.prepare_file(path)
             except:
@@ -2265,28 +2339,29 @@ def sim_resource_cycles():
                 clip_on=False,
             )
 
-            ax.set_xlim(0.0, 1.0)
-            ax.set_ylim(0, 150)
+            if apply_formatting:
+                ax.set_xlim(0.0, 1.0)
+                ax.set_ylim(0, 150)
 
-            ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1.0))
-            ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.2))
-            ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(100))
-            ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(50))
+                ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1.0))
+                ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.2))
+                ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(100))
+                ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(50))
 
-            cc.set_size2(ax, 1.6, 1.0)
-            sns.despine(
-                ax=ax,
-                trim=False,
-                offset=2,
-                right=True,
-                top=True,
-                bottom=True if rate == "80.0" else False,
-            )
-            if rate == "80.0":
-                cc.detick(ax.xaxis)
+                cc.set_size2(ax, 1.6, 1.0)
+                sns.despine(
+                    ax=ax,
+                    trim=False,
+                    offset=2,
+                    right=True,
+                    top=True,
+                    bottom=True if rate == "80" else False,
+                )
+                if rate == "80":
+                    cc.detick(ax.xaxis)
 
-            if k == -1:
-                cc.detick(ax.yaxis, keep_ticks=True)
+                if k == -1:
+                    cc.detick(ax.yaxis, keep_ticks=True)
 
             axes[str(k)][rate] = ax
 

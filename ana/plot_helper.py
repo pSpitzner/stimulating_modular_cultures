@@ -675,6 +675,8 @@ def _plot_bursts_into_timeseries(
     style : str
         "markers" to show in and outs via small triangles
         "fill" to highlight the the background with a `fill_between`
+    y_offset: float
+        y position if style is "markers"
     """
 
     kwargs = kwargs.copy()
