@@ -20,6 +20,7 @@ import h5py
 import argparse
 import logging
 import functools
+import re
 
 import matplotlib
 # matplotlib.rcParams['font.sans-serif'] = "Arial"
@@ -881,6 +882,93 @@ def plot_initiation_site(h5f, ax=None, apply_formatting=True):
         log.debug(e)
 
     fig.tight_layout()
+
+    return ax
+
+
+def plot_resources_vs_activity(
+    h5f, ax=None, apply_formatting=True, mod_ids=None, max_traces_per_mod=100, **kwargs
+):
+    """
+    Helper to illustrate the charge-and-release cycle of synaptic resources.
+
+    # Parameters
+    mod_ids : list of modules to plot e.g. `[0, 1, 2]`, default all modules in h5f
+    max_traces_per_mod : only show this many traces for each module
+    """
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.get_figure()
+    if apply_formatting:
+        ax.set_xlabel("Synaptic resources")
+        ax.set_ylabel("Population rate (Hz)")
+
+    if mod_ids is None:
+        mod_ids = h5f["ana.mod_ids"]
+
+    for mdx, mod_id in enumerate(mod_ids):
+        mod = f"mod_{mod_id}"
+        assert f"ana.rates.module_level.{mod}" in h5f.keypaths(), f"rate for {mod} needed"
+        n_ids = np.where(h5f["data.neuron_module_id"][:] == mod_id)[0]
+        mod_adapt = np.mean(h5f["data.state_vars_D"][n_ids, :], axis=0)
+        mod_rate = h5f[f"ana.rates.module_level.{mod}"]
+
+        # we need matching time steps. unfortunately, i have not saved the dt of the
+        # state vars, so this is a bit fishy.
+        stride = int(
+            np.round(
+                (h5f["data.state_vars_time"][1] - h5f["data.state_vars_time"][0])
+                / h5f["ana.rates.dt"]
+            )
+        )
+        print(f"strides for rate vs adaptation: {stride}")
+        assert (
+            len(mod_rate) == len(mod_adapt) * stride
+        ), "len of rate v resources did not match."
+        assert stride >= 1, "NotImplemented"
+        # in our default parameters, stride is 50:
+        # rate dt is 0.5 ms
+        # adaptation dt is 25 ms
+        # subsample or smooth over window ?
+        mod_rate = mod_rate[0 : len(mod_rate) : stride]
+
+        adap_times = h5f["data.state_vars_time"][:]
+
+        try:
+            clr = h5f["ana.mod_colors"][mod_id]
+        except:
+            clr = "black"
+        plot_kwargs = {"color": clr, "alpha": 0.3}
+        plot_kwargs.update(kwargs)
+
+        split_by_burst = True
+        if split_by_burst and stride == 1:
+            beg_times = h5f["ana.bursts.system_level.beg_times"]
+            end_times = h5f["ana.bursts.system_level.end_times"]
+            last_end = 0.0
+            num_traces = 0
+            for bdx in range(0, len(end_times)):
+                if num_traces == max_traces_per_mod:
+                    break
+                num_traces += 1
+                next_end = end_times[bdx]
+                next_beg = beg_times[bdx]
+                # do we want the recharging part of the trace?
+                # idx = np.where((adap_times >= next_beg) & (adap_times <= next_end))
+                idx = np.where((adap_times > last_end) & (adap_times <= next_end))
+                last_end = next_end
+                ax.plot(mod_adapt[idx], mod_rate[idx], **plot_kwargs)
+            print(f"plotted {num_traces} traces for {mod}")
+
+        else:
+            ax.plot(mod_adapt, mod_rate, alpha=1, **plot_kwargs)
+            # ax.scatter(mod_rate, mod_adapt, alpha=0.6, s=0.5)
+
+        if apply_formatting:
+            ax.set_xlim(0, 1)
+            ax.set_ylim(-5, 100)
+            ax.get_figure().tight_layout()
 
     return ax
 

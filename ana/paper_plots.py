@@ -244,11 +244,17 @@ def fig_2(skip_plots=False):
         )
 
     log.debug("\n\nPairwise tests for trials\n")
-    exp_pairwise_tests_for_trials()
-
-    # log.debug("\n\nTests for joint distributions\n")
-    # exp_tests_for_joint_distributions(observables=["Fraction"])
-    # exp_tests_for_joint_distributions(observables=["Correlation Coefficient"])
+    exp_pairwise_tests_for_trials(
+        observables=[
+            "Mean Correlation",
+            "Mean IBI",
+            "Median IBI",
+            "Mean Fraction",
+            "Functional Complexity",
+            "Mean Core delays",
+            "Median Core delays",
+        ]
+    )
 
 
 def fig_3():
@@ -416,6 +422,7 @@ def fig_4(skip_rasters=True):
     times = []  # start time for the large time window of ~ 180 seconds
     zooms = []  # start time for an interesting 250 ms time window showing a burst
 
+
     coords.append(dict(k=1, rate=75, rep=1))
     zooms.append(299.5)
     times.append(0)
@@ -578,6 +585,12 @@ def fig_4(skip_rasters=True):
         ax.set_ylabel(ylabels[obs])
         cc.set_size3(ax, 3, 2)
         ax.get_figure().savefig(f"./fig/paper/sim_ksweep_{obs}.pdf", dpi=300)
+
+    # ------------------------------------------------------------------------------ #
+    # panel h, resource cycles
+    # ------------------------------------------------------------------------------ #
+
+    sim_resource_cycles()
 
 
 # Fig 1
@@ -1076,7 +1089,7 @@ def exp_violins_for_layouts(remove_outlier_for_ibis=True):
             else dfs[layout]["bursts"],
             category="Condition",
             observable="Core delay",
-            ylim=[0, .4],
+            ylim=[0, 0.4],
             num_swarm_points=250,
             bw=0.2,
         )
@@ -1085,7 +1098,9 @@ def exp_violins_for_layouts(remove_outlier_for_ibis=True):
         ax.set_title(f"{layout}")
         ax.set_ylim(0, 1)
         ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.05))
-        ax.get_figure().savefig(f"./fig/paper/exp_violins_core_delay_{layout}.pdf", dpi=300)
+        ax.get_figure().savefig(
+            f"./fig/paper/exp_violins_core_delay_{layout}.pdf", dpi=300
+        )
 
     return ax
 
@@ -1748,7 +1763,7 @@ def sim_resource_density_vs_noise_for_all_k(
     ndim = np.squeeze(ndims["vec_sys_hvals_resource_dist"])
     ndim_edges = np.squeeze(ndims["vec_sys_hbins_resource_dist"])[0, 0, 0, :]
 
-    ndim = ndim.sel(k_inter=1)
+    ndim = ndim.sel(k_inter=10)
     # ndim = ndim.sel(k_inter=5)
     # ndim_edges.sel(k_inter=5)
 
@@ -1774,7 +1789,7 @@ def sim_resource_density_vs_noise_for_all_k(
     # for rdx, rep in enumerate(ndim.coords["repetition"]):
     #     ax.plot(ndim_edges[0:-1], ndim[rdx, :])
 
-    centroids = ndim_edges[0:-1] + (ndim_edges[1] - ndim_edges[0])/2
+    centroids = ndim_edges[0:-1] + (ndim_edges[1] - ndim_edges[0]) / 2
     print(centroids)
 
     ndim = ndim.assign_coords(vector_observable=centroids.to_numpy())
@@ -2159,7 +2174,7 @@ def sim_prob_dist_rates_and_resources(k=5):
     for hdx, h5f in enumerate([h5f1, h5f2]):
         mod_adapts = []
         for mod_id in np.unique(h5f["data.neuron_module_id"]):
-            n_ids = np.where(h5f["data.neuron_module_id"] == mod_id)[0]
+            n_ids = np.where(h5f["data.neuron_module_id"][:] == mod_id)[0]
             mod_adapts.append(np.mean(h5f["data.state_vars_D"][n_ids, :], axis=0))
         mod_adapts = np.hstack(mod_adapts)
 
@@ -2211,6 +2226,71 @@ def sim_layout_sketches_for_all_k(ax_width=1.5):
         ax.get_figure().savefig(
             f"./fig/paper/sim_layout_sketch_{k}.png", dpi=600, transparent=True
         )
+
+
+def sim_resource_cycles():
+    """
+    wrapper that creates the resource plots, fig. 4 h.
+
+    this is horribly slow: we import and analyse the files (rate and burst detection)
+    """
+    axes = benedict()
+
+    for k in [-1, 5]:
+        axes[str(k)] = benedict()
+        for rate in ["80.0", "90.0"]:
+            log.info(f"Resource cycle for k={k} at {rate} Hz")
+            path = f"./dat/the_last_one/dyn/highres_stim=off_k={k}_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate={rate}_rep=001.hdf5"
+            try:
+                h5f = ah.prepare_file(path)
+            except:
+                path = path.replace("highres_", "")
+                h5f = ah.prepare_file(path)
+
+            # we keep hardcoding these values. TODO: set as global variables or sth
+            bs_large = 20 / 1000  # width of the gaussian kernel for rate
+            threshold_factor = 2.5 / 100  # fraction of max peak height for burst
+            ah.find_rates(h5f, bs_large=bs_large)
+            threshold = threshold_factor * np.nanmax(h5f["ana.rates.system_level"])
+            ah.find_system_bursts_from_global_rate(
+                h5f, rate_threshold=threshold, merge_threshold=0.1
+            )
+
+            ax = ph.plot_resources_vs_activity(
+                h5f,
+                max_traces_per_mod=80 if k == -1 else 20,
+                apply_formatting=False,
+                lw=0.5,
+                alpha=0.6,
+                clip_on=False,
+            )
+
+            ax.set_xlim(0.0, 1.0)
+            ax.set_ylim(0, 150)
+
+            ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1.0))
+            ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.2))
+            ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(100))
+            ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(50))
+
+            cc.set_size2(ax, 1.6, 1.0)
+            sns.despine(
+                ax=ax,
+                trim=False,
+                offset=2,
+                right=True,
+                top=True,
+                bottom=True if rate == "80.0" else False,
+            )
+            if rate == "80.0":
+                cc.detick(ax.xaxis)
+
+            if k == -1:
+                cc.detick(ax.yaxis, keep_ticks=True)
+
+            axes[str(k)][rate] = ax
+
+    return axes
 
 
 # ------------------------------------------------------------------------------ #
@@ -2784,15 +2864,8 @@ def _draw_error_stick(
 # ------------------------------------------------------------------------------ #
 
 
-def exp_pairwise_tests_for_trials():
+def exp_pairwise_tests_for_trials(observables):
     # observables = ["Mean Fraction", "Mean Correlation", "Functional Complexity"]
-    observables = [
-        "Mean Correlation",
-        "Mean IBI",
-        "Median IBI",
-        "Mean Fraction",
-        "Functional Complexity",
-    ]
     kwargs = dict(
         observables=observables,
         col="Condition",

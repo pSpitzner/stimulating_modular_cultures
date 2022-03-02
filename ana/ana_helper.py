@@ -1213,7 +1213,7 @@ def find_resource_order_parameters(h5f, which="all"):
     if "dist_percentiles" in which:
         mod_resources = []
         for mod_id in np.unique(h5f["data.neuron_module_id"]):
-            n_ids = np.where(h5f["data.neuron_module_id"] == mod_id)[0]
+            n_ids = np.where(h5f["data.neuron_module_id"][:] == mod_id)[0]
             mod_resources.append(np.mean(h5f["data.state_vars_D"][n_ids, :], axis=0))
         mod_resources = np.hstack(mod_resources)
         res["dist_low_end"] = np.percentile(mod_resources, q=0.5)
