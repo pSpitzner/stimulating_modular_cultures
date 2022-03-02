@@ -106,6 +106,8 @@ record_state_vars = ["D"]
 record_state_idxs = True # [0, 1, 2, 3]
 record_state_idxs = np.arange(0, 160)
 
+record_state_dt = 0.5 * ms
+
 # whether to record population rates
 record_rates = False
 record_rates_freq = 50 * ms   # with which time resolution should rates be written to h5
@@ -374,13 +376,13 @@ if record_state:
     else:
         # list
         rec = t2b[record_state_idxs]
-    stat_m = StateMonitor(G, record_state_vars, record=rec, dt=25 * ms)
+    stat_m = StateMonitor(G, record_state_vars, record=rec, dt=record_state_dt)
 
 if record_rates:
     rate_m = PopulationRateMonitor(G)
 
 log.info("Recording data")
-run(args.sim_duration, report="stdout", report_period=60 * 60 * second)
+run(args.sim_duration, report="stdout", report_period=60 * second)
 
 
 # ------------------------------------------------------------------------------ #
@@ -408,6 +410,8 @@ h5_data, h5_desc = tp.get_everything_as_nested_dict(return_descriptions=True)
 # meta data of this simulation
 # ------------------------------------------------------------------------------ #
 # fmt: off
+h5_data["meta.seed"] = args.seed
+
 h5_data["meta.dynamics_jA"] = jA / mV
 h5_desc["meta.dynamics_jA"] = "AMPA current strength, in mV"
 
@@ -487,6 +491,8 @@ try:
         t_axis = (stat_m.t - args.equil_duration) / second
         h5_data["data.state_vars_time"] = t_axis
         h5_desc["data.state_vars_time"] = "time axis of all state variables, in seconds"
+        h5_data["data.state_vars_dt"] = record_state_dt / second
+        h5_desc["data.state_vars_dt"] = "time step for state variable saving (seconds)"
 
         for idx, var in enumerate(record_state_vars):
             # careful to back-convert indices here
@@ -499,6 +505,7 @@ try:
 
             h5_data[f"data.state_vars_{var}"] = data.T
             h5_desc[f"data.state_vars_{var}"] = f"state variable {var}, dim 1 neurons, dim 2 value for time, recorded neurons: {record_state_idxs}"
+
 
     if record_rates:
         # we could write rates, but
