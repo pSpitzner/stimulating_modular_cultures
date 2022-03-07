@@ -81,6 +81,10 @@ matplotlib.rcParams["axes.facecolor"] = (
     0.0,
 )  # developer mode, red axes
 
+# style of error bars 'butt' or 'round'
+# "butt" gives precise errors, "round" looks much nicer but most people find it confusing.
+# https://matplotlib.org/3.1.0/gallery/lines_bars_and_markers/joinstyle.html
+_error_bar_cap_style = "butt"
 
 colors = dict()
 # colors["pre"] = "#135985"
@@ -2912,6 +2916,14 @@ def _draw_error_stick(
     kwargs.setdefault("zorder", 3)
     kwargs.setdefault("clip_on", False)
 
+    try:
+        # "butt" gives precise errors, "round" looks much nicer but most people find
+        # it confusing.
+        kwargs.setdefault("solid_capstyle", _error_bar_cap_style)
+    except:
+        kwargs.setdefault("solid_capstyle", "round")
+
+
     if outliers is not None:
         assert len(outliers) == 2
         if orientation == "h":
@@ -2928,10 +2940,17 @@ def _draw_error_stick(
     kwargs["zorder"] += 1
     kwargs["edgecolor"] = kwargs["color"]
     kwargs["color"] = "white"
-    if orientation == "h":
-        ax.scatter(mid, center, s=np.square(linewidth * 2), **kwargs)
+    if kwargs["solid_capstyle"] == "round":
+        kwargs["s"] = np.square(linewidth * 2)
     else:
-        ax.scatter(center, mid, s=np.square(linewidth * 2), **kwargs)
+        kwargs["s"] = np.square(linewidth * 1.5)
+        # kwargs["lw"] = 0.75*linewidth
+    kwargs.pop("solid_capstyle")
+
+    if orientation == "h":
+        ax.scatter(mid, center, **kwargs)
+    else:
+        ax.scatter(center, mid, **kwargs)
 
 
 # ------------------------------------------------------------------------------ #
