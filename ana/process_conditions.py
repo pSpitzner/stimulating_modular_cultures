@@ -54,6 +54,8 @@ time_bin_size_for_rij = 500 / 1000  # in seconds
 threshold_factor = dict()
 threshold_factor["exp"] = 10 / 100
 threshold_factor["exp_chemical"] = 10 / 100
+threshold_factor["exp_bic"] = 10 / 100
+
 threshold_factor["sim"] = 2.5 / 100
 threshold_factor["sim_partial"] = 2.5 / 100
 
@@ -61,6 +63,8 @@ threshold_factor["sim_partial"] = 2.5 / 100
 bs_large = dict()
 bs_large["exp"] = 200 / 1000
 bs_large["exp_chemical"] = 200 / 1000
+bs_large["exp_bic"] = 200 / 1000
+
 bs_large["sim"] = 20 / 1000
 bs_large["sim_partial"] = 20 / 1000
 
@@ -72,7 +76,7 @@ def main():
         "-t",
         dest="etype",
         required=True,
-        help="'exp', 'exp_chemical', or 'sim'",
+        help="'exp', 'exp_chemical', 'exp_bic', or 'sim'",
     )
     parser.add_argument(
         "-i",
@@ -102,6 +106,8 @@ def main():
             conditions[layout] = ["1_pre", "2_stim", "3_post"]
     elif args.etype == "exp_chemical":
         conditions["KCl_1b"] = ["1_KCl_0mM", "2_KCl_2mM"]
+    elif args.etype == "exp_bic":
+        conditions["Bicuculline_1b"] = ["1_spon_Bic_20uM", "2_stim_Bic_20uM"]
     elif args.etype == "sim":
         # number of axons between modules as layouts
         # first rate gets stimulated "off" value assigned, second becomes "on"
