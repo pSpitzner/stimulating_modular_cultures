@@ -101,8 +101,11 @@ colors["90 Hz"] = colors["stim"]
 # colors["post"] = "#80A4BB"
 # colors["post"] = "#99CCB5"
 colors["post"] = "#8C668C"
+
 colors["KCl_0mM"] = "gray"
 colors["KCl_2mM"] = "gray"
+colors["spon_Bic_20uM"] = colors["pre"]
+colors["stim_Bic_20uM"] = colors["stim"]
 
 colors["rij_within_stim"] = "#e09f3e"
 colors["rij_within_nonstim"] = "#135985"
@@ -948,11 +951,19 @@ def exp_sticks_across_layouts(
     observable="Functional Complexity",
     hide_labels=True,
     set_ylim=True,
+    apply_formatting=True,
+    layouts=None,
+    conditions=None,
+    save_path="automatic",
 ):
     log.info(f"")
     log.info(f"# sticks for {observable}")
-    layouts = ["1b", "3b", "merged"]
-    conditions = ["pre", "stim", "post"]
+
+    if layouts is None:
+        layouts = ["1b", "3b", "merged"]
+    if conditions is None:
+        conditions = ["pre", "stim", "post"]
+
     # we want the precalculated summary statistics of each trial
     dfs = dict()
     for key in layouts:
@@ -997,7 +1008,7 @@ def exp_sticks_across_layouts(
         trials = dfs[etype]["Trial"].unique()
         for trial in trials:
             df = dfs[etype].loc[dfs[etype]["Trial"] == trial]
-            assert len(df) == len(layouts)
+            # assert len(df) == len(layouts)
             x = []
             y = []
             for idx, row in df.iterrows():
@@ -1062,25 +1073,39 @@ def exp_sticks_across_layouts(
         ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
         ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
     ax.set_xlim(-0.25, 3.5)
-    sns.despine(ax=ax, bottom=True, left=False, trim=True, offset=5)
+    if apply_formatting:
+        sns.despine(ax=ax, bottom=True, left=False, trim=True, offset=5)
     ax.set_xticks([])
     if not hide_labels:
         ax.set_ylabel(f"{observable}")
 
     cc.set_size3(ax, 2.2, 2)
 
-    ax.get_figure().savefig(f"./fig/paper/exp_layouts_sticks_{observable}.pdf", dpi=300)
+    if save_path is "automatic":
+        save_path = f"./fig/paper/exp_layouts_sticks_{observable}.pdf"
+    if save_path is not None:
+        ax.get_figure().savefig(save_path, dpi=300)
 
     return ax
 
 
 # Fig 2
-def exp_violins_for_layouts(remove_outlier_for_ibis=True):
+def exp_violins_for_layouts(remove_outlier_for_ibis=True, layouts=None):
+
+    if layouts is None:
+        layouts = ["single-bond", "triple-bond", "merged"]
 
     dfs = dict()
-    dfs["single-bond"] = load_pd_hdf5("./dat/exp_out/1b.hdf5")
-    dfs["triple-bond"] = load_pd_hdf5("./dat/exp_out/3b.hdf5")
-    dfs["merged"] = load_pd_hdf5("./dat/exp_out/merged.hdf5")
+    if "single-bond" in layouts:
+        dfs["single-bond"] = load_pd_hdf5("./dat/exp_out/1b.hdf5")
+    if "triple-bond" in layouts:
+        dfs["triple-bond"] = load_pd_hdf5("./dat/exp_out/3b.hdf5")
+    if "merged" in layouts:
+        dfs["merged"] = load_pd_hdf5("./dat/exp_out/merged.hdf5")
+    if "chem" in layouts:
+        dfs["chem"] = load_pd_hdf5("./dat/exp_out/KCl_1b.hdf5")
+    if "bic" in layouts:
+        dfs["bic"] = load_pd_hdf5("./dat/exp_out/Bicuculline_1b.hdf5")
 
     def apply_formatting(ax, ylim=True, trim=True):
         if ylim:
@@ -1096,6 +1121,7 @@ def exp_violins_for_layouts(remove_outlier_for_ibis=True):
         ax.set_xticks([])
         cc.set_size2(ax, 3, 2.0)
 
+    # Event size, used to be called "Fraction" in the data frame
     for layout in dfs.keys():
         log.info(f"")
         log.info(f"# {layout}")
@@ -1107,9 +1133,12 @@ def exp_violins_for_layouts(remove_outlier_for_ibis=True):
             num_swarm_points=250,
             bw=0.2,
         )
+        # we changed the naming convention while writing
+        ax.set_ylabel("Event size")
         apply_formatting(ax)
         ax.get_figure().savefig(f"./fig/paper/exp_violins_fraction_{layout}.pdf", dpi=300)
 
+    # Correlation coefficients
     for layout in dfs.keys():
         log.info(f"")
         log.info(f"# {layout}")
@@ -1124,6 +1153,7 @@ def exp_violins_for_layouts(remove_outlier_for_ibis=True):
         apply_formatting(ax)
         ax.get_figure().savefig(f"./fig/paper/exp_violins_rij_{layout}.pdf", dpi=300)
 
+    # IBI
     for layout in dfs.keys():
         log.info(f"")
         log.info(f"# {layout}")
@@ -1137,12 +1167,16 @@ def exp_violins_for_layouts(remove_outlier_for_ibis=True):
             num_swarm_points=250,
             bw=0.2,
         )
+        # we changed the naming convention while writing
+        ax.set_ylabel("Inter-event-interval")
         ax.set_ylim(0, 70)
+        # ax.set_ylim(0, 200)
         apply_formatting(ax, ylim=False, trim=False)
         ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(20))
         ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(10))
         ax.get_figure().savefig(f"./fig/paper/exp_violins_ibi_{layout}.pdf", dpi=300)
 
+    # Core delay
     for layout in dfs.keys():
         # if layout == "merged":
         #     # for the merged system, we do not have modules, but the analysis still works
@@ -1161,10 +1195,8 @@ def exp_violins_for_layouts(remove_outlier_for_ibis=True):
             num_swarm_points=250,
             bw=0.2,
         )
-        # apply_formatting(ax)
-        # ax.set_yscale("log")
-        ax.set_title(f"{layout}")
-        ax.set_ylim(0, 1)
+        ax.set_ylim(0, 0.4)
+        apply_formatting(ax, ylim=False, trim=False)
         ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.05))
         ax.get_figure().savefig(
             f"./fig/paper/exp_violins_core_delay_{layout}.pdf", dpi=300
@@ -1209,6 +1241,49 @@ def exp_rij_for_layouts():
         ax.get_figure().savefig(f"./fig/paper/exp_rij_barplot_{layout}.pdf", dpi=300)
 
     return ax
+
+
+# Supplemental
+def exp_sm_bicuculline():
+    exp_violins_for_layouts(layouts=["bic"])
+    kwargs = dict()
+    kwargs["hide_labels"] = False
+    kwargs["layouts"] = ["Bicuculline_1b"]
+    kwargs["conditions"] = ["spon_Bic_20uM", "stim_Bic_20uM"]
+    save_path = "./fig/paper/exp_layouts_sticks_bic"
+    ax = exp_sticks_across_layouts(
+        observable="Mean Fraction", save_path=None, **kwargs
+    )
+    ax.set_ylabel("Mean Event size")
+    ax.get_figure().savefig(f"{save_path}_fraction.pdf", dpi=300)
+
+    ax = exp_sticks_across_layouts(
+        observable="Mean Correlation", save_path=f"{save_path}_correlation.pdf", **kwargs
+    )
+    ax = exp_sticks_across_layouts(
+        observable="Mean Core delays",
+        set_ylim=False,
+        save_path=None,
+        apply_formatting=False,
+        **kwargs,
+    )
+    ax.set_ylim(0, 0.4)
+    sns.despine(ax=ax, bottom=True, left=False, trim=True, offset=5)
+    ax.get_figure().savefig(f"{save_path}_coredelays.pdf", dpi=300)
+
+    exp_pairwise_tests_for_trials(
+        observables=[
+            "Mean Correlation",
+            "Mean IBI",
+            "Median IBI",
+            "Mean Fraction",
+            "Functional Complexity",
+            "Mean Core delays",
+            "Median Core delays",
+        ],
+        layouts = ["Bicuculline_1b"]
+    )
+
 
 
 # Fig 3
@@ -2896,6 +2971,8 @@ def _draw_error_stick(
     Use this to draw errors likes seaborns nice error bars, but using our own
     error estimates.
 
+    respects the global `_error_bar_cap_style` variable, set this to "butt" to be precise
+
     # Parameters
     ax : axis element
     center : number,
@@ -2922,7 +2999,6 @@ def _draw_error_stick(
         kwargs.setdefault("solid_capstyle", _error_bar_cap_style)
     except:
         kwargs.setdefault("solid_capstyle", "round")
-
 
     if outliers is not None:
         assert len(outliers) == 2
@@ -2958,35 +3034,41 @@ def _draw_error_stick(
 # ------------------------------------------------------------------------------ #
 
 
-def exp_pairwise_tests_for_trials(observables):
+def exp_pairwise_tests_for_trials(observables, layouts=None):
     # observables = ["Mean Fraction", "Mean Correlation", "Functional Complexity"]
     kwargs = dict(
         observables=observables,
         col="Condition",
     )
 
-    layouts = ["1b", "3b", "merged"]
+    if layouts is None:
+        layouts = ["1b", "3b", "merged", "KCl_1b"]
     for layout in layouts:
         print(f"\n{layout}")
         dfs = load_pd_hdf5(f"./dat/exp_out/{layout}.hdf5")
         df = dfs["trials"]
-        _paired_sample_t_test(
-            df, col_vals=["pre", "stim"], alternatives="one-sided", **kwargs
-        )
-        _paired_sample_t_test(
-            df, col_vals=["stim", "post"], alternatives="one-sided", **kwargs
-        )
-        _paired_sample_t_test(
-            df, col_vals=["pre", "post"], alternatives="two-sided", **kwargs
-        )
 
-    layout = "KCl_1b"
-    print(f"\n{layout}")
-    dfs = load_pd_hdf5(f"./dat/exp_out/{layout}.hdf5")
-    df = dfs["trials"]
-    _paired_sample_t_test(
-        df, col_vals=["KCl_0mM", "KCl_2mM"], alternatives="one-sided", **kwargs
-    )
+        if layout in ["1b", "3b", "merged"]:
+            _paired_sample_t_test(
+                df, col_vals=["pre", "stim"], alternatives="one-sided", **kwargs
+            )
+            _paired_sample_t_test(
+                df, col_vals=["stim", "post"], alternatives="one-sided", **kwargs
+            )
+            _paired_sample_t_test(
+                df, col_vals=["pre", "post"], alternatives="two-sided", **kwargs
+            )
+
+        elif layout == "KCl_1b":
+            _paired_sample_t_test(
+                df, col_vals=["KCl_0mM", "KCl_2mM"], alternatives="one-sided", **kwargs
+            )
+        elif layout == "Bicuculline_1b":
+            _paired_sample_t_test(
+                df, col_vals=["spon_Bic_20uM", "stim_Bic_20uM"], alternatives="one-sided", **kwargs
+            )
+
+
 
 
 def _paired_sample_t_test(df, col, col_vals, observables=None, alternatives=None):

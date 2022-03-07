@@ -304,8 +304,8 @@ def load_experimental_files(path_prefix, condition="1_pre_"):
         # h5f["pd.fl"] = pd.read_csv(f"{path_prefix}{condition}/Results.csv")
 
     except Exception as e:
-        log.exception(f"{path_prefix} {condition}")
-        log.exception(e)
+        log.error(f"No fluorescence data found for {path_prefix} {condition}")
+        # log.exception(e)
 
     return prepare_file(h5f)
 
