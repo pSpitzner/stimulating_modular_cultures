@@ -232,21 +232,30 @@ def load_experimental_files(path_prefix, condition="1_pre_"):
 
     h5f = benedict()
 
-    # ROIs as neuron centers
-    rois = np.loadtxt(f"{path_prefix}/RoiSet_Cartesian.txt", delimiter=",", skiprows=1)
+    # Load spike times
+    # in this format, we have a 50 ms timestep, the column is the neuron id
+    # and the row is whether a neuron fired in this time step.
+    spikes_as_sparse = np.loadtxt(
+        f"{path_prefix}{condition}/Raster.csv", delimiter=",", skiprows=0
+    )
 
-    h5f["data.neuron_pos_x"] = rois[:, 1].copy()
-    h5f["data.neuron_pos_y"] = rois[:, 2].copy()
+    # ROIs as neuron centers
+    try:
+        rois = np.loadtxt(f"{path_prefix}/RoiSet_Cartesian.txt", delimiter=",", skiprows=1)
+
+        h5f["data.neuron_pos_x"] = rois[:, 1].copy()
+        h5f["data.neuron_pos_y"] = rois[:, 2].copy()
+    except Exception as e:
+        log.error(e)
+        log.warning(f"No ROIs found, setting all neuron position to 100um / 100 um!")
+        num_n = spikes_as_sparse.shape[1]
+        h5f["data.neuron_pos_x"] = np.ones(num_n)*100.0
+        h5f["data.neuron_pos_y"] = np.ones(num_n)*100.0
+
 
     # add some more stuff that is usually already in the meta data
     num_n = len(h5f["data.neuron_pos_x"])
     h5f["meta.topology_num_neur"] = num_n
-
-    # in this format, we have a 50 ms timestep, the column is the neuron id
-    # and the row is whether a neuron fired in this time step.
-    spikes_as_sparse = np.loadtxt(
-        f"{path_prefix}{condition}/raster.csv", delimiter=",", skiprows=0
-    )
 
     # drop first 60 seconds due to artifacts at the beginning of the recording
     spikes_as_sparse = spikes_as_sparse[1200:, :]
