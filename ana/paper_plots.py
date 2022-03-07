@@ -1116,8 +1116,11 @@ def exp_violins_for_layouts(remove_outlier_for_ibis=True, layouts=None):
         ax.tick_params(bottom=False)
         # reuse xlabel for title
         # ax.set_xlabel(f"{layout}")
-        ax.set_xlabel(f"")
-        ax.set_ylabel(f"")
+        if not show_xlabel:
+            ax.set_xlabel(f"")
+        if not show_ylabel:
+            ax.set_ylabel(f"")
+
         ax.set_xticks([])
         cc.set_size2(ax, 3, 2.0)
 
