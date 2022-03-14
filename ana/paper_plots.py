@@ -572,7 +572,7 @@ def fig_4(skip_rasters=True):
         xlim=[65, 100],
         drop_zero_len=True,
     )
-    cc.set_size2(ax, 4.0, 2.0)
+    cc.set_size2(ax, 3.5, 2.0)
     ax.get_figure().savefig("./fig/paper/sim_fractions.pdf", dpi=300)
 
     # ------------------------------------------------------------------------------ #
@@ -627,6 +627,7 @@ def fig_4(skip_rasters=True):
         # ]
         try:
             base_color = base_colors[odx]
+            assert False # we decided against colors
         except:
             base_color = "#333"
         if obs == "sys_median_any_ibis":
@@ -660,7 +661,7 @@ def fig_4(skip_rasters=True):
             ax.set_ylim(0, 0.1)
 
         ax.set_ylabel(ylabels[obs])
-        cc.set_size3(ax, 3, 2)
+        cc.set_size3(ax, 3, 2.3)
         ax.get_figure().savefig(f"./fig/paper/sim_ksweep_{obs}.pdf", dpi=300)
 
 
@@ -1254,9 +1255,7 @@ def exp_sm_bicuculline():
     kwargs["layouts"] = ["Bicuculline_1b"]
     kwargs["conditions"] = ["spon_Bic_20uM", "stim_Bic_20uM"]
     save_path = "./fig/paper/exp_layouts_sticks_bic"
-    ax = exp_sticks_across_layouts(
-        observable="Mean Fraction", save_path=None, **kwargs
-    )
+    ax = exp_sticks_across_layouts(observable="Mean Fraction", save_path=None, **kwargs)
     ax.set_ylabel("Mean Event size")
     ax.get_figure().savefig(f"{save_path}_fraction.pdf", dpi=300)
 
@@ -1284,9 +1283,8 @@ def exp_sm_bicuculline():
             "Mean Core delays",
             "Median Core delays",
         ],
-        layouts = ["Bicuculline_1b"]
+        layouts=["Bicuculline_1b"],
     )
-
 
 
 # Fig 3
@@ -3068,10 +3066,11 @@ def exp_pairwise_tests_for_trials(observables, layouts=None):
             )
         elif layout == "Bicuculline_1b":
             _paired_sample_t_test(
-                df, col_vals=["spon_Bic_20uM", "stim_Bic_20uM"], alternatives="one-sided", **kwargs
+                df,
+                col_vals=["spon_Bic_20uM", "stim_Bic_20uM"],
+                alternatives="one-sided",
+                **kwargs,
             )
-
-
 
 
 def _paired_sample_t_test(df, col, col_vals, observables=None, alternatives=None):
