@@ -244,9 +244,9 @@ def fig_2(skip_plots=False):
         exp_sticks_across_layouts(
             observable="Mean IBI", set_ylim=False, hide_labels=False
         )
-        exp_sticks_across_layouts(
-            observable="Median IBI", set_ylim=False, hide_labels=False
-        )
+        # exp_sticks_across_layouts(
+        #     observable="Median IBI", set_ylim=False, hide_labels=False
+        # )
         exp_sticks_across_layouts(
             observable="Mean Core delays", set_ylim=False, hide_labels=False
         )
@@ -256,11 +256,11 @@ def fig_2(skip_plots=False):
         observables=[
             "Mean Correlation",
             "Mean IBI",
-            "Median IBI",
+            # "Median IBI",
             "Mean Fraction",
             "Functional Complexity",
             "Mean Core delays",
-            "Median Core delays",
+            # "Median Core delays",
         ]
     )
 
@@ -627,7 +627,7 @@ def fig_4(skip_rasters=True):
         # ]
         try:
             base_color = base_colors[odx]
-            assert False # we decided against colors
+            assert False  # we decided against colors
         except:
             base_color = "#333"
         if obs == "sys_median_any_ibis":
@@ -664,6 +664,206 @@ def fig_4(skip_rasters=True):
         cc.set_size3(ax, 3, 2.3)
         ax.get_figure().savefig(f"./fig/paper/sim_ksweep_{obs}.pdf", dpi=300)
 
+
+def table_for_violins():
+    """
+    Generate a table (pandas data frame) that holds all analysis results with calculated
+    errors. serves as a consistency check when comparing to the plots.
+
+    `table.to_excel("/Users/paul/Desktop/test.xls", engine="openpyxl")`
+    """
+
+    # collect conditions, since they depend on the layout and where they are stored
+    ref = benedict()
+    ref["single-bond.conditions"] = ["pre", "stim", "post"]
+    ref["tripe-bond.conditions"] = ["pre", "stim", "post"]
+    ref["merged.conditions"] = ["pre", "stim", "post"]
+    ref["chem.conditions"] = ["KCl_0mM", "KCl_2mM"]
+    ref["bic.conditions"] = ["spon_Bic_20uM", "stim_Bic_20uM"]
+    # simulation of the partial stimulation in only two modules
+    ref["simulation.conditions"] = ["0.0 Hz", "20.0 Hz"]
+
+    # where are the data frames stored
+    ref["single-bond.df_path"] = "./dat/exp_out/1b.hdf5"
+    ref["tripe-bond.df_path"] = "./dat/exp_out/3b.hdf5"
+    ref["merged.df_path"] = "./dat/exp_out/merged.hdf5"
+    ref["chem.df_path"] = "./dat/exp_out/KCl_1b.hdf5"
+    ref["bic.df_path"] = "./dat/exp_out/Bicuculline_1b.hdf5"
+    ref["simulation.df_path"] = "./dat/sim_partial_out_20/k=5.hdf5"
+
+    # depending on the observable, we may need a different data frame and different
+    # querying. so we use retreiving functions of the form
+    # f(layout, condition) -> observable value, upper error, lower error
+    def f(df_path, df_key, condition, observable):
+        try:
+            df = load_pd_hdf5(input_path=df_path, keys=df_key)
+            df = df.query(f"`Condition` == '{condition}'")
+            mid, std, percentiles = ah.pd_bootstrap(
+                df,
+                obs=observable,
+                num_boot=500,
+                func=np.nanmedian,
+                percentiles=[50, 2.5, 97.5],
+            )
+            # using 50% as the median, so we have median of medians
+            return percentiles
+        except:
+            # should not occur, but I added new analysis and I dont want older data
+            # versions to crash this
+            return [np.nan, np.nan, np.nan]
+
+    observables = benedict()
+    observables["Correlation Coefficient"] = lambda layout, condition: f(
+        df_path=ref[f"{layout}.df_path"],
+        df_key="rij",
+        condition=condition,
+        observable="Correlation Coefficient",
+    )
+    observables["Event size"] = lambda layout, condition: f(
+        df_path=ref[f"{layout}.df_path"],
+        df_key="bursts",
+        condition=condition,
+        observable="Fraction",
+    )
+    observables["Inter-event-interval"] = lambda layout, condition: f(
+        df_path=ref[f"{layout}.df_path"],
+        df_key="bursts",
+        condition=condition,
+        observable="Inter-burst-interval",
+    )
+    observables["Core delay"] = lambda layout, condition: f(
+        df_path=ref[f"{layout}.df_path"],
+        df_key="bursts",
+        condition=condition,
+        observable="Core delay",
+    )
+
+    table = pd.DataFrame(columns=["layout", "condition", "percentile"] + [obs for obs in observables.keys()])
+
+    for layout in tqdm(ref.keys(), desc="layouts"):
+        for condition in tqdm(ref[f"{layout}.conditions"], leave=False):
+            new_rows = pd.DataFrame(dict(
+                layout=[layout]*3, condition=[condition]*3, percentile=["50", "2.5", "97.5"]
+            ))
+            for obs in observables.keys():
+                new_rows[obs] = observables[obs](layout, condition)
+
+            table = table.append(new_rows, ignore_index=True)
+
+    table = table.set_index(["layout", "condition", "percentile"])
+    return table
+
+
+def table_for_trials():
+    """
+    Generate a table (pandas data frame) that holds all analysis results with calculated
+    errors. serves as a consistency check when comparing to the plots.
+
+    cf. `sticks_across_layouts()`
+    """
+
+    # collect conditions, since they depend on the layout and where they are stored
+    ref = benedict()
+    ref["single-bond.conditions"] = ["pre", "stim", "post"]
+    ref["tripe-bond.conditions"] = ["pre", "stim", "post"]
+    ref["merged.conditions"] = ["pre", "stim", "post"]
+    ref["chem.conditions"] = ["KCl_0mM", "KCl_2mM"]
+    ref["bic.conditions"] = ["spon_Bic_20uM", "stim_Bic_20uM"]
+    ref["simulation.conditions"] = ["0.0 Hz", "20.0 Hz"]
+
+    # where are the data frames stored
+    ref["single-bond.df_path"] = "./dat/exp_out/1b.hdf5"
+    ref["tripe-bond.df_path"] = "./dat/exp_out/3b.hdf5"
+    ref["merged.df_path"] = "./dat/exp_out/merged.hdf5"
+    ref["chem.df_path"] = "./dat/exp_out/KCl_1b.hdf5"
+    ref["bic.df_path"] = "./dat/exp_out/Bicuculline_1b.hdf5"
+    ref["simulation.df_path"] = "./dat/sim_partial_out_20/k=5.hdf5"
+
+    # same idea as before, but we use the trial data frame, where every row is a trial
+    def f(df_path, condition, observable, df_key="trials"):
+        try:
+            df = load_pd_hdf5(input_path=df_path, keys=df_key)
+            trials = df["Trial"].unique()
+            df = df.query(f"`Condition` == '{condition}'")
+            assert len(df) == len(trials)
+            mid, std, percentiles = ah.pd_bootstrap(
+                df,
+                obs=observable,
+                num_boot=500,
+                # here we use the mean
+                func=np.nanmean,
+                # and will not further percentiles
+                percentiles=[50, 2.5, 97.5],
+            )
+            df_max = np.nanmax(df[observable])
+            df_min = np.nanmin(df[observable])
+            error = std / np.sqrt(len(trials))
+
+            res = dict()
+            res["mean"] = mid
+            res["sem"] = error
+            res["max"] = df_max
+            res["min"] = df_min
+            res["trials"] = len(trials)
+        except:
+            # should not occur, but I added new analysis and I dont want older data
+            # versions to crash this
+            res = dict()
+            res["mean"] = np.nan
+            res["sem"] = np.nan
+            res["max"] = np.nan
+            res["min"] = np.nan
+            res["trials"] = np.nan
+        return res
+
+
+    observables = benedict()
+    observables["Correlation Coefficient"] = lambda layout, condition: f(
+        df_path=ref[f"{layout}.df_path"],
+        condition=condition,
+        observable="Mean Correlation",
+    )
+    observables["Event size"] = lambda layout, condition: f(
+        df_path=ref[f"{layout}.df_path"],
+        condition=condition,
+        observable="Mean Fraction",
+    )
+    observables["Inter-event-interval"] = lambda layout, condition: f(
+        df_path=ref[f"{layout}.df_path"],
+        condition=condition,
+        observable="Mean IBI",
+    )
+    observables["Core delays"] = lambda layout, condition: f(
+        df_path=ref[f"{layout}.df_path"],
+        condition=condition,
+        observable="Mean Core delays",
+    )
+    observables["Functional Complexity"] = lambda layout, condition: f(
+        df_path=ref[f"{layout}.df_path"],
+        condition=condition,
+        observable="Functional Complexity",
+    )
+
+    table = pd.DataFrame(columns=["layout", "condition", "kind"] + [obs for obs in observables.keys()])
+
+    for layout in tqdm(ref.keys(), desc="layouts"):
+        for condition in tqdm(ref[f"{layout}.conditions"], leave=False):
+            new_rows = pd.DataFrame(dict(
+                layout=[layout]*4, condition=[condition]*4, kind=
+                ["mean", "sem", "max", "min"]
+            ))
+            trials = 0
+            for obs in observables.keys():
+                res = observables[obs](layout, condition)
+                trials = res.pop("trials")
+                new_rows[obs] = res.values()
+            # we want trials as multi index, so reorder a bit
+            new_rows["trials"]=[trials]*4
+
+            table = table.append(new_rows, ignore_index=True)
+
+    table = table.set_index(["layout", "trials", "condition", "kind"])
+    return table
 
 # Fig 1
 def exp_raster_plots(
@@ -807,8 +1007,8 @@ def exp_raster_plots(
 
     return fig
 
-
-def exp_chemical_vs_opto(observable="Mean Fraction", df="trials"):
+# this became impossible to tweak further when using seaborn
+def exp_chemical_vs_opto_old(observable="Mean Fraction", df="trials"):
     chem = load_pd_hdf5("./dat/exp_out/KCl_1b.hdf5")
     opto = load_pd_hdf5("./dat/exp_out/1b.hdf5")
 
@@ -858,7 +1058,7 @@ def exp_chemical_vs_opto(observable="Mean Fraction", df="trials"):
     return ax
 
 
-# this becomes impossible to tweak further when using seaborn
+
 def exp_chemical_vs_opto2(observable="Functional Complexity"):
     chem = load_pd_hdf5("./dat/exp_out/KCl_1b.hdf5")
     opto = load_pd_hdf5("./dat/exp_out/1b.hdf5")
@@ -2473,18 +2673,26 @@ def load_pd_hdf5(input_path, keys=None):
     trials : summary statistics, each row is a trial (or repetition in simulations)
     """
 
+    single_key = False
     if keys is None:
         keys = ["bursts", "isis", "rij", "rij_paired", "drij", "trials"]
+    elif isinstance(keys, str):
+        single_key = True
+        keys = [keys]
     res = dict()
     for key in keys:
         try:
             res[key] = pd.read_hdf(input_path, f"/data/df_{key}")
             if remove_outlier and "1b.hdf5" in input_path:
                 res[key] = res[key].query("`Trial` != '210405_C'")
-        except:
+        except Exception as e:
+            # log.exception(e)
             log.debug(f"/data/df_{key} not in {input_path}, skipping")
 
-    return res
+    if single_key:
+        return res[keys[0]]
+    else:
+        return res
 
 
 def custom_violins(
@@ -2598,7 +2806,7 @@ def custom_violins(
                 df_for_cat,
                 obs=observable,
                 num_boot=500,
-                func=np.nanmedian,
+                func=np.nanmean,
                 percentiles=[2.5, 50, 97.5],
             )
 
