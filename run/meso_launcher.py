@@ -52,22 +52,6 @@ def main():
             )
 
 
-def simulate_model_noise_cpp(hvalues, tf, coupling_folder, coupling=0.3, rseed=815):
-
-    cpp_exe = f"{cpp_exe_folder}/mesoscopic_model"
-    if not os.path.isfile(cpp_exe):
-        print(f"Compiling cpp binary {cpp_exe}")
-        os.makedirs(cpp_exe_folder, exist_ok=True)
-        os.system(f"g++ -O3 ./src/mesoscopic_model.cpp -o {cpp_exe}")
-
-    for j, (h, t) in tqdm(
-        enumerate(zip(hvalues, tf)), desc="noise", leave=False, total=len(tf)
-    ):
-        os.system(
-            f"{cpp_exe} {h} {coupling} {t} 0.0 2 0 {rseed} {coupling_folder}/noise{j}"
-        )
-
-
 def simulate_model_noise_python(hvalues, tf, coupling_folder, coupling=0.3, rseed=815):
 
     for j, (h, t) in tqdm(
@@ -82,6 +66,22 @@ def simulate_model_noise_python(hvalues, tf, coupling_folder, coupling=0.3, rsee
             ext_str_=h,
             w0_=coupling,
             sigma_=0.15,
+        )
+
+
+def simulate_model_noise_cpp(hvalues, tf, coupling_folder, coupling=0.3, rseed=815):
+
+    cpp_exe = f"{cpp_exe_folder}/mesoscopic_model"
+    if not os.path.isfile(cpp_exe):
+        print(f"Compiling cpp binary {cpp_exe}")
+        os.makedirs(cpp_exe_folder, exist_ok=True)
+        os.system(f"g++ -O3 ./src/mesoscopic_model.cpp -o {cpp_exe}")
+
+    for j, (h, t) in tqdm(
+        enumerate(zip(hvalues, tf)), desc="noise", leave=False, total=len(tf)
+    ):
+        os.system(
+            f"{cpp_exe} {h} {coupling} {t} 0.0 2 0 {rseed} {coupling_folder}/noise{j}"
         )
 
 
