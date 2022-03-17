@@ -22,6 +22,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+import xarray as xr
 import palettable
 
 from benedict import benedict
@@ -31,6 +32,7 @@ from scipy import stats
 import plot_helper as ph
 import ana_helper as ah
 import ndim_helper as nh
+import meso_helper as mh
 import colors as cc
 import hi5 as h5
 
@@ -2685,6 +2687,123 @@ def sim_resource_cycles(apply_formatting=True, k_list=None):
             axes[str(k)][rate] = ax
 
     return axes
+
+
+# ------------------------------------------------------------------------------ #
+# Mesoscopic model
+# ------------------------------------------------------------------------------ #
+
+
+def meso_obs_for_all_couplings(dset, obs):
+    """
+    Wrapper tjat reproduces the plots of the microscopic plots ~ fig 4:
+    Correlations and event size with error bars across realizations.
+    Uses `meso_xr_with_errors`
+
+    # Parameters
+    dset : xarray dataset
+        from `mh.process_data_from_folder` (or loaded from disk)
+    obs : str,
+        one of the observables in `dset.data_vars`
+
+    # Example
+    ```
+    import paper_plots as pp
+    import xarray as xr
+
+    dset = xr.load_dataset("./dat/meso_out/analysed.hdf5"
+    ax = pp.meso_obs_for_all_couplings(dset, "event_size")
+    ```
+    """
+    ax = None
+    for cdx, coupling in enumerate(dset["coupling"].to_numpy()):
+        ax = meso_xr_with_errors(
+            dset[obs].sel(coupling=coupling),
+            ax=ax,
+            color=cc.alpha_to_solid_on_bg(
+                "#333", cc.fade(cdx, dset["coupling"].size, invert=True)
+            ),
+            label=f"w = {coupling:.1f}",
+        )
+    ax.legend()
+
+    if obs == "correlation_coefficient":
+        ax.set_ylim(0, 1)
+    elif obs == "event_size":
+        ax.set_ylim(1, 4)
+    cc.set_size2(ax, w=3.0, h=2.2)
+
+
+def meso_xr_with_errors(da, ax=None, apply_formatting=True, **kwargs):
+    """
+    Plot an observable provided via an xarray, with error bars over repetitions
+
+    `da` needs to have specified all coordinate points except for two dimensions,
+    the one that becomes the x axis and `repetitions`
+
+    Use e.g. `da.loc[dict(dim_0=0.1, dim_2=0)]`
+
+    # Parameters
+    da : xarray.DataArray
+    """
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.get_figure()
+
+    assert (
+        len(da.shape) == 2
+    ), f"specify all coordinates except repetitions and one other {da.coords}"
+
+    # this would fail if we only have one data point to plot
+    x_name = [cs for cs in da.coords if (cs != "repetition" and da[cs].size > 1)][0]
+    num_reps = da["repetition"].size
+
+    if apply_formatting:
+        ax.set_ylabel(da.name)
+        ax.set_xlabel(x_name)
+
+    plot_kwargs = kwargs.copy()
+    plot_kwargs.setdefault("color", "#333")
+    plot_kwargs.setdefault("fmt", "o")
+    plot_kwargs.setdefault("markersize", 1.5)
+    plot_kwargs.setdefault("elinewidth", 0.5)
+    plot_kwargs.setdefault("capsize", 1.5)
+
+    ax.errorbar(
+        x=da[x_name],
+        y=da.mean(dim="repetition", skipna=True),
+        yerr=da.std(dim="repetition") / np.sqrt(num_reps),
+        **plot_kwargs,
+    )
+
+    return ax
+
+
+def meso_resource_cycle(input_file):
+    """
+    Wrapper to plot a resource cycle for a single file created from the mesoscopic model
+    """
+    if isinstance(input_file, str):
+        h5f = mh.prepare_file(input_file)
+        mh.find_system_bursts_and_module_contributions(h5f)
+        mh.module_contribution(h5f)
+    else:
+        h5f = input_file
+
+    ax = ph.plot_resources_vs_activity(
+        h5f, apply_formatting=False, max_traces_per_mod=20, clip_on=False
+    )
+    ax.set_xlabel("Synaptic resources")
+    ax.set_ylabel("Module rate")
+    ax.set_title(input_file)
+    ax.set_xlim(0, 5)
+    ax.set_ylim(-0.4, 4)
+    cc.set_size3(ax, 3.5, 3)
+
+    sns.despine(ax=ax, trim=True, offset=5)
+
+    return ax
 
 
 # ------------------------------------------------------------------------------ #
