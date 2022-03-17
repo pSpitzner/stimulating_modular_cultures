@@ -673,6 +673,8 @@ def table_for_violins():
     `table.to_excel("/Users/paul/Desktop/test.xls", engine="openpyxl")`
     """
 
+    np.random.seed(314)
+
     # collect conditions, since they depend on the layout and where they are stored
     ref = benedict()
     ref["single-bond.conditions"] = ["pre", "stim", "post"]
@@ -738,13 +740,20 @@ def table_for_violins():
         observable="Core delay",
     )
 
-    table = pd.DataFrame(columns=["layout", "condition", "percentile"] + [obs for obs in observables.keys()])
+    table = pd.DataFrame(
+        columns=["layout", "condition", "percentile"]
+        + [obs for obs in observables.keys()]
+    )
 
     for layout in tqdm(ref.keys(), desc="layouts"):
         for condition in tqdm(ref[f"{layout}.conditions"], leave=False):
-            new_rows = pd.DataFrame(dict(
-                layout=[layout]*3, condition=[condition]*3, percentile=["50", "2.5", "97.5"]
-            ))
+            new_rows = pd.DataFrame(
+                dict(
+                    layout=[layout] * 3,
+                    condition=[condition] * 3,
+                    percentile=["50", "2.5", "97.5"],
+                )
+            )
             for obs in observables.keys():
                 new_rows[obs] = observables[obs](layout, condition)
 
@@ -761,6 +770,8 @@ def table_for_trials():
 
     cf. `sticks_across_layouts()`
     """
+
+    np.random.seed(815)
 
     # collect conditions, since they depend on the layout and where they are stored
     ref = benedict()
@@ -797,7 +808,7 @@ def table_for_trials():
             )
             df_max = np.nanmax(df[observable])
             df_min = np.nanmin(df[observable])
-            error = std / np.sqrt(len(trials))
+            error = std
 
             res = dict()
             res["mean"] = mid
@@ -815,7 +826,6 @@ def table_for_trials():
             res["min"] = np.nan
             res["trials"] = np.nan
         return res
-
 
     observables = benedict()
     observables["Correlation Coefficient"] = lambda layout, condition: f(
@@ -844,26 +854,32 @@ def table_for_trials():
         observable="Functional Complexity",
     )
 
-    table = pd.DataFrame(columns=["layout", "condition", "kind"] + [obs for obs in observables.keys()])
+    table = pd.DataFrame(
+        columns=["layout", "condition", "kind"] + [obs for obs in observables.keys()]
+    )
 
     for layout in tqdm(ref.keys(), desc="layouts"):
         for condition in tqdm(ref[f"{layout}.conditions"], leave=False):
-            new_rows = pd.DataFrame(dict(
-                layout=[layout]*4, condition=[condition]*4, kind=
-                ["mean", "sem", "max", "min"]
-            ))
+            new_rows = pd.DataFrame(
+                dict(
+                    layout=[layout] * 4,
+                    condition=[condition] * 4,
+                    kind=["mean", "sem", "max", "min"],
+                )
+            )
             trials = 0
             for obs in observables.keys():
                 res = observables[obs](layout, condition)
                 trials = res.pop("trials")
                 new_rows[obs] = res.values()
             # we want trials as multi index, so reorder a bit
-            new_rows["trials"]=[trials]*4
+            new_rows["trials"] = [trials] * 4
 
             table = table.append(new_rows, ignore_index=True)
 
     table = table.set_index(["layout", "trials", "condition", "kind"])
     return table
+
 
 # Fig 1
 def exp_raster_plots(
@@ -1007,6 +1023,7 @@ def exp_raster_plots(
 
     return fig
 
+
 # this became impossible to tweak further when using seaborn
 def exp_chemical_vs_opto_old(observable="Mean Fraction", df="trials"):
     chem = load_pd_hdf5("./dat/exp_out/KCl_1b.hdf5")
@@ -1056,7 +1073,6 @@ def exp_chemical_vs_opto_old(observable="Mean Fraction", df="trials"):
     ax.get_figure().savefig("./fig/paper/exp_chem_vs_opto.pdf", dpi=300)
 
     return ax
-
 
 
 def exp_chemical_vs_opto2(observable="Functional Complexity"):
@@ -1126,7 +1142,7 @@ def exp_chemical_vs_opto2(observable="Functional Complexity"):
             )
             df_max = np.nanmax(df[observable])
             df_min = np.nanmin(df[observable])
-            error = std / np.sqrt(len(trials))
+            error = std
 
             _draw_error_stick(
                 ax,
@@ -1243,7 +1259,8 @@ def exp_sticks_across_layouts(
             )
             df_max = np.nanmax(df[observable])
             df_min = np.nanmin(df[observable])
-            error = std / np.sqrt(len(trials))
+            # error = std / np.sqrt(len(trials))
+            error = std
 
             p_str = ""
             p_str += f"| {stim:>9} "
