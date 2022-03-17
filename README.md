@@ -39,9 +39,9 @@ ax = pp.meso_obs_for_all_couplings(dset, "event_size")
 Locations where code was moved:
 
 - the models (cpp and py) are located in `src/`
-- the the launcher is in `run/meso_launcher.py`
-- the analysis and input/output are in `ana/meso_helper.py`
-- the plot functions are in `ana/paper_plots.py` where there is a big "meso" heading near line 2692 :P
+- the the launcher is in [`run/meso_launcher.py`](./run/meso_launcher.py)
+- the analysis and input/output are in [`ana/meso_helper.py`](ana/meso_helper.py)
+- the plot functions are in `ana/paper_plots.py` where there is a big "meso" heading [near line 2692](ana/paper_plots.py#L2692) :P
 
 Major changes:
 
