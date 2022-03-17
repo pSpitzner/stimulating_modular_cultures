@@ -15,6 +15,7 @@ import tempfile
 import numbers
 import numpy as np
 import pandas as pd
+import networkx as nx
 
 # from hi5 import BetterDict
 import hi5 as h5
@@ -308,6 +309,36 @@ def load_experimental_files(path_prefix, condition="1_pre_"):
         # log.exception(e)
 
     return prepare_file(h5f)
+
+
+def nx_graph_from_connectivity_matrix(h5f):
+    """
+    use the sparse connectivity matrix of the h5f and construct a directed graph in the
+    networkx format.
+
+    The graph gets saved to `'ana.networkx.G'`
+    """
+
+    # add nodes, generate positions in usable format
+    G = nx.DiGraph()
+    G.add_nodes_from(h5f["ana.neuron_ids"])
+    pos = dict()
+    for idx, n in enumerate(h5f["ana.neuron_ids"]):
+        pos[n] = (
+            h5f["data.neuron_pos_x"][idx],
+            h5f["data.neuron_pos_y"][idx],
+        )
+
+    # add edges
+    try:
+        # for large data, we might not have loaded the matrix.
+        G.add_edges_from(h5f["data.connectivity_matrix_sparse"][:])
+    except Exception as e:
+        log.info(e)
+
+    # add to h5f
+    h5f["ana.networkx.G"] = G
+    h5f["ana.networkx.pos"] = pos
 
 
 # depricating, do this more explicitly
@@ -2443,8 +2474,9 @@ def pd_bootstrap(
         the percentiles to return. default is [2.5, 50, 97.5]
 
     # Returns:
-    mean : mean across all drawn bootstrap samples
+    mean : mean across all drawn bootstrap samples (mean of `func` over each sample)
     std : std
+    percentiles : list of percentiles requested
 
     """
 
