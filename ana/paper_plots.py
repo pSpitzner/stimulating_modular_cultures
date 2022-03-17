@@ -409,7 +409,7 @@ def fig_3():
     fig.savefig(f"./fig/paper/sim_raster_stim_02_0hz.pdf", dpi=900)
 
 
-def fig_4(skip_rasters=True):
+def fig_4(skip_rasters=True, skip_cycles=True):
 
     # set the global seed once for each figure to produce consistent results, when
     # calling repeatedly.
@@ -534,26 +534,45 @@ def fig_4(skip_rasters=True):
     # panel h, resource cycles
     # ------------------------------------------------------------------------------ #
 
-    if not skip_rasters:
+    if not skip_cycles:
         # sim_resource_cycles(apply_formatting=True, k_list=[-1, 5])
         # for main manuscript, defaults above are fine, but for SI bigger overview:
+        global axes
         axes = sim_resource_cycles(apply_formatting=False, k_list=[-1, 1, 5, 10])
         for k in axes.keys():
             for rate in axes[k].keys():
-                ax = axes[k][f"{rate}.0"]
+                ax = axes[k][f"{rate}"]
                 k_str = f"merged" if k == "-1" else f"k={k}"
-                ax.set_title(f"{k_str}    {rate}Hz")
-                cc.set_size3(ax, 1.6, 1.4)
+                # ax.set_title(f"{k_str}    {rate}Hz")
+                cc.set_size2(ax, 1.6, 1.4)
                 ax.set_xlim(0.0, 1.0)
-                if k == "-1":
-                    ax.set_ylim(0, 200)
-                else:
-                    ax.set_ylim(0, 200)
                 ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1.0))
                 ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.2))
+                # workaround to avoid cutting off figure content but limiting axes:
+                # set, then despine, then set again
+                ax.set_ylim(0, 150)
+                ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(150))
+                ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(50))
+
+                sns.despine(
+                    ax=ax,
+                    trim=True,
+                    offset=2,
+                    top=True,
+                    right=True,
+                    bottom=False,
+                )
+                # if k != "1":
+                #     cc.detick(ax.yaxis, keep_ticks=True)
+
+                if rate == "80":
+                    cc.detick(ax.xaxis, keep_ticks=False, keep_labels=False)
+                    sns.despine(ax=ax, bottom=True)
+
+                ax.set_ylim(0, 199)
                 ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(100))
                 ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(50))
-                cc.detick(ax.yaxis, keep_ticks=True)
+
                 ax.get_figure().savefig(
                     f"./fig/paper/sim_resource_cycle_{k_str}_{rate}Hz.pdf",
                     transparent=False,
@@ -660,8 +679,9 @@ def fig_4(skip_rasters=True):
         if "sys_orderpar_fano" in obs:
             ax.set_ylim(0, 0.1)
 
-        ax.set_ylabel(ylabels[obs])
-        cc.set_size3(ax, 3, 2.3)
+        if show_ylabel:
+            ax.set_ylabel(ylabels[obs])
+        cc.set_size3(ax, 2.5, 1.8)
         ax.get_figure().savefig(f"./fig/paper/sim_ksweep_{obs}.pdf", dpi=300)
 
 
@@ -2032,8 +2052,10 @@ def sim_obs_vs_noise_for_all_k(
 
         ax.plot(x[selects], y[selects], **plot_kwargs)
 
-        ax.set_xlabel("Synaptic noise rate (Hz)")
-        ax.set_ylabel(observable)
+        if show_ylabel:
+            ax.set_ylabel(observable)
+        if show_xlabel:
+            ax.set_xlabel("Synaptic noise rate (Hz)")
 
     return ax
 
@@ -2605,7 +2627,7 @@ def sim_resource_cycles(apply_formatting=True, k_list=None):
     axes = benedict()
 
     if k_list is None:
-        k_list = [-1, 5]
+        k_list = [-1, 1, 5, 10]
 
     for k in k_list:
         axes[str(k)] = benedict()
@@ -2657,7 +2679,7 @@ def sim_resource_cycles(apply_formatting=True, k_list=None):
                 if rate == "80":
                     cc.detick(ax.xaxis)
 
-                if k == -1:
+                if k != 1:
                     cc.detick(ax.yaxis, keep_ticks=True)
 
             axes[str(k)][rate] = ax
