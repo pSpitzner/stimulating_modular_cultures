@@ -1,3 +1,30 @@
+# Notes for Victor
+
+I did quite a bit of refactoring.
+A simple example of what works now: launch python from base directory,
+```
+import sys
+sys.path.append("./ana")
+sys.path.append("./run")
+
+import meso_launcher as launcher
+import meso_helper as mh
+import plot_helper as ph
+import ana_helper as ah
+
+# simulate,
+# for the example you can ctrl-c after the first iteration of the noise is done
+launcher.main()
+
+h5f = mh.prepare_file("./dat/meso_in/coup0.10-0/noise0.hdf5")
+mh.find_system_bursts_and_module_contributions(h5f)
+fig = ph.overview_dynamic(h5f)
+fig.axes[-1].set_ylim(0, 5)
+
+
+```
+
+
 # Stimulating Modular Cultures
 
 The code is structured into folders as follows:

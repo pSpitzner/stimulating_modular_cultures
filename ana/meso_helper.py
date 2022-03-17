@@ -10,6 +10,7 @@ import os
 import sys
 import glob
 import re
+import functools
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -31,7 +32,7 @@ warnings.filterwarnings("ignore")  # suppress numpy warnings
 
 
 # ------------------------------------------------------------------------------ #
-# Prep files in the needed format
+# I/O
 # ------------------------------------------------------------------------------ #
 
 
@@ -43,26 +44,19 @@ def prepare_file(file_path):
     - file_path: string where the CSV or hdf5 file is located
     """
 
-    # this checks file type and loads
+    # this checks file type and loads that raw pandas data frame
+    # also does module index shift, if needed, so we start with `mod_0`
     df = _load_if_path(file_path)
 
     # Create a dictionary and store the names of DF columns
     h5f = benedict()
 
+    # to get many of pauls analysis working, we can pretend every module has
+    # only one neuron
+    h5f["data.neuron_module_id"] = np.arange(4)
     h5f["ana.mods"] = [f"mod_{m}" for m in range(0, 4)]
     h5f["ana.mod_ids"] = np.arange(4)
-    h5f["data.neuron_module_id"] = np.arange(4)
-
-    # ps: we need an index shift because I used a different 0-convetion for modules
-    def mapper(col):
-        regex = re.search("mod_(\d+)", col, re.IGNORECASE)
-        if regex:
-            mod_id = int(regex.group(1))
-            return col.replace(f"mod_{mod_id}", f"mod_{mod_id-1}")
-        else:
-            return col
-
-    df.rename(columns=mapper, inplace=True)
+    h5f["ana.neuron_ids"] = np.arange(4)
 
     # keep a copy of the original pandas data frame
     # ps: to simplify, I removed the dict_argument everywhere since we did not use it.
@@ -89,6 +83,60 @@ def prepare_file(file_path):
     h5f["ana.mod_colors"] = [f"C{x}" for x in range(0, len(h5f["ana.mods"]))]
 
     return h5f
+
+
+def write_xr_dset_to_hdf5(dset, output_path, **kwargs):
+    """
+    Wrapper to write xarray Dataset to disk as hdf5 with Pauls preferred default
+    arguments (mainly compression with zlib for all variables)
+
+    to write a DataArray, you can cast beforehand e.g.
+    `my_array.to_dataset(name="data")`
+
+    to load back
+    `dset = xr.load_dataset("/path/to/file.hdf5")`
+
+    # Parameters
+    kwargs : dict, passed to `xr.Dataset.to_netcdf()`
+    """
+    # enable compression
+    encoding = {d: {"zlib": True, "complevel": 9} for d in dset.data_vars}
+
+    dset.to_netcdf(
+        output_path, format="NETCDF4", engine="h5netcdf", encoding=encoding, **kwargs
+    )
+
+
+def _load_if_path(raw):
+    """
+    Wrapper that loads the file (`raw`) to pandas data frame if it is not loaded, yet
+    """
+
+    if isinstance(raw, pd.DataFrame):
+        return raw
+    else:
+        assert isinstance(raw, str), "provide a loaded pandas dataframe or file path"
+
+    if ".csv" in raw:
+        df = pd.read_csv(raw)
+    elif ".hdf5" in raw:
+        df = pd.read_hdf(raw, f"/dataframe")
+
+    # we may need an index shift for older data,
+    # because my analysis assumes modules start at index 0, not 1
+    if "mod_0" not in df.columns:
+
+        def mapper(col):
+            regex = re.search("mod_(\d+)", col, re.IGNORECASE)
+            if regex:
+                mod_id = int(regex.group(1))
+                return col.replace(f"mod_{mod_id}", f"mod_{mod_id-1}")
+            else:
+                return col
+
+        df.rename(columns=mapper, inplace=True)
+
+    return df
 
 
 # ------------------------------------------------------------------------------ #
@@ -118,10 +166,88 @@ def process_data_from_file(file_path, processing_functions, labels=None):
     return y
 
 
-# ps: currently not used, afaik
-def process_data_from_folder(
-    folder_path, processing_functions, file_extension=".hdf5"
-):
+# ps: a semi-minor todo is to use meta data and more meaningful filenames
+def process_data_from_folder(input_folder):
+    """
+    Calls `process_data_from_file` on all the files in the given folder and returns
+    an xarray dataset
+
+    The structure we get by default from `run/meso_launcher` is
+    ```
+    input_folder
+      coup0.10-0
+          noise0.hdf5
+          noise1.hdf5
+      coup0.10-1
+    ```
+    0.10 is the coupling value, -0 and 1 are the repetitions
+    and the integer after noise is the noise value
+
+    # Returns
+    dset : xarray DataSet
+    """
+
+    # collect the folders and files
+    # the `/**/` for all subdirectories is only supported by python >= 3.5
+    candidates = glob.glob(
+        os.path.abspath(os.path.expanduser(input_folder + "/**/*.hdf5"))
+    )
+
+    couplings = []
+    noises = []
+    reps = []
+
+    # fetch the coordinates we may find in our folders, in order to create a 3d xarray
+    for cdx, candidate in enumerate(candidates):
+        regex = re.search("coup(\d+.\d+)-(\d+)/noise(\d+).hdf5", candidate, re.IGNORECASE)
+        coupling = float(regex.group(1))
+        rep = int(regex.group(2))
+        noise = int(regex.group(3))
+
+        if coupling not in couplings:
+            couplings.append(coupling)
+        if noise not in noises:
+            noises.append(noise)
+        if rep not in reps:
+            reps.append(rep)
+
+    log.info(f"found {len(couplings)} couplings, {len(noises)} noises, {len(reps)} reps")
+
+    # create coords that work with xarrays
+    coords = dict()
+    coords["repetition"] = np.sort(reps)
+    coords["coupling"] = np.sort(couplings)
+    coords["noise"] = np.sort(noises)
+
+    # lets have an xarray dataset that has an array for every scalar observable
+    observables = ["correlation_coefficient", "event_size"]
+    dset = xr.Dataset(coords=coords)
+    for obs in observables:
+        dset[obs] = xr.DataArray(np.nan, coords=dset.coords)
+
+    # assigning default variables makes it easer to parallelise via dask, if needed later
+    f = functools.partial(
+        process_data_from_file,
+        processing_functions=[f_correlation_coefficients, f_event_size],
+        labels=observables,
+    )
+
+    for candidate in tqdm(candidates, desc="analysing files"):
+        regex = re.search("coup(\d+.\d+)-(\d+)/noise(\d+).hdf5", candidate, re.IGNORECASE)
+        coupling = float(regex.group(1))
+        rep = int(regex.group(2))
+        noise = int(regex.group(3))
+        cs = dict(noise=noise, coupling=coupling, repetition=rep)
+
+        results = f(candidate)
+        for obs in results.keys():
+            dset[obs].loc[cs] = results[obs]
+
+    return dset
+
+
+# ps: old version currently not used, afaik
+def _process_data_from_folder(folder_path, processing_functions, file_extension=".hdf5"):
     """
     similar to `process_data_from_file` but this uses all files in the provided folder and extracts the index from the file name.
 
@@ -150,7 +276,7 @@ def process_data_from_folder(
     for f in processing_functions:
         y[f.__name__] = np.ones(len(candidates)) * np.nan
 
-    # print(candidates, os.path.abspath(os.path.expanduser(folder_path)))
+    # log.info(candidates, os.path.abspath(os.path.expanduser(folder_path)))
     for cdx, candidate in enumerate(candidates):
 
         # ~/path/to/noise17.csv
@@ -160,7 +286,7 @@ def process_data_from_folder(
             fdx = fdx.group(1)
         else:
             fdx = -1
-            print(f"no file index found for {candidate}")
+            log.error(f"no file index found for {candidate}")
         x[cdx] = fdx
 
         # read victors format
@@ -174,7 +300,7 @@ def process_data_from_folder(
         # Apply function to data
         for f in processing_functions:
             y[f.__name__][cdx] = f(raw)
-        # print(cdx, raw, y)
+        # log.info(cdx, raw, y)
 
         del raw
 
@@ -198,7 +324,7 @@ def f_correlation_coefficients(raw, return_matrix=False):
 
     raw = _load_if_path(raw)
 
-    act = raw[["mod_1", "mod_2", "mod_3", "mod_4"]].to_numpy()
+    act = raw[["mod_0", "mod_1", "mod_2", "mod_3"]].to_numpy()
 
     # plt.figure()
     # plt.plot(act[:,0])
@@ -232,41 +358,41 @@ def f_event_size(raw):
     h5f = prepare_file(raw)
     # `module_contribution` retuns a list of how many modules contributed
     # (round about the length of detected events)
-    contrib = module_contribution(h5f, 1.0, area_min=0.7, roll_window=0.5)
+    contrib = find_system_bursts_and_module_contributions(
+        h5f, 1.0, area_min=0.7, roll_window=0.5
+    )
 
     return np.nanmean(contrib)
 
 
 # this guy breaks convention
-def module_contribution(
-    data,
-    system_thres,
+# before was called `module_contribution`
+# I adapted this a bit to not return anything, but rather add the info to the h5f
+# structure. This makes it more similar to what we have in the `ana_helper.py`
+def find_system_bursts_and_module_contributions(
+    h5f,
+    system_thres=1.0,
     roll_window=0.5,
-    area_min=1.0,
-    write_back_burst_times=True,
+    area_min=0.7,
 ):
     """
     This function computes how many modules contributed to each system-wide burst using area overlap.
     Parameters
-    - data: benedict containing all information (or raw dataframe, in which case we call `prepare_file(data)`)
+    - h5f: benedict containing all information (or raw dataframe, in which case we call `prepare_file(h5f)`)
     - system_thres: float, threshold to consider system-wide burst
     - roll_window: in seconds, width of rolling average kernel
     - area_min: how much area do we consider to see if a module contributed.
     """
 
-    if isinstance(data, pd.DataFrame) or isinstance(data, str):
-        h5f = prepare_file(data)
-    else:
-        h5f = data
+    if isinstance(h5f, pd.DataFrame) or isinstance(h5f, str):
+        h5f = prepare_file(h5f)
 
     dt = h5f["ana.rates.dt"]
     n_roll = int(roll_window / dt)
 
     # Get total rate and module rate
     datacols = h5f["ana.mods"]
-    smoothrate = (
-        h5f[f"data.raw_df"][datacols].mean(axis=1).rolling(n_roll).mean().values
-    )
+    smoothrate = h5f[f"data.raw_df"][datacols].mean(axis=1).rolling(n_roll).mean().values
     smoothcluster = h5f[f"data.raw_df"][datacols].rolling(n_roll).mean().values
 
     # Filter total rate and label with a different tag each burst
@@ -276,61 +402,87 @@ def module_contribution(
     # Get where are these tags positioned
     unique, label_events = np.unique(features, return_index=True)
     del unique
-    # print(features[1150:1370])
-    # print(system_thres)
-    # print(smoothrate[1150:1370])
 
+    # Burst times
+    # -----------
     # paul: label events contains integer start times of bursts (rate above threshold)
     label_events = label_events[1:]  # (from 1 onwards, 0 means no cluster)
-    if write_back_burst_times:
-        # for now we only need to find cycles, so its okay to reuse times
-        beg_times = label_events*dt
-        end_times = label_events*dt
-        beg_times = np.append(beg_times, np.inf)
-        end_times = np.insert(end_times, 0, np.nan)
-        h5f["ana.bursts.system_level.beg_times"] = beg_times
-        h5f["ana.bursts.system_level.end_times"] = end_times
 
+    # indices of burst begins
+    beg_idx = label_events
+    end_idx = list()
 
+    # ps: i assume that we can get the indices of end times of the bursts this way:
+    for i in range(0, len(beg_idx)):
+        burst = beg_idx[i]
+        try:
+            next_burst = beg_idx[i + 1]
+        except:
+            next_burst = len(smoothrate) - 1
+        burst_duration = len(np.where(smoothrate[burst:next_burst] >= system_thres)[0])
+        end_idx.append(burst + burst_duration)
+    end_idx = np.array(end_idx)
+
+    beg_times = beg_idx * dt
+    end_times = end_idx * dt
+    h5f["ana.bursts.system_level.beg_times"] = beg_times.tolist()
+    h5f["ana.bursts.system_level.end_times"] = end_times.tolist()
+
+    # Contributions / Sequences
+    # -------------------------
     # Now that we know where burst start we can go through them
-    contribution = np.zeros(label_events.size - 1, dtype=int)
-    for j in range(label_events.size - 1):
-        burst = label_events[j]
-        next_burst = label_events[j + 1]
+    contribution = list()
+    sequences = list()
+    areas = list()
+    # victors hack: use the burst beg_times as spike times.
+    # if we save them as spike times, we can use the raster plot from plot_helper.py
+    # spiketimes are a 2d array, nan-padded
+    spiketimes = np.ones(shape=(4, len(beg_times))) * np.nan
 
-        # Total area over the threshold given by this burst
-        filter_positive = np.where(smoothrate[burst:next_burst] >= system_thres)[
-            0
-        ]  # Find where the module is above threshold inside this cluster
-        filter_positive += burst  # Set the indices correctly, starting in threshold, to recover them later from full series
-
-        filtered = smoothrate[filter_positive]
-        # area_burst =  0.5*np.sum(filtered[1:] + filtered[:-1] - 2*system_thres)
+    for bdx in range(0, len(beg_idx)):
+        beg = beg_idx[bdx]
+        end = end_idx[bdx]
 
         # Get contribution from each module
         area_contrib = np.empty(4)
         for c in range(4):
-            filtered = smoothcluster[:, c][filter_positive]
+            filtered = smoothcluster[:, c][beg:end]
             filtered = filtered[filtered >= system_thres]
             area_contrib[c] = 0.5 * np.sum(
                 filtered[1:] + filtered[:-1]
             )  # - 2*system_thres)
 
         area_contrib /= np.sum(area_contrib)
-        # print(4*area_contrib)
-        contribution[j] = int((4 * area_contrib > area_min).sum())
+        areas.append(4 * area_contrib)
 
+        # this gives us the number of contributing modules
+        contribution.append(int((4 * area_contrib > area_min).sum()))
 
-    return contribution
+        # Sequences are not ordered but they are also used to find out which
+        # module contributed to which bursts
+        seq = tuple(np.where(4 * area_contrib > area_min)[0])
+        sequences.append(seq)
+
+        for mod_id in range(0, 4):
+            if mod_id in seq:
+                spiketimes[mod_id, bdx] = beg_times[bdx]
+
+    h5f["ana.bursts.system_level.module_sequences"] = sequences
+    h5f["data.spiketimes"] = np.sort(spiketimes)
+
+    # these are so far unused but may come in handy
+    h5f["ana.bursts.areas"] = areas
+    h5f["ana.bursts.contributions"] = contribution
+
+    return h5f
+
 
 # ------------------------------------------------------------------------------ #
 # Others
 # ------------------------------------------------------------------------------ #
 
 
-def fourier_transform(
-    h5f, t_sti_start=600.0, t_sti_end=1200.0, dataroll=10, avroll=5
-):
+def fourier_transform(h5f, t_sti_start=600.0, t_sti_end=1200.0, dataroll=10, avroll=5):
     """
     This function performs a Fourier transform of the data provided.
     Parameters
@@ -363,16 +515,3 @@ def fourier_transform(
     half = freq.size // 2
 
     return (freq[:half], pandasfourier[:half])
-
-
-def _load_if_path(raw):
-    """
-    Wrapper that loads the file (`raw`) to pandas data frame if it is not loaded, yet
-    """
-    if not isinstance(raw, str):
-        return raw
-
-    if ".csv" in raw:
-        return pd.read_csv(raw)
-    elif ".hdf5" in raw:
-        return pd.read_hdf(raw, f"/dataframe")
