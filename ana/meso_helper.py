@@ -175,16 +175,24 @@ def process_data_from_folder(input_folder):
     The structure we get by default from `run/meso_launcher` is
     ```
     input_folder
-      coup0.10-0
-          noise0.hdf5
-          noise1.hdf5
-      coup0.10-1
+        coup0.10-0
+            noise0.hdf5
+            noise1.hdf5
+        coup0.10-1
+            ...
     ```
     0.10 is the coupling value, -0 and 1 are the repetitions
     and the integer after noise is the noise value
 
     # Returns
     dset : xarray DataSet
+
+    # Example
+    ```
+    import meso_helper as mh
+    dset = mh.process_data_from_folder("./dat/meso_in/")
+    mh.write_xr_dset_to_hdf5(dset, "./dat/meso_out/analysed.hdf5")
+    ```
     """
 
     # collect the folders and files
@@ -356,13 +364,9 @@ def f_event_size(raw):
     raw = _load_if_path(raw)
     # lets reuse some of victors tricks
     h5f = prepare_file(raw)
-    # `module_contribution` retuns a list of how many modules contributed
-    # (round about the length of detected events)
-    contrib = find_system_bursts_and_module_contributions(
-        h5f, 1.0, area_min=0.7, roll_window=0.5
-    )
+    find_system_bursts_and_module_contributions(h5f)
 
-    return np.nanmean(contrib)
+    return np.nanmean(h5f["ana.bursts.contributions"])
 
 
 # this guy breaks convention
@@ -376,12 +380,29 @@ def find_system_bursts_and_module_contributions(
     area_min=0.7,
 ):
     """
-    This function computes how many modules contributed to each system-wide burst using area overlap.
-    Parameters
-    - h5f: benedict containing all information (or raw dataframe, in which case we call `prepare_file(h5f)`)
-    - system_thres: float, threshold to consider system-wide burst
-    - roll_window: in seconds, width of rolling average kernel
-    - area_min: how much area do we consider to see if a module contributed.
+    Detect burst start- and end-times using Vicotrs area overlap method.
+    From those, we find which module contributes to which burst.
+    Modifies h5f in place and add a couple of entries
+
+    # Parameters:
+    h5f : benedict
+        containing all information (or raw dataframe, in which case we call `prepare_file(h5f)`)
+    system_thres : float,
+        threshold to consider system-wide burst
+    roll_window : float,
+        in seconds, width of rolling average kernel
+    area_min : flaot,
+        how much area do we consider to see if a module contributed.
+
+    # Returns
+    h5f : benedict
+        with additional / overwritten entires:
+        - h5f["ana.bursts.system_level.beg_times"]
+        - h5f["ana.bursts.system_level.end_times"]
+        - h5f["ana.bursts.system_level.module_sequences"]
+        - h5f["data.spiketimes"]
+        - h5f["ana.bursts.areas"]
+        - h5f["ana.bursts.contributions"]
     """
 
     if isinstance(h5f, pd.DataFrame) or isinstance(h5f, str):
@@ -408,11 +429,11 @@ def find_system_bursts_and_module_contributions(
     # paul: label events contains integer start times of bursts (rate above threshold)
     label_events = label_events[1:]  # (from 1 onwards, 0 means no cluster)
 
-    # indices of burst begins
+    # indices of burst begin-times and end-times
     beg_idx = label_events
     end_idx = list()
 
-    # ps: i assume that we can get the indices of end times of the bursts this way:
+    # now get the end times
     for i in range(0, len(beg_idx)):
         burst = beg_idx[i]
         try:
@@ -430,7 +451,6 @@ def find_system_bursts_and_module_contributions(
 
     # Contributions / Sequences
     # -------------------------
-    # Now that we know where burst start we can go through them
     contribution = list()
     sequences = list()
     areas = list()
@@ -458,8 +478,9 @@ def find_system_bursts_and_module_contributions(
         # this gives us the number of contributing modules
         contribution.append(int((4 * area_contrib > area_min).sum()))
 
-        # Sequences are not ordered but they are also used to find out which
-        # module contributed to which bursts
+        # Sequences are not ordered but they are also used by some of
+        # pauls functions to find out which  module contributed
+        # to which bursts
         seq = tuple(np.where(4 * area_contrib > area_min)[0])
         sequences.append(seq)
 

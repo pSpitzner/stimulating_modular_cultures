@@ -1,7 +1,7 @@
 # Notes for Victor
 
 I did quite a bit of refactoring.
-A simple example of what works now: launch python from base directory,
+A simple example of what works now: launch python from base directory, then
 ```
 import sys
 sys.path.append("./ana")
@@ -21,9 +21,41 @@ mh.find_system_bursts_and_module_contributions(h5f)
 fig = ph.overview_dynamic(h5f)
 fig.axes[-1].set_ylim(0, 5)
 
+# plot a resource cycle
+pp.meso_resource_cycle(h5f)
 
+# to analyse all data and save
+dset = mh.process_data_from_folder("./dat/meso_in/")
+mh.write_xr_dset_to_hdf5(dset, "./dat/meso_out/analysed.hdf5")
+
+# and to load back in
+import xarray as xr
+dset = xr.load_dataset("./dat/meso_out/analysed.hdf5"
+
+# plot event size or rij
+ax = pp.meso_obs_for_all_couplings(dset, "event_size")
 ```
 
+Locations where code was moved:
+
+- the models (cpp and py) are located in `src/`
+- the the launcher is in `run/meso_launcher.py`
+- the analysis and input/output are in `ana/meso_helper.py`
+- the plot functions are in `ana/paper_plots.py` where there is a big "meso" heading near line 2692 :P
+
+Major changes:
+
+- I restructured the launcher and have not tested the cpp.
+- The `src/mesoscopic_model.py` now writes hdf5 files for compression and all code that relies on it has been updated accordingly - it should handle the old `.csv` and the new `.hdf5` just fine.  (If you want to add this to cpp, too I can provide some resources. For now, that does not seem important.)
+- My code has the convention to start counting modules with `mod_0`. As a workaround, the data loader (`ana/meso_helper.py/_load_if_path()`) now makes an index shift whenever it does not find `mod_0` as a column.
+- For preparing the data, I updated `read_csv_and_format` (for consistency, now called `prepare_file` in the `meso_helper.py`).
+- Reworked the `module_contribution` function, now called `find_system_bursts_and_module_contributions`. Together, the two functions generate a few more details of the `h5f`, which allows more of the microscopic plot functions to work.
+
+Notes:
+- Depending on how much we want to persue this, we should come up with a better conventions for storing the simulation files. (its quite easy to write / extract parameter values either to metat data of hdf5 or to filenames via regex)
+- For combining across many realizations I use [xarrays](https://docs.xarray.dev/en/stable/user-guide/data-structures.html#dataset). Super cool stuff highly commended.
+    - xarray dataframes are just n-dimensional numpy arrays with labels
+    - xarray datasets are essentially a dict of multiple such frames that share the same coordinate systems (here I use one data frame for each observable)
 
 # Stimulating Modular Cultures
 
