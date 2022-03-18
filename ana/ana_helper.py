@@ -242,7 +242,9 @@ def load_experimental_files(path_prefix, condition="1_pre_"):
 
     # ROIs as neuron centers
     try:
-        rois = np.loadtxt(f"{path_prefix}/RoiSet_Cartesian.txt", delimiter=",", skiprows=1)
+        rois = np.loadtxt(
+            f"{path_prefix}/RoiSet_Cartesian.txt", delimiter=",", skiprows=1
+        )
 
         h5f["data.neuron_pos_x"] = rois[:, 1].copy()
         h5f["data.neuron_pos_y"] = rois[:, 2].copy()
@@ -250,9 +252,8 @@ def load_experimental_files(path_prefix, condition="1_pre_"):
         log.error(e)
         log.warning(f"No ROIs found, setting all neuron position to 100um / 100 um!")
         num_n = spikes_as_sparse.shape[1]
-        h5f["data.neuron_pos_x"] = np.ones(num_n)*100.0
-        h5f["data.neuron_pos_y"] = np.ones(num_n)*100.0
-
+        h5f["data.neuron_pos_x"] = np.ones(num_n) * 100.0
+        h5f["data.neuron_pos_y"] = np.ones(num_n) * 100.0
 
     # add some more stuff that is usually already in the meta data
     num_n = len(h5f["data.neuron_pos_x"])
@@ -336,9 +337,17 @@ def nx_graph_from_connectivity_matrix(h5f):
     except Exception as e:
         log.info(e)
 
+    # communities according to modules
+    communities = []
+    for mod_id in h5f["ana.mod_ids"]:
+        communities.append(
+            np.where(h5f["data.neuron_module_id"][:] == mod_id)[0].tolist()
+        )
+
     # add to h5f
     h5f["ana.networkx.G"] = G
     h5f["ana.networkx.pos"] = pos
+    h5f["ana.networkx.communities"] = communities
 
 
 # depricating, do this more explicitly
@@ -939,7 +948,9 @@ def find_burst_core_delays(h5f, write_to_h5f=True, return_res=False):
     assert "ana.rates.system_level" in h5f.keypaths(), "system-level rate is needed"
     assert "ana.rates.module_level" in h5f.keypaths(), "module-level rates are needed"
     assert "ana.bursts.system_level" in h5f.keypaths(), "system-level bursts are needed"
-    assert "ana.bursts.system_level.module_sequences" in h5f.keypaths(), "module sequences are needed"
+    assert (
+        "ana.bursts.system_level.module_sequences" in h5f.keypaths()
+    ), "module sequences are needed"
 
     beg_times = h5f["ana.bursts.system_level.beg_times"]
     end_times = h5f["ana.bursts.system_level.end_times"]
@@ -1226,7 +1237,7 @@ def find_resource_order_parameters(h5f, which="all"):
             "fano_population",
             "baseline_neuron",
             "baseline_population",
-            "dist_percentiles"
+            "dist_percentiles",
         ]
 
     res = dict()
@@ -1261,14 +1272,32 @@ def find_resource_order_parameters(h5f, which="all"):
         res["dist_high_mid"] = np.percentile(mod_resources, q=75)
         res["dist_high_end"] = np.percentile(mod_resources, q=99.5)
         res["dist_median"] = np.percentile(mod_resources, q=50)
-        hist, edges = np.histogram(mod_resources, bins=100, range=(0,1))
+        hist, edges = np.histogram(mod_resources, bins=100, range=(0, 1))
         res["dist_hist"] = hist
         res["dist_edges"] = edges
         idx = np.argmax(hist)
-        res["dist_max"] = (edges[idx] + edges[idx + 1])/2
+        res["dist_max"] = (edges[idx] + edges[idx + 1]) / 2
 
     return res
 
+
+def find_modularity(h5f):
+    """
+    Networks with high modularity have dense connections between the nodes within modules
+    but sparse connections between nodes in different modules. [wiki]
+
+    We use networkx instead of reimplementing this.
+
+    Communities are our modules so we can skip the community detection through e.g.
+    louvain partitioning `networkx.algorithms.community.louvain_communities`
+    """
+
+    if "ana.networkx.communities" not in h5f.keypaths():
+        nx_graph_from_connectivity_matrix(h5f)
+
+    return nx.algorithms.community.modularity(
+        G=h5f["ana.networkx.G"], communities=h5f["ana.networkx.communities"], weight=None
+    )
 
 
 # ------------------------------------------------------------------------------ #

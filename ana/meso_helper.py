@@ -413,6 +413,7 @@ def find_system_bursts_and_module_contributions(
 
     # Get total rate and module rate
     datacols = h5f["ana.mods"]
+    # we could do this from the already calculated system-level rate, right?
     smoothrate = h5f[f"data.raw_df"][datacols].mean(axis=1).rolling(n_roll).mean().values
     smoothcluster = h5f[f"data.raw_df"][datacols].rolling(n_roll).mean().values
 

@@ -116,6 +116,7 @@ def all_in_one(candidate=None):
         res["sys_orderpar_dist_high_end"] = 1
         res["sys_orderpar_dist_median"] = 1
         res["sys_orderpar_dist_max"] = 1
+        res["sys_modularity"] = 1
 
         # histograms, use "vec" prefix to indicate that higher dimensional data
         res["vec_sys_hbins_participating_fraction"] = 21
@@ -314,6 +315,9 @@ def all_in_one(candidate=None):
     except:
         C = np.nan
     res["mod_num_spikes_in_bursts_1"] = C
+
+    # modularity
+    res["sys_modularity"] = ah.find_modularity(h5f)
 
     # order parameters
     ops = ah.find_resource_order_parameters(h5f)
