@@ -335,7 +335,9 @@ def nx_graph_from_connectivity_matrix(h5f):
         # for large data, we might not have loaded the matrix.
         G.add_edges_from(h5f["data.connectivity_matrix_sparse"][:])
     except Exception as e:
-        log.warning("Could not set Graph edges because connectivity matrix was not loaded.")
+        log.warning(
+            "Could not set Graph edges because connectivity matrix was not loaded."
+        )
 
     # communities according to modules
     communities = []

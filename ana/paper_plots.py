@@ -258,11 +258,11 @@ def fig_2(skip_plots=False):
         observables=[
             "Mean Correlation",
             "Mean IBI",
-            # "Median IBI",
+            "Median IBI",
             "Mean Fraction",
             "Functional Complexity",
             "Mean Core delays",
-            # "Median Core delays",
+            "Median Core delays",
         ]
     )
 
@@ -3409,7 +3409,7 @@ def exp_pairwise_tests_for_trials(observables, layouts=None):
     )
 
     if layouts is None:
-        layouts = ["1b", "3b", "merged", "KCl_1b"]
+        layouts = ["1b", "3b", "merged", "KCl_1b",  "Bicuculline_1b"]
     for layout in layouts:
         print(f"\n{layout}")
         dfs = load_pd_hdf5(f"./dat/exp_out/{layout}.hdf5")

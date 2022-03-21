@@ -130,15 +130,15 @@ def all_in_one(candidate=None):
         res["vec_sys_hvals_resource_dist"] = 100
 
         # correlation coefficients, within
-        for mod in [0, 1, 2, 3]:
-            # 40 neurons per module, count pairs only once, exclude 20 self-to-self
-            # 40^2 / 2 - 20
-            res[f"vec_rij_within_{mod}"] = 780
+        # for mod in [0, 1, 2, 3]:
+        #     # 40 neurons per module, count pairs only once, exclude 20 self-to-self
+        #     # 40^2 / 2 - 20
+        #     res[f"vec_rij_within_{mod}"] = 780
 
-        # correlation coefficients, across
-        for pair in itertools.combinations("0123", 2):
-            # here just 40^2, since in different modules
-            res[f"vec_rij_across_{pair[0]}_{pair[1]}"] = 1600
+        # # correlation coefficients, across
+        # for pair in itertools.combinations("0123", 2):
+        #     # here just 40^2, since in different modules
+        #     res[f"vec_rij_across_{pair[0]}_{pair[1]}"] = 1600
 
         return res
 
@@ -244,17 +244,17 @@ def all_in_one(candidate=None):
     res["sys_mean_depletion_correlation"] = np.nanmean(rij_depletion_matrix)
     res["sys_median_depletion_correlation"] = np.nanmedian(rij_depletion_matrix)
 
-    for mod in [0, 1, 2, 3]:
-        try:
-            res[f"vec_rij_within_{mod}"] = ah.find_rij_pairs(
-                h5f, rij_matrix, pairing=f"within_group_{mod}"
-            )
-        except Exception as e:
-            log.error(e)
-            res[f"vec_rij_within_{mod}"] = np.ones(780) * np.nan
-
-    # correlation coefficients, across
     # we are not using those any more
+    # correlation coefficients, across
+    # for mod in [0, 1, 2, 3]:
+    #     try:
+    #         res[f"vec_rij_within_{mod}"] = ah.find_rij_pairs(
+    #             h5f, rij_matrix, pairing=f"within_group_{mod}"
+    #         )
+    #     except Exception as e:
+    #         log.error(e)
+    #         res[f"vec_rij_within_{mod}"] = np.ones(780) * np.nan
+
     # for pair in itertools.combinations("0123", 2):
     #     # here just 40^2, since in different modules
     #     try:

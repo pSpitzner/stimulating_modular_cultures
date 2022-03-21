@@ -157,7 +157,12 @@ def overview_dynamic(h5f, filenames=None, threshold=None, states=True, skip=[]):
 
     plot_parameter_info(h5f, axes[0])
     if not "raster" in skip:
-        plot_raster(h5f, axes[1])
+        try:
+            # this may happen for the mesoscopic model
+            plot_raster(h5f, axes[1])
+        except Exception as e:
+            log.info("Failed to plot raster")
+            log.debug(e)
     if not "rates" in skip:
         plot_module_rates(h5f, axes[2])
         plot_system_rate(h5f, axes[2])
@@ -168,9 +173,13 @@ def overview_dynamic(h5f, filenames=None, threshold=None, states=True, skip=[]):
             h5f, axes[1], apply_formatting=False, style="fill_between"
         )
     if not "init" in skip:
-        ax = plot_initiation_site(h5f, axes[4])
-        ax.xaxis.set_major_locator(plt.NullLocator())
-        ax.xaxis.set_minor_locator(plt.NullLocator())
+        try:
+            ax = plot_initiation_site(h5f, axes[4])
+            ax.xaxis.set_major_locator(plt.NullLocator())
+            ax.xaxis.set_minor_locator(plt.NullLocator())
+        except Exception as e:
+            log.info("Failed to plot initiating module")
+            log.debug(e)
 
     axes[1].set_xlabel("")
     axes[2].set_xlabel("")
@@ -178,7 +187,6 @@ def overview_dynamic(h5f, filenames=None, threshold=None, states=True, skip=[]):
     if depletion and not "depletion" in skip:
         axes[3].set_xlabel("")
         ax = plot_state_variable(h5f, axes[5], variable="D")
-        ax.set_ylim(0.0, 1)
 
     fig.tight_layout()
 
@@ -465,6 +473,10 @@ def plot_state_variable(h5f, ax=None, apply_formatting=True, variable="D", **kwa
     else:
         fig = ax.get_figure()
 
+    # check if this seems to be a quantity between
+    # 0 and one
+    geqo = False
+    leqz = False
     for mdx, m_id in enumerate(h5f["ana.mod_ids"]):
         m_dc = h5f["ana.mods"][mdx]
 
@@ -475,11 +487,13 @@ def plot_state_variable(h5f, ax=None, apply_formatting=True, variable="D", **kwa
         plot_kwargs.setdefault("color", h5f["ana.mod_colors"][m_id])
 
         # mean across neurons
-        ax.plot(
-            h5f[f"data.state_vars_time"][:],
-            np.nanmean(stat_vals[selects, :], axis=0),
-            **kwargs,
-        )
+        x = h5f[f"data.state_vars_time"][:]
+        y = np.nanmean(stat_vals[selects, :], axis=0)
+        ax.plot(x,y,**kwargs)
+        if np.any(y > 1):
+            geqo = True
+        if np.any(y < 0):
+            leqz = True
 
         # show some faint lines for individual neurons from each module
         num_examples = 0
@@ -501,6 +515,12 @@ def plot_state_variable(h5f, ax=None, apply_formatting=True, variable="D", **kwa
             ax.set_ylabel("Resources")
         else:
             ax.set_ylabel(f"state {variable}")
+
+        if (not geqo) and (not leqz):
+            ax.set_ylim(0, 1)
+        elif geqo and not (leqz):
+            ax.set_ylim(0, None)
+
         ax.set_xlabel("Time [seconds]")
         fig.tight_layout()
 

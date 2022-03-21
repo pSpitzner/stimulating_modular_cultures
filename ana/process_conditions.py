@@ -111,6 +111,8 @@ def main():
     elif args.etype == "sim":
         # number of axons between modules as layouts
         # first rate gets stimulated "off" value assigned, second becomes "on"
+        # motiviation here was to get similar IEI for all k,
+        # which occurs at different levels of noise, depending on k.
         conditions["k=5"] = ["80.0", "90.0"]  # Hz
         conditions["k=1"] = ["75.0", "85.0"]
         conditions["k=10"] = ["85.0", "92.5"]
