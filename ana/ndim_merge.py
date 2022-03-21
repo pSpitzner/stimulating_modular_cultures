@@ -146,7 +146,10 @@ def all_in_one(candidate=None):
 
     # load and process
     h5f = ah.prepare_file(
-        candidate, hot=False, skip=["connectivity_matrix", "connectivity_matrix_sparse"]
+        candidate,
+        hot=False,
+        skip=["connectivity_matrix"]
+        # skip=["connectivity_matrix", "connectivity_matrix_sparse"]
     )
 
     # modularity
@@ -162,7 +165,9 @@ def all_in_one(candidate=None):
 
     # this also finds module sequences, currently when at least 20% of module neurons
     # fired at least one spike.
-    ah.find_system_bursts_from_global_rate(h5f, rate_threshold=threshold, merge_threshold=0.1)
+    ah.find_system_bursts_from_global_rate(
+        h5f, rate_threshold=threshold, merge_threshold=0.1
+    )
     # ah.find_bursts_from_rates(h5f, rate_threshold=5.0)
     if remove_null_sequences:
         ah.remove_bursts_with_sequence_length_null(h5f)
@@ -225,7 +230,9 @@ def all_in_one(candidate=None):
 
     # correlation coefficients
     try:
-        rij_matrix = ah.find_rij(h5f, which="neurons", time_bin_size=time_bin_size_for_rij)
+        rij_matrix = ah.find_rij(
+            h5f, which="neurons", time_bin_size=time_bin_size_for_rij
+        )
         rij_depletion_matrix = ah.find_rij(h5f, which="depletion")
         np.fill_diagonal(rij_matrix, np.nan)
         np.fill_diagonal(rij_depletion_matrix, np.nan)
@@ -275,8 +282,8 @@ def all_in_one(candidate=None):
     except Exception as e:
         log.exception(e)
         C = np.nan
-        rij_hist= np.ones(20) * np.nan
-        rij_depletion_hist= np.ones(20) * np.nan
+        rij_hist = np.ones(20) * np.nan
+        rij_depletion_hist = np.ones(20) * np.nan
 
     res["sys_functional_complexity"] = C
     res["vec_sys_hvals_correlation_coefficients"] = rij_hist.copy()
@@ -386,14 +393,14 @@ def parse_arguments():
         dest="threshold_factor",
         help="% of peak height to use for thresholding of burst detection",
         default=threshold_factor,
-        type=float
+        type=float,
     )
     parser.add_argument(
         "-s",
         dest="smoothing_width",
         help="% of peak height to use for thresholding of burst detection",
         default=smoothing_width,
-        type=float
+        type=float,
     )
 
     args = parser.parse_args()
@@ -419,7 +426,8 @@ def main(args):
         log.info(f"{args.input_path} is a directory, using contained hdf5 files")
     elif len(glob.glob(full_path(args.input_path))) <= 1:
         log.error(
-            "Provide a directory with hdf5 files or wildcarded path as string: 'path/to/file_ptrn*.hdf5''"
+            "Provide a directory with hdf5 files or wildcarded path as string:"
+            " 'path/to/file_ptrn*.hdf5''"
         )
         sys.exit()
     else:
@@ -514,9 +522,7 @@ def main(args):
         # keep repetitions always as the last axes for scalars,
         # but for vectors (inconsistent length across observables), keep data-dim last
         if key[0:3] == "vec":
-            res_ndim[key] = (
-                np.ones(shape=axes_shape + (num_rep, res_dict[key])) * np.nan
-            )
+            res_ndim[key] = np.ones(shape=axes_shape + (num_rep, res_dict[key])) * np.nan
         else:
             res_ndim[key] = np.ones(shape=axes_shape + (num_rep,)) * np.nan
 
@@ -560,7 +566,8 @@ def main(args):
 
     if not np.all(sampled == sampled.flat[0]):
         log.info(
-            f"repetitions vary across data points, from {np.min(sampled)} to {np.max(sampled)}"
+            f"repetitions vary across data points, from {np.min(sampled)} to"
+            f" {np.max(sampled)}"
         )
 
     # ------------------------------------------------------------------------------ #
@@ -592,8 +599,9 @@ def main(args):
         desc_axes += obs + ", "
 
     # desc_axes += "repetition"
-    dset = f_tar.create_dataset("/meta/axis_repetition",
-        data=np.arange(0, num_rep), dtype="int")
+    dset = f_tar.create_dataset(
+        "/meta/axis_repetition", data=np.arange(0, num_rep), dtype="int"
+    )
 
     for key in res_ndim.keys():
         dset = f_tar.create_dataset(f"/data/{key}", data=res_ndim[key])
@@ -602,9 +610,7 @@ def main(args):
                 "description"
             ] = "like scalars, but last dim are histogram bin edges"
         elif "weights" in key:
-            dset.attrs[
-                "description"
-            ] = "like scalars, but last dim are histogram weights"
+            dset.attrs["description"] = "like scalars, but last dim are histogram weights"
         else:
             dset.attrs["description"] = desc_axes
 
@@ -612,10 +618,8 @@ def main(args):
     dset.attrs["description"] = "measured number of repetitions"
 
     # meta data
-    dset = f_tar.create_dataset("/meta/ana_par/threshold_factor",
-        data=threshold_factor)
-    dset = f_tar.create_dataset("/meta/ana_par/smoothing_width",
-        data=smoothing_width)
+    dset = f_tar.create_dataset("/meta/ana_par/threshold_factor", data=threshold_factor)
+    dset = f_tar.create_dataset("/meta/ana_par/smoothing_width", data=smoothing_width)
 
     f_tar.close()
 
