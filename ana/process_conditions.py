@@ -117,7 +117,7 @@ def main():
     elif args.etype == "sim_partial":
         # for the case where we only stimulate 2 modules instead of uniform
         # noise to all, we need a bit more tweaking below
-        conditions["k=5"] = ["0.0", "15.0"]
+        conditions["k=5"] = ["0.0", "20.0"]
     else:
         raise KeyError("type should be 'exp', 'exp_chemical' or 'sim'")
 
