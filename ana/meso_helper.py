@@ -499,6 +499,64 @@ def find_system_bursts_and_module_contributions(
     return h5f
 
 
+def find_system_bursts_and_module_contributions2(h5f, threshold_factor=0.1):
+    """
+    We can use the same pipeline as for experiments and microscopic simulations to find burst begin and end times.
+
+    What remains is the event size and module contribution.
+
+    # Parameters
+    threshold_factor : at how many percent of max system rate to threshold
+        (0.1 in exp., 0.025 for microscopic sim)
+    """
+
+    threshold = threshold_factor * np.nanmax(h5f["ana.rates.system_level"])
+    ah.find_system_bursts_from_global_rate(
+        h5f,
+        skip_sequences=True,
+        rate_threshold=threshold,
+        merge_threshold=0.1,
+    )
+
+    dt = h5f["ana.rates.dt"]
+    sys_rate = h5f["ana.rates.system_level"]
+    beg_times = np.array(h5f["ana.bursts.system_level.beg_times"])
+    end_times = np.array(h5f["ana.bursts.system_level.end_times"])
+    beg_idx = (beg_times / dt).astype(int)
+    end_idx = (end_times / dt).astype(int)
+
+    contributions = list()
+    sequences = list()
+    areas = list()
+    event_sizes = list()
+
+    for bdx in range(0, len(beg_idx)):
+        beg = beg_idx[bdx]
+        end = end_idx[bdx]
+
+        mod_areas = np.zeros(4)
+        for mod_id in range(0, 4):
+            rate = h5f[f"ana.rates.module_level.mod_{mod_id}"]
+            mod_areas[mod_id] = np.sum(rate[beg:end])
+        mod_areas /= np.sum(mod_areas)
+        areas.append(mod_areas)
+
+        # Sequences are not ordered but they are also used by some of
+        # pauls functions to find out which  module contributed
+        # to which bursts
+        seq = tuple(np.where(mod_areas > 0.10)[0])
+        sequences.append(seq)
+        contributions.append(len(seq))
+
+        event_sizes.append(np.sum(sys_rate[beg:end]))
+
+
+    h5f["ana.bursts.areas"] = areas
+    h5f["ana.bursts.system_level.module_sequences"] = sequences
+    h5f["ana.bursts.contributions"] = contributions
+    h5f["ana.bursts.event_sizes"] = event_sizes
+
+
 # ------------------------------------------------------------------------------ #
 # Others
 # ------------------------------------------------------------------------------ #

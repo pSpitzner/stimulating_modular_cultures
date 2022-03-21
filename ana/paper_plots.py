@@ -2805,6 +2805,19 @@ def meso_resource_cycle(input_file):
 
     return ax
 
+def meso_sketch_gate_deactivation():
+    sys.path.append('./src')
+    from mesoscopic_model import gate_deactivation_function
+
+    # currently using probabilities for y. better as rates?
+    src_resources = np.arange(0, 1, 0.01)
+    fig, ax = plt.subplots()
+    ax.plot(src_resources, gate_deactivation_function(src_resources))
+    ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.01))
+    ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.002))
+    ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1))
+    ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.2))
+    sns.despine(ax=ax, right=True, top=True, trim=True)
 
 # ------------------------------------------------------------------------------ #
 # helper

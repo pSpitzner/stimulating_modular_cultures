@@ -9,6 +9,18 @@ import pandas as pd
 import os
 
 
+# ps: we need to make this code more readable.
+def gate_deactivation_function(src_resources):
+    def f2(inpt, thrs, gamma, lmbda):
+        return lmbda / (1.0 + np.exp(-gamma * (inpt - thrs)))
+
+    dt = 0.01
+    prob = 1.0 - np.exp(
+        -dt * (1.0 - f2(src_resources, 0.5, 40.0, 1.0))
+    )
+
+    return prob
+
 def simulate_model(
     tf,
     t_sti_start,
@@ -43,7 +55,8 @@ def simulate_model(
     # Initialize variables
     x = np.empty((4, nt))  # activity
     mvar = np.empty((4, nt))  # current resources
-    gate = np.zeros((4, 4), dtype=int)  # state of each gate at this time (directed)
+    gate = np.zeros((4, 4), dtype=int)  # state of each gate at this time (directed) gate[from, to]
+
 
     # Model parameters!
     m0 = m_  # Max amount of resources (spont, sti)
