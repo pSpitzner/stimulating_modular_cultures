@@ -142,10 +142,21 @@ def all_in_one(candidate=None):
 
         return res
 
+    res = dict()
+
     # load and process
     h5f = ah.prepare_file(
         candidate, hot=False, skip=["connectivity_matrix", "connectivity_matrix_sparse"]
     )
+
+    # modularity
+    try:
+        res["sys_modularity"] = ah.find_modularity(h5f)
+    except Exception as e:
+        log.exception(candidate)
+        res["sys_modularity"] = np.nan
+
+    # rates
     ah.find_rates(h5f, bs_large=smoothing_width)
     threshold = threshold_factor * np.nanmax(h5f["ana.rates.system_level"])
 
@@ -158,7 +169,6 @@ def all_in_one(candidate=None):
     ah.find_ibis(h5f)
 
     # number of bursts and duration
-    res = dict()
     res["sys_rate_threshold"] = threshold
     res["any_num_b"] = len(h5f["ana.bursts.system_level.beg_times"])
     res["mod_num_b_0"] = len(
@@ -237,15 +247,16 @@ def all_in_one(candidate=None):
             res[f"vec_rij_within_{mod}"] = np.ones(780) * np.nan
 
     # correlation coefficients, across
-    for pair in itertools.combinations("0123", 2):
-        # here just 40^2, since in different modules
-        try:
-            res[f"vec_rij_across_{pair[0]}_{pair[1]}"] = ah.find_rij_pairs(
-                h5f, rij_matrix, pairing=f"across_groups_{pair[0]}_{pair[1]}"
-            )
-        except Exception as e:
-            log.exception(e)
-            res[f"vec_rij_across_{pair[0]}_{pair[1]}"] = np.ones(1600) * np.nan
+    # we are not using those any more
+    # for pair in itertools.combinations("0123", 2):
+    #     # here just 40^2, since in different modules
+    #     try:
+    #         res[f"vec_rij_across_{pair[0]}_{pair[1]}"] = ah.find_rij_pairs(
+    #             h5f, rij_matrix, pairing=f"across_groups_{pair[0]}_{pair[1]}"
+    #         )
+    #     except Exception as e:
+    #         log.exception(e)
+    #         res[f"vec_rij_across_{pair[0]}_{pair[1]}"] = np.ones(1600) * np.nan
 
     # functional complexity
     bw = 1.0 / 20
@@ -316,9 +327,6 @@ def all_in_one(candidate=None):
         C = np.nan
     res["mod_num_spikes_in_bursts_1"] = C
 
-    # modularity
-    res["sys_modularity"] = ah.find_modularity(h5f)
-
     # order parameters
     ops = ah.find_resource_order_parameters(h5f)
     res["sys_orderpar_fano_neuron"] = ops["fano_neuron"]
@@ -334,7 +342,7 @@ def all_in_one(candidate=None):
     res["sys_orderpar_dist_max"] = ops["dist_max"]
 
     res["vec_sys_hbins_resource_dist"] = ops["dist_edges"]
-    res["vec_sys_hval_resource_dist"] = ops["dist_hist"]
+    res["vec_sys_hvals_resource_dist"] = ops["dist_hist"]
 
     h5.close_hot(h5f)
     h5f.clear()
