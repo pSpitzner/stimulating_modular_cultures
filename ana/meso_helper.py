@@ -540,42 +540,7 @@ def find_system_bursts_and_module_contributions2(h5f, threshold_factor=0.1):
         merge_threshold=0.1,
     )
 
-    dt = h5f["ana.rates.dt"]
-    sys_rate = h5f["ana.rates.system_level"]
-    beg_times = np.array(h5f["ana.bursts.system_level.beg_times"])
-    end_times = np.array(h5f["ana.bursts.system_level.end_times"])
-    beg_idx = (beg_times / dt).astype(int)
-    end_idx = (end_times / dt).astype(int)
-
-    contributions = list()
-    sequences = list()
-    areas = list()
-    event_sizes = list()
-
-    for bdx in range(0, len(beg_idx)):
-        beg = beg_idx[bdx]
-        end = end_idx[bdx]
-
-        mod_areas = np.zeros(4)
-        for mod_id in range(0, 4):
-            rate = h5f[f"ana.rates.module_level.mod_{mod_id}"]
-            mod_areas[mod_id] = np.sum(rate[beg:end])
-        mod_areas /= np.sum(mod_areas)
-        areas.append(mod_areas)
-
-        # Sequences are not ordered but they are also used by some of
-        # pauls functions to find out which  module contributed
-        # to which bursts
-        seq = tuple(np.where(mod_areas > 0.10)[0])
-        sequences.append(seq)
-        contributions.append(len(seq))
-
-        event_sizes.append(np.sum(sys_rate[beg:end]))
-
-    h5f["ana.bursts.areas"] = areas
-    h5f["ana.bursts.system_level.module_sequences"] = sequences
-    h5f["ana.bursts.contributions"] = contributions
-    h5f["ana.bursts.event_sizes"] = event_sizes
+    ah.sequences_from_area(h5f)
 
 
 # ------------------------------------------------------------------------------ #

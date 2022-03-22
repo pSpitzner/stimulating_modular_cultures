@@ -2698,6 +2698,52 @@ def sequences_from_module_contribution(
     return sys_seqs
 
 
+def sequences_from_area(h5f, area_threshold=0.1):
+    """
+    For the mesoscopic model, we do not have single-neuron properties,
+    so we want to approximate the sequences (and module contributions to bursts)
+    from the area their rates cover.
+
+    (Over) writes
+    h5f["ana.bursts.areas"]
+    h5f["ana.bursts.system_level.module_sequences"]
+    h5f["ana.bursts.event_sizes"]
+    """
+
+    dt = h5f["ana.rates.dt"]
+    sys_rate = h5f["ana.rates.system_level"]
+    beg_times = np.array(h5f["ana.bursts.system_level.beg_times"])
+    end_times = np.array(h5f["ana.bursts.system_level.end_times"])
+    beg_idx = (beg_times / dt).astype(int)
+    end_idx = (end_times / dt).astype(int)
+
+    sequences = list()
+    areas = list()
+    event_sizes = list()
+
+    for bdx in range(0, len(beg_idx)):
+        beg = beg_idx[bdx]
+        end = end_idx[bdx]
+
+        mod_areas = np.zeros(4)
+        for mod_id in range(0, 4):
+            rate = h5f[f"ana.rates.module_level.mod_{mod_id}"]
+            mod_areas[mod_id] = np.sum(rate[beg:end])
+        mod_areas /= np.sum(mod_areas)
+        areas.append(mod_areas)
+
+        # Sequences are not ordered but they are also used by some of
+        # pauls functions to find out which  module contributed
+        # to which bursts
+        seq = tuple(np.where(mod_areas > area_threshold)[0])
+        sequences.append(seq)
+
+        event_sizes.append(np.sum(sys_rate[beg:end]))
+
+    h5f["ana.bursts.areas"] = areas
+    h5f["ana.bursts.system_level.module_sequences"] = sequences
+    h5f["ana.bursts.event_sizes"] = event_sizes
+
 def sequence_histogram(ids, sequences=None):
 
     """
