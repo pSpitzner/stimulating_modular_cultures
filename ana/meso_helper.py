@@ -152,17 +152,17 @@ def process_data_from_file(file_path, processing_functions, labels=None):
     file_path : str
     process_functions : list of functions that take file path as input and give back
         a scalar
-    labels : list of length `len(process_functions)`
 
     # Returns
     res : dict
-        keys are the provided labels of if not provided, the function names
+        keys are the labels/observables (possibly more than one per function)
         values are the scalar results
     """
     y = dict()
     for fdx, f in enumerate(processing_functions):
-        label = f.__name__ if labels is None else labels[fdx]
-        y[label] = f(file_path)
+        res = f(file_path)
+        for key in res.keys():
+            y[key] = res[key]
     return y
 
 
@@ -195,6 +195,9 @@ def process_data_from_folder(input_folder):
     ```
     """
 
+    global dset
+    global results
+    global candidate
     # collect the folders and files
     # the `/**/` for all subdirectories is only supported by python >= 3.5
     candidates = glob.glob(
@@ -228,16 +231,12 @@ def process_data_from_folder(input_folder):
     coords["noise"] = np.sort(noises)
 
     # lets have an xarray dataset that has an array for every scalar observable
-    observables = ["correlation_coefficient", "event_size"]
     dset = xr.Dataset(coords=coords)
-    for obs in observables:
-        dset[obs] = xr.DataArray(np.nan, coords=dset.coords)
 
     # assigning default variables makes it easer to parallelise via dask, if needed later
     f = functools.partial(
         process_data_from_file,
-        processing_functions=[f_correlation_coefficients, f_event_size],
-        labels=observables,
+        processing_functions=[f_correlation_coefficients, f_event_size_and_friends],
     )
 
     for candidate in tqdm(candidates, desc="analysing files"):
@@ -248,6 +247,16 @@ def process_data_from_folder(input_folder):
         cs = dict(noise=noise, coupling=coupling, repetition=rep)
 
         results = f(candidate)
+        try:
+            observables = list(results.keys())
+            assert len(observables) != 0
+            dset[observables[0]]
+        except KeyError:
+            # initialize all data arrays, we count on the observables being the same
+            # for all analyzed files.
+            for obs in results.keys():
+                dset[obs] = xr.DataArray(np.nan, coords=dset.coords)
+
         for obs in results.keys():
             dset[obs].loc[cs] = results[obs]
 
@@ -347,7 +356,7 @@ def f_correlation_coefficients(raw, return_matrix=False):
     if return_matrix:
         return rij
     else:
-        return np.nanmean(rij)
+        return dict(correlation_coefficient=np.nanmean(rij))
 
 
 def f_functional_complexity(raw):
@@ -355,18 +364,31 @@ def f_functional_complexity(raw):
     # we end up calculating rij twice, which might get slow.
     rij = f_correlation_coefficients(raw, return_matrix=True)
 
-    return ah._functional_complexity(rij)
+    return dict(functional_complexity=ah._functional_complexity(rij))
 
 
-def f_event_size(raw):
-
+def f_event_size_and_friends(raw):
     # this should be redundant with the prepping below
     raw = _load_if_path(raw)
     # lets reuse some of victors tricks
     h5f = prepare_file(raw)
-    find_system_bursts_and_module_contributions(h5f)
+    find_system_bursts_and_module_contributions2(h5f)
 
-    return np.nanmean(h5f["ana.bursts.contributions"])
+    res = dict()
+    res["event_size"] = np.nanmean(h5f["ana.bursts.event_sizes"])
+
+    # here we stick with convention that is not great but has not been refactored.
+    # number of bursts with different number of modules contributing
+    slens = h5f["ana.bursts.system_level.module_sequences"]
+    res["any_num_b"] = len(slens)
+    res["mod_num_b_0"] = len([x for x in slens if len(x) == 0])
+    res["mod_num_b_1"] = len([x for x in slens if len(x) == 1])
+    res["mod_num_b_2"] = len([x for x in slens if len(x) == 2])
+    res["mod_num_b_3"] = len([x for x in slens if len(x) == 3])
+    res["mod_num_b_4"] = len([x for x in slens if len(x) == 4])
+
+    return res
+
 
 
 # this guy breaks convention
@@ -549,7 +571,6 @@ def find_system_bursts_and_module_contributions2(h5f, threshold_factor=0.1):
         contributions.append(len(seq))
 
         event_sizes.append(np.sum(sys_rate[beg:end]))
-
 
     h5f["ana.bursts.areas"] = areas
     h5f["ana.bursts.system_level.module_sequences"] = sequences

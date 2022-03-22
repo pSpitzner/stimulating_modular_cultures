@@ -2310,23 +2310,40 @@ def sim_participating_fraction(
 
 
 def sim_modules_participating_in_bursts(
-    input_path, simulation_coordinates, xlim=[65, 110], drop_zero_len=True
+    input_path,
+    simulation_coordinates,
+    xlim=[65, 110],
+    dim1="rate",
+    drop_zero_len=True,
+    apply_formatting=True,
 ):
-    global data, dim1, x, selects
-    data = nh.load_ndim_h5f(input_path)
-    dim1 = "rate"
 
-    for obs in data.keys():
-        data[obs] = data[obs].sel(simulation_coordinates)
+    if isinstance(input_path, str):
+        data = nh.load_ndim_h5f(input_path)
+    elif isinstance(input_path, xr.Dataset):
+        data = input_path
+    else:
+        raise ValueError("Provide a file path or loaded xr dataArray")
+
+
+    # memo from past paul: should have just used xr datasets...
+    if not isinstance(data, xr.Dataset):
+        for obs in data.keys():
+            data[obs] = data[obs].sel(simulation_coordinates)
+    else:
+        data = data.sel(simulation_coordinates)
 
     x = data["any_num_b"].coords[dim1]
     # for 92.5 Hz we only sampled k = 10, hence drop the point
-    selects = np.where((x >= xlim[0]) & (x <= xlim[1]) & (x != 92.5))
+    try:
+        selects = np.where((x >= xlim[0]) & (x <= xlim[1]) & (x != 92.5))
+    except:
+        selects = ...
     # selects = np.ones_like(x, dtype=bool)
 
     fig, ax = plt.subplots()
 
-    prev = np.zeros_like(x)
+    prev = np.zeros_like(x, dtype=float)
     for seq_len in [4, 3, 2, 1, 0]:
 
         ref = data["any_num_b"].copy()
@@ -2386,20 +2403,21 @@ def sim_modules_participating_in_bursts(
 
         prev += nxt
 
-    fig.tight_layout()
+    if apply_formatting:
+        fig.tight_layout()
 
-    ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(10))
-    ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(5))
-    ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
-    ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
-    ax.set_xlim(xlim)
-    ax.set_ylim(0, 1)
+        ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(10))
+        ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(5))
+        ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
+        ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
+        ax.set_xlim(xlim)
+        ax.set_ylim(0, 1)
 
-    # ax.spines["left"].set_position(("outward", 5))
-    # ax.spines["bottom"].set_position(("outward", 5))
+        # ax.spines["left"].set_position(("outward", 5))
+        # ax.spines["bottom"].set_position(("outward", 5))
 
-    ax.set_xlabel(r"Synaptic noise rate (Hz)")
-    ax.set_ylabel("Fraction of events\nspanning")
+        ax.set_xlabel(r"Synaptic noise rate (Hz)")
+        ax.set_ylabel("Fraction of events\nspanning")
 
     return ax
 
@@ -2729,8 +2747,8 @@ def meso_obs_for_all_couplings(dset, obs):
 
     if obs == "correlation_coefficient":
         ax.set_ylim(0, 1)
-    elif obs == "event_size":
-        ax.set_ylim(1, 4)
+    # elif obs == "event_size":
+    # ax.set_ylim(1, 4)
     cc.set_size2(ax, w=3.0, h=2.2)
 
 
@@ -2805,12 +2823,13 @@ def meso_resource_cycle(input_file):
 
     return ax
 
+
 def meso_sketch_gate_deactivation():
-    sys.path.append('./src')
+    sys.path.append("./src")
     from mesoscopic_model import gate_deactivation_function
 
     # currently using probabilities for y. better as rates?
-    src_resources = np.arange(0, 1, 0.01)
+    src_resources = np.arange(0.25, 0.75, 0.01)
     fig, ax = plt.subplots()
     ax.plot(src_resources, gate_deactivation_function(src_resources))
     ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.01))
@@ -2818,6 +2837,20 @@ def meso_sketch_gate_deactivation():
     ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1))
     ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.2))
     sns.despine(ax=ax, right=True, top=True, trim=True)
+
+
+def meso_module_contribution(coupling=0.3):
+    """
+    fig 4 c but for mesoscopic model, how many modules contributed to bursting
+    events. so this is similar to `sim_modules_participating_in_bursts`
+    """
+
+    dset = xr.load_dataset("./dat/meso_out/analysed.hdf5")
+    ax = sim_modules_participating_in_bursts(
+        dset, simulation_coordinates=dict(coupling=coupling), xlim=None, dim1="noise", drop_zero_len=False
+    )
+
+    return ax
 
 # ------------------------------------------------------------------------------ #
 # helper
@@ -3422,7 +3455,7 @@ def exp_pairwise_tests_for_trials(observables, layouts=None):
     )
 
     if layouts is None:
-        layouts = ["1b", "3b", "merged", "KCl_1b",  "Bicuculline_1b"]
+        layouts = ["1b", "3b", "merged", "KCl_1b", "Bicuculline_1b"]
     for layout in layouts:
         print(f"\n{layout}")
         dfs = load_pd_hdf5(f"./dat/exp_out/{layout}.hdf5")
