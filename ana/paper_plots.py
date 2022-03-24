@@ -903,6 +903,77 @@ def table_for_trials():
     return table
 
 
+def table_for_rij():
+
+    # collect conditions, since they depend on the layout and where they are stored
+    ref = benedict()
+    ref["single-bond.conditions"] = ["pre", "stim"]
+    ref["tripe-bond.conditions"] = ["pre", "stim"]
+    ref["merged.conditions"] = ["pre", "stim"]
+    ref["simulation.conditions"] = ["0.0 Hz", "20.0 Hz"]
+
+    # where are the data frames stored
+    ref["single-bond.df_path"] = "./dat/exp_out/1b.hdf5"
+    ref["tripe-bond.df_path"] = "./dat/exp_out/3b.hdf5"
+    ref["merged.df_path"] = "./dat/exp_out/merged.hdf5"
+    ref["simulation.df_path"] = "./dat/sim_partial_out_20/k=5.hdf5"
+
+    pairings = ["within_stim", "within_nonstim", "across", "all"]
+    observable = "Correlation Coefficient"
+
+    def f(df_path, condition, df_key="rij_paired"):
+        df = load_pd_hdf5(input_path=df_path, keys=df_key)
+        df = df.query(f"`Condition` == '{condition}'")
+        res = benedict(keypath_separator="/")
+        for pairing in pairings:
+            try:
+                # we have calculated the pairings for merged system, but the are derived purely from neuron position, since no moduli exist. skip.
+                if layout == "merged" and (pairing != 'all'):
+                    raise ValueError
+
+                this_df = df.query(f"`Pairing` == '{pairing}'")
+                np.random.seed(815)
+                _, _, percentiles = ah.pd_bootstrap(
+                    this_df,
+                    obs=observable,
+                    num_boot=500,
+                    func=np.nanmedian,
+                    percentiles=[50, 2.5, 97.5],
+                )
+
+                res[f"{pairing}/median"] = np.nanmedian(this_df[observable])
+                res[f"{pairing}/2.5"] = percentiles[1]
+                res[f"{pairing}/97.5"] = percentiles[2]
+
+            except Exception as e:
+                # some pairings do not exist in all data frames
+                res[f"{pairing}/median"] = np.nan
+                res[f"{pairing}/2.5"] = np.nan
+                res[f"{pairing}/97.5"] = np.nan
+
+
+        return res
+
+    table = pd.DataFrame(columns=["layout", "condition", "kind"] + pairings)
+
+    for layout in tqdm(ref.keys(), desc="layouts"):
+        for condition in tqdm(ref[f"{layout}.conditions"], leave=False):
+            res = f(df_path=ref[f"{layout}.df_path"], condition=condition)
+            new_rows = pd.DataFrame(
+                dict(
+                    layout=[layout] * 3,
+                    condition=[condition] * 3,
+                    kind=["median", "2.5", "97.5"],
+                )
+            )
+            for pairing in res.keys():
+                new_rows[pairing] = res[pairing].values()
+
+            table = table.append(new_rows, ignore_index=True)
+
+    table = table.set_index(["layout", "condition", "kind"])
+    return table
+
 # Fig 1
 def exp_raster_plots(
     path,
@@ -1454,7 +1525,7 @@ def exp_rij_for_layouts():
     dfs["triple-bond"] = load_pd_hdf5("./dat/exp_out/3b.hdf5", ["rij_paired"])
     dfs["merged"] = load_pd_hdf5("./dat/exp_out/merged.hdf5", ["rij_paired"])
 
-    # experimentally, we need to focus on pre vs stim, isntead of on vs off,
+    # experimentally, we need to focus on pre vs stim, instead of on vs off,
     # to get _pairs_ of rij
     for key in dfs.keys():
         dfs[key]["rij_paired"] = dfs[key]["rij_paired"].query(
@@ -2325,7 +2396,6 @@ def sim_modules_participating_in_bursts(
     else:
         raise ValueError("Provide a file path or loaded xr dataArray")
 
-
     # memo from past paul: should have just used xr datasets...
     if not isinstance(data, xr.Dataset):
         for obs in data.keys():
@@ -2847,10 +2917,15 @@ def meso_module_contribution(coupling=0.3):
 
     dset = xr.load_dataset("./dat/meso_out/analysed.hdf5")
     ax = sim_modules_participating_in_bursts(
-        dset, simulation_coordinates=dict(coupling=coupling), xlim=None, dim1="noise", drop_zero_len=False
+        dset,
+        simulation_coordinates=dict(coupling=coupling),
+        xlim=None,
+        dim1="noise",
+        drop_zero_len=False,
     )
 
     return ax
+
 
 # ------------------------------------------------------------------------------ #
 # helper
@@ -3176,8 +3251,11 @@ def custom_rij_barplot(df, ax=None, conditions=None, pairings=None, recolor=True
             palette=palette,
             errcolor=".0",
             edgecolor=".0",
+            # these settings reflect what we do manually in `table_rij()`
+            # the bar height is given from the
+            # estimator applied on the original data, not the bootstrap estimates
             estimator=np.nanmedian,
-            ci=95,
+            ci=95,  # 2.5 and 97.5%
             n_boot=500,
             seed=815,
         )
