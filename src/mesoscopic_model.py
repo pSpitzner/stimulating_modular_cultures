@@ -28,8 +28,8 @@ def simulate_model(
     output_filename,
     no_gates=False,
     m_=2.0,
-    tc_=5.0,
-    td_=0.55,
+    tc_= 45.0,
+    td_= 15.0,
     b_=1.55,
     sigma_=0.1,
     basefiring_=0.01,
@@ -81,8 +81,7 @@ def simulate_model(
     g = g_  # Gate recovery
 
     # External input
-    ext_str = ext_str_
-    ext_input = np.zeros(4)
+    ext_input = np.ones(4) * ext_str_
 
     # Sigmoid definition (Wilson-Cowan type, such that f(x<=0)=0 and f(+infty)=gain)
     ksig = ksig_  # Slope
@@ -116,15 +115,6 @@ def simulate_model(
     # Main computation loop: Milstein algorithm, assuming Ito interpretation
     t = 0.0
     for j in range(nt - 1):
-
-        # Change parameters during stimulation
-        if j < nt_start:
-            ext_input[:2] = 0.0
-        elif j < nt_end:
-            ext_input[:2] = ext_str, ext_str
-        else:
-            ext_input[:2] = 0.0
-
         # Update each cluster
         old_gate = gate.copy()
         for c in range(4):

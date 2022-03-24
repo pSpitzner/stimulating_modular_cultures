@@ -4,6 +4,7 @@ exe/*
 log/*
 var/*
 run/*.tsv
+run/dat/*
 dask-worker-space
 __pycache__
 .DS_Store

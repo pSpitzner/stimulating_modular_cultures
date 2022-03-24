@@ -17,13 +17,13 @@ if not use_cpp:
     import mesoscopic_model as mm
 
 rng_start_seed = 55436434
-n_trajectories = 20
+n_trajectories =  20
 output_folder = "./dat/meso_in/"
 cpp_exe_folder = "./exe/"
 
 timescale_span = np.linspace(0.0, 0.8, 30)
-coupling_span = np.array([0.1, 0.3, 0.6])
-tf = np.array([3000 for j in range(30)])
+coupling_span = np.array([0.01, 0.05, 0.5])
+tf = np.array([1000 for j in range(30)])
 
 
 def main():
