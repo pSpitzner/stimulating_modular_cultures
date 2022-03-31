@@ -239,30 +239,11 @@ def fig_2(skip_plots=False):
         exp_violins_for_layouts()
         exp_rij_for_layouts()
         exp_sticks_across_layouts(observable="Functional Complexity", hide_labels=False)
-        # we actually only show the sticks for other observables in the SM,
-        # but since the calls are similar we do this here
-        exp_sticks_across_layouts(observable="Mean Fraction", hide_labels=False)
-        exp_sticks_across_layouts(observable="Mean Correlation", hide_labels=False)
-        exp_sticks_across_layouts(
-            observable="Mean IBI", set_ylim=False, hide_labels=False
-        )
-        # exp_sticks_across_layouts(
-        #     observable="Median IBI", set_ylim=False, hide_labels=False
-        # )
-        exp_sticks_across_layouts(
-            observable="Mean Core delays", set_ylim=False, hide_labels=False
-        )
 
     log.debug("\n\nPairwise tests for trials\n")
     exp_pairwise_tests_for_trials(
         observables=[
-            "Mean Correlation",
-            "Mean IBI",
-            "Median IBI",
-            "Mean Fraction",
             "Functional Complexity",
-            "Mean Core delays",
-            "Median Core delays",
         ]
     )
 
@@ -607,12 +588,13 @@ def fig_4(skip_rasters=True, skip_cycles=True):
     ]
     observables = unit_observables + [
         "any_num_spikes_in_bursts",
-        "sys_median_any_ibis",
+        # "sys_median_any_ibis",
+        "sys_mean_any_ibis",
         # testing order parameters
-        "sys_orderpar_fano_neuron",
-        "sys_orderpar_fano_population",
-        "sys_orderpar_baseline_neuron",
-        "sys_orderpar_baseline_population",
+        # "sys_orderpar_fano_neuron",
+        # "sys_orderpar_fano_population",
+        # "sys_orderpar_baseline_neuron",
+        # "sys_orderpar_baseline_population",
         "sys_mean_core_delay",
     ]
 
@@ -620,13 +602,14 @@ def fig_4(skip_rasters=True, skip_cycles=True):
     ylabels["sys_mean_participating_fraction"] = "Event size"
     ylabels["sys_mean_correlation"] = "Correlation\ncoefficient"
     ylabels["sys_functional_complexity"] = "Functional\ncomplexity"
-    ylabels["any_num_spikes_in_bursts"] = "Spikes\nper neuron"
+    ylabels["any_num_spikes_in_bursts"] = "Spikes\nper neuron in event"
     ylabels["sys_median_any_ibis"] = "Inter-event-interval\n(seconds)"
+    ylabels["sys_mean_any_ibis"] = "Inter-event-interval\n(seconds)"
     ylabels["sys_orderpar_fano_neuron"] = "fano neuron"
     ylabels["sys_orderpar_fano_population"] = "fano population"
     ylabels["sys_orderpar_baseline_neuron"] = "baseline neuron"
     ylabels["sys_orderpar_baseline_population"] = "baseline population"
-    ylabels["sys_mean_core_delay"] = "delay between burst cores (seconds)"
+    ylabels["sys_mean_core_delay"] = "Core delay (seconds)"
 
     coords = reference_coordinates.copy()
     coords["k_inter"] = [1, 5, 10, -1]
@@ -651,8 +634,6 @@ def fig_4(skip_rasters=True, skip_cycles=True):
             assert False  # we decided against colors
         except:
             base_color = "#333"
-        if obs == "sys_median_any_ibis":
-            base_color = "#333"
         clrs = dict()
         for kdx, k in enumerate([1, 5, 10, -1]):
             clrs[k] = cc.alpha_to_solid_on_bg(base_color, cc.fade(kdx, 4, invert=True))
@@ -672,7 +653,7 @@ def fig_4(skip_rasters=True, skip_cycles=True):
             ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
             ax.set_ylim(0, 1.0)
 
-        if obs == "sys_median_any_ibis":
+        if obs in ["sys_median_any_ibis", "sys_mean_any_ibis"]:
             ax.set_ylim(0, 70)
         if obs == "any_num_spikes_in_bursts":
             ax.set_ylim(0, 10)
@@ -680,12 +661,209 @@ def fig_4(skip_rasters=True, skip_cycles=True):
             ax.set_ylim(0, 1.05)
         if "sys_orderpar_fano" in obs:
             ax.set_ylim(0, 0.1)
+        if obs == "sys_mean_core_delay":
+            ax.set_ylim(0, None)
 
         if show_ylabel:
             ax.set_ylabel(ylabels[obs])
-        cc.set_size3(ax, 2.5, 1.8)
+        if obs in [
+            "sys_mean_any_ibis",
+            "sys_mean_core_delay",
+            "any_num_spikes_in_bursts",
+        ]:
+            # these guys only go to the supplemental material
+            cc.set_size3(ax, 3.5, 2.5)
+        else:
+            cc.set_size3(ax, 2.5, 1.8)
         ax.get_figure().savefig(f"./fig/paper/sim_ksweep_{obs}.pdf", dpi=300)
 
+
+def fig_supplementary():
+    """
+    wrapper to produce the panels of most supplementary figures.
+    """
+    sm_exp_trialwise_observables()
+    sm_exp_bicuculline()
+
+
+def tables(output_folder):
+
+    funcs = dict(
+        trials=table_for_trials,
+        rij=table_for_rij,
+        violins=table_for_violins,
+    )
+
+    for key in funcs.keys():
+        table = funcs[key]()
+        table.to_excel(f"{output_folder}/data_{key}.xlsx", engine="openpyxl")
+        table.to_latex(
+            f"{output_folder}/data_{key}.tex",
+            na_rep="",
+            bold_rows=True,
+            multirow=True,
+            multicolumn=True,
+        )
+
+
+def sm_exp_trialwise_observables():
+    """
+    We can calculate estimates for every trial and see how they change within each
+    trial.
+    Also does stat. significance tests.
+
+    This has some overlap with fig. 1 and 2
+    """
+    kwargs = dict(save_path=None, hide_labels=False)
+    prefix = "./fig/paper/exp_layouts_sticks"
+
+    ax = exp_sticks_across_layouts(observable="Functional Complexity", **kwargs)
+    ax.get_figure().savefig(f"{prefix}_functional_complexity.pdf", dpi=300)
+
+    ax = exp_sticks_across_layouts(observable="Mean Fraction", **kwargs)
+    ax.set_ylabel("Mean Event size")
+    ax.get_figure().savefig(f"{prefix}_mean_event_size.pdf", dpi=300)
+
+    ax = exp_sticks_across_layouts(observable="Mean Correlation", **kwargs)
+    ax.get_figure().savefig(f"{prefix}_mean_correlation.pdf", dpi=300)
+
+    ax = exp_sticks_across_layouts(observable="Mean IBI", set_ylim=False, **kwargs)
+    ax.set_ylabel("Mean IEI (seconds)")
+    ax.get_figure().savefig(f"{prefix}_mean_iei.pdf", dpi=300)
+
+    ax = exp_sticks_across_layouts(
+        observable="Mean Core delays", set_ylim=False, apply_formatting=False, **kwargs
+    )
+    ax.set_ylabel("Mean Core delay\n(seconds)")
+    ax.set_ylim(0, None)
+    sns.despine(ax=ax, bottom=True, left=False, trim=True, offset=5)
+    ax.get_figure().savefig(f"{prefix}_mean_core_delay.pdf", dpi=300)
+
+    exp_pairwise_tests_for_trials(
+        observables=[
+            "Mean Correlation",
+            "Mean IBI",
+            "Mean Fraction",
+            "Functional Complexity",
+            "Mean Core delays",
+            # "Median IBI",
+            # "Median Core delays",
+        ],
+        layouts=["1b", "3b", "merged"],
+    )
+
+
+def sm_exp_bicuculline():
+    """
+    violins and sticks for blocked inhibition
+    """
+
+    exp_violins_for_layouts(layouts=["bic"], observables=["event_size", "rij"])
+
+    kwargs = dict(
+        hide_labels=False,
+        layouts=["Bicuculline_1b"],
+        conditions=["spon_Bic_20uM", "stim_Bic_20uM"],
+    )
+    save_path = "./fig/paper/exp_layouts_sticks_bic"
+
+    ax = exp_sticks_across_layouts(observable="Mean Fraction", save_path=None, **kwargs)
+    ax.set_ylabel("Mean Event size")
+    ax.get_figure().savefig(f"{save_path}_fraction.pdf", dpi=300)
+
+    ax = exp_sticks_across_layouts(
+        observable="Mean Correlation", save_path=f"{save_path}_correlation.pdf", **kwargs
+    )
+
+    ax = exp_sticks_across_layouts(
+        observable="Functional Complexity",
+        save_path=f"{save_path}_functional_complexity.pdf",
+        **kwargs,
+    )
+
+    # ax = exp_sticks_across_layouts(
+    #     observable="Mean Core delays",
+    #     set_ylim=False,
+    #     save_path=None,
+    #     apply_formatting=False,
+    #     **kwargs,
+    # )
+    # ax.set_ylim(0, 0.4)
+    # sns.despine(ax=ax, bottom=True, left=False, trim=True, offset=5)
+    # ax.get_figure().savefig(f"{save_path}_coredelays.pdf", dpi=300)
+
+    exp_pairwise_tests_for_trials(
+        observables=[
+            "Mean Correlation",
+            # "Mean IBI",
+            # "Median IBI",
+            "Mean Fraction",
+            "Functional Complexity",
+            # "Mean Core delays",
+            # "Median Core delays",
+        ],
+        layouts=["Bicuculline_1b"],
+    )
+
+
+def sm_exp_number_of_cells():
+    """
+    For simplicity, we just hard code this data
+    """
+
+    data = [
+        ["merged", "210713_400_C", 91],
+        ["merged", "210726_400_B", 113],
+        ["merged", "210726_400_C", 89],
+        ["merged", "210401_400_A", 174],
+        ["merged", "210405_400_A", 173],
+        ["merged", "210406_400_A", 151],
+        ["merged", "210406_400_B", 128],
+        ["3b", "210713_3b_A", 143],
+        ["3b", "210713_3b_B", 108],
+        ["3b", "210713_3b_C", 101],
+        ["3b", "210316_3b_A", 184],
+        ["3b", "210316_3b_C", 151],
+        ["3b", "210401_A_3b_A", 180],
+        ["3b", "210402_B", 154],
+        ["1b", "210719_1b_B", 118],
+        ["1b", "210719_1b_C", 105],
+        ["1b", "210726_1b_B", 114],
+        ["1b", "210315_1b_A", 146],
+        ["1b", "210315_1b_C", 154],
+        ["1b", "210405_1b_C", 162],
+        ["1b", "210406_1b_B", 145],
+        ["1b", "210406_1b_C", 177],
+    ]
+
+    df = pd.DataFrame(data, columns=["Layout", "Trial", "Num Cells"])
+
+    # to reuse our `exp_sticks_across_layouts` function, we need a dict of dfs
+    # instead of a single dataframe
+    dfs = dict()
+    layouts = df["Layout"].unique()
+    for layout in layouts:
+        dfs[layout] = df.query("Layout == @layout")
+
+    ax = exp_sticks_across_layouts(
+        observable="Num Cells",
+        layouts=layouts,
+        dfs=dfs,
+        conditions=["Only one"],
+        save_path=None,
+        apply_formatting=False,
+        set_ylim=False,
+        x_offset=0.3,
+    )
+
+    ax.set_ylim(0, 200)
+    ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(50))
+    ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(100))
+    sns.despine(ax=ax, bottom=True, left=False, trim=True, offset=5)
+    cc.set_size3(ax, 2.2, 1.8)
+    ax.set_ylabel("Number of cells")
+
+    ax.get_figure().savefig(f"./fig/paper/exp_layouts_sticks_num_cells.pdf", dpi=300)
 
 def table_for_violins():
     """
@@ -693,6 +871,7 @@ def table_for_violins():
     errors. serves as a consistency check when comparing to the plots.
 
     `table.to_excel("/Users/paul/Desktop/test.xls", engine="openpyxl")`
+    `table.to_latex("/Users/paul/Desktop/test.xls", na_rep="")`
     """
 
     np.random.seed(314)
@@ -928,7 +1107,7 @@ def table_for_rij():
         for pairing in pairings:
             try:
                 # we have calculated the pairings for merged system, but the are derived purely from neuron position, since no moduli exist. skip.
-                if layout == "merged" and (pairing != 'all'):
+                if layout == "merged" and (pairing != "all"):
                     raise ValueError
 
                 this_df = df.query(f"`Pairing` == '{pairing}'")
@@ -951,7 +1130,6 @@ def table_for_rij():
                 res[f"{pairing}/2.5"] = np.nan
                 res[f"{pairing}/97.5"] = np.nan
 
-
         return res
 
     table = pd.DataFrame(columns=["layout", "condition", "kind"] + pairings)
@@ -973,6 +1151,7 @@ def table_for_rij():
 
     table = table.set_index(["layout", "condition", "kind"])
     return table
+
 
 # Fig 1
 def exp_raster_plots(
@@ -1265,6 +1444,8 @@ def exp_sticks_across_layouts(
     layouts=None,
     conditions=None,
     save_path="automatic",
+    dfs=None,
+    x_offset=0,
 ):
     log.info(f"")
     log.info(f"# sticks for {observable}")
@@ -1275,10 +1456,11 @@ def exp_sticks_across_layouts(
         conditions = ["pre", "stim", "post"]
 
     # we want the precalculated summary statistics of each trial
-    dfs = dict()
-    for key in layouts:
-        df = load_pd_hdf5(f"./dat/exp_out/{key}.hdf5")
-        dfs[key] = df["trials"].query("Condition == @conditions")
+    if dfs is None:
+        dfs = dict()
+        for key in layouts:
+            df = load_pd_hdf5(f"./dat/exp_out/{key}.hdf5")
+            dfs[key] = df["trials"].query("Condition == @conditions")
 
     fig, ax = plt.subplots()
 
@@ -1290,8 +1472,8 @@ def exp_sticks_across_layouts(
         x_pos[l] = dict()
         x_pos_sticks[l] = dict()
         for cdx, c in enumerate(conditions):
-            x_pos[l][c] = ldx * large_dx + cdx * small_dx
-            x_pos_sticks[l][c] = ldx * large_dx + cdx * small_dx
+            x_pos[l][c] = x_offset + ldx * large_dx + cdx * small_dx
+            x_pos_sticks[l][c] = x_offset + ldx * large_dx + cdx * small_dx
 
     # x_pos["1b"] = {"pre" : 0.0, "stim" : 1.0, "post" :  2.0 }
     # x_pos["3b"] = {"pre" : 0.25, "stim" : 1.25, "post"  :  2.25 }
@@ -1321,27 +1503,35 @@ def exp_sticks_across_layouts(
             # assert len(df) == len(layouts)
             x = []
             y = []
-            for idx, row in df.iterrows():
-                stim = row["Condition"]
-                x.append(x_pos[etype][stim])
-                y.append(row[observable])
+            try:
+                for idx, row in df.iterrows():
+                    stim = row["Condition"]
+                    x.append(x_pos[etype][stim])
+                    y.append(row[observable])
 
-            ax.plot(
-                x,
-                y,
-                # marker="o",
-                # markersize=1,
-                lw=0.5,
-                color=cc.alpha_to_solid_on_bg(clr, 0.2),
-                # color=clr,
-                # alpha = 0.3,
-                label=trial,
-                zorder=0,
-                clip_on=False,
-            )
+                ax.plot(
+                    x,
+                    y,
+                    # marker="o",
+                    # markersize=1,
+                    lw=0.5,
+                    color=cc.alpha_to_solid_on_bg(clr, 0.2),
+                    # color=clr,
+                    # alpha = 0.3,
+                    label=trial,
+                    zorder=0,
+                    clip_on=False,
+                )
+            except KeyError as e:
+                # this fails if we have no conditions in the df,
+                # needed for number of cells
+                log.debug(f"{e}")
 
         for stim in conditions:
-            df = dfs[etype].query(f"Condition == '{stim}'")
+            try:
+                df = dfs[etype].query(f"Condition == '{stim}'")
+            except Exception as e:
+                df = dfs[etype]
             # sticklike error bar
             mid, std, percentiles = ah.pd_bootstrap(
                 df,
@@ -1364,6 +1554,11 @@ def exp_sticks_across_layouts(
 
             log.info(p_str)
 
+            try:
+                clr = colors[stim]
+            except:
+                clr = "#808080"
+
             _draw_error_stick(
                 ax,
                 center=x_pos_sticks[etype][stim],
@@ -1373,7 +1568,7 @@ def exp_sticks_across_layouts(
                 errors=[mid - error, mid + error],
                 outliers=[df_min, df_max],
                 orientation="v",
-                color=colors[stim],
+                color=clr,
                 zorder=2,
             )
         log.info(f"")
@@ -1390,7 +1585,8 @@ def exp_sticks_across_layouts(
     if not hide_labels:
         ax.set_ylabel(f"{observable}")
 
-    cc.set_size3(ax, 2.2, 2)
+    if apply_formatting:
+        cc.set_size3(ax, 2.2, 2)
 
     if save_path is "automatic":
         save_path = f"./fig/paper/exp_layouts_sticks_{observable}.pdf"
@@ -1401,10 +1597,13 @@ def exp_sticks_across_layouts(
 
 
 # Fig 2
-def exp_violins_for_layouts(remove_outlier_for_ibis=True, layouts=None):
+def exp_violins_for_layouts(remove_outlier_for_ibis=True, layouts=None, observables=None):
 
     if layouts is None:
         layouts = ["single-bond", "triple-bond", "merged"]
+
+    if observables is None:
+        observables = ["event_size", "rij", "iei", "core_delay"]
 
     dfs = dict()
     if "single-bond" in layouts:
@@ -1437,6 +1636,8 @@ def exp_violins_for_layouts(remove_outlier_for_ibis=True, layouts=None):
 
     # Event size, used to be called "Fraction" in the data frame
     for layout in dfs.keys():
+        if "event_size" not in observables:
+            continue
         log.info(f"")
         log.info(f"# {layout}")
         ax = custom_violins(
@@ -1454,6 +1655,8 @@ def exp_violins_for_layouts(remove_outlier_for_ibis=True, layouts=None):
 
     # Correlation coefficients
     for layout in dfs.keys():
+        if "rij" not in observables:
+            continue
         log.info(f"")
         log.info(f"# {layout}")
         ax = custom_violins(
@@ -1469,6 +1672,8 @@ def exp_violins_for_layouts(remove_outlier_for_ibis=True, layouts=None):
 
     # IBI
     for layout in dfs.keys():
+        if "iei" not in observables:
+            continue
         log.info(f"")
         log.info(f"# {layout}")
         ax = custom_violins(
@@ -1482,9 +1687,11 @@ def exp_violins_for_layouts(remove_outlier_for_ibis=True, layouts=None):
             bw=0.2,
         )
         # we changed the naming convention while writing
-        ax.set_ylabel("Inter-event-interval")
-        ax.set_ylim(0, 70)
-        # ax.set_ylim(0, 200)
+        ax.set_ylabel("Inter-event-interval\n(seconds)")
+        if layout == "bic":
+            ax.set_ylim(0, 200)
+        else:
+            ax.set_ylim(0, 70)
         apply_formatting(ax, ylim=False, trim=False)
         ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(20))
         ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(10))
@@ -1492,6 +1699,8 @@ def exp_violins_for_layouts(remove_outlier_for_ibis=True, layouts=None):
 
     # Core delay
     for layout in dfs.keys():
+        if "core_delay" not in observables:
+            continue
         # if layout == "merged":
         #     # for the merged system, we do not have modules, but the analysis still works
         #     # by using quadrants of the merged substrate.
@@ -1510,6 +1719,7 @@ def exp_violins_for_layouts(remove_outlier_for_ibis=True, layouts=None):
             bw=0.2,
         )
         ax.set_ylim(0, 0.4)
+        ax.set_ylabel("Core delay\n(seconds)")
         apply_formatting(ax, ylim=False, trim=False)
         ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.05))
         ax.get_figure().savefig(
@@ -1555,46 +1765,6 @@ def exp_rij_for_layouts():
         ax.get_figure().savefig(f"./fig/paper/exp_rij_barplot_{layout}.pdf", dpi=300)
 
     return ax
-
-
-# Supplemental
-def exp_sm_bicuculline():
-    exp_violins_for_layouts(layouts=["bic"])
-    kwargs = dict()
-    kwargs["hide_labels"] = False
-    kwargs["layouts"] = ["Bicuculline_1b"]
-    kwargs["conditions"] = ["spon_Bic_20uM", "stim_Bic_20uM"]
-    save_path = "./fig/paper/exp_layouts_sticks_bic"
-    ax = exp_sticks_across_layouts(observable="Mean Fraction", save_path=None, **kwargs)
-    ax.set_ylabel("Mean Event size")
-    ax.get_figure().savefig(f"{save_path}_fraction.pdf", dpi=300)
-
-    ax = exp_sticks_across_layouts(
-        observable="Mean Correlation", save_path=f"{save_path}_correlation.pdf", **kwargs
-    )
-    ax = exp_sticks_across_layouts(
-        observable="Mean Core delays",
-        set_ylim=False,
-        save_path=None,
-        apply_formatting=False,
-        **kwargs,
-    )
-    ax.set_ylim(0, 0.4)
-    sns.despine(ax=ax, bottom=True, left=False, trim=True, offset=5)
-    ax.get_figure().savefig(f"{save_path}_coredelays.pdf", dpi=300)
-
-    exp_pairwise_tests_for_trials(
-        observables=[
-            "Mean Correlation",
-            "Mean IBI",
-            "Median IBI",
-            "Mean Fraction",
-            "Functional Complexity",
-            "Mean Core delays",
-            "Median Core delays",
-        ],
-        layouts=["Bicuculline_1b"],
-    )
 
 
 # Fig 3
@@ -1944,10 +2114,15 @@ def sim_vs_exp_violins(**kwargs):
 
 
 def sim_vs_exp_ibi(
-    input_path, ax=None, simulation_coordinates=reference_coordinates, **kwargs
+    input_path=None, ax=None, simulation_coordinates=reference_coordinates, **kwargs
 ):
-
+    """
+    Plot the inter-burst-interval of the k=5  simulation to compare with the experimental data.
+    """
     kwargs = kwargs.copy()
+
+    if input_path is None:
+        input_path = "./dat/the_last_one/k_sweep_with_merged.hdf5"
 
     if ax is None:
         fig, ax = plt.subplots()
@@ -1955,7 +2130,8 @@ def sim_vs_exp_ibi(
         fig = ax.get_figure()
 
     data = nh.load_ndim_h5f(input_path)
-    obs = "sys_median_any_ibis"
+    # obs = "sys_median_any_ibis"
+    obs = "sys_mean_any_ibis"
     data[obs] = data[obs].sel(simulation_coordinates)
 
     num_reps = len(data[obs].coords["repetition"])
@@ -1991,7 +2167,7 @@ def sim_vs_exp_ibi(
 
     ax.plot(
         [0, 80, 80],
-        [20, 20, 0],
+        [25, 25, 0],
         ls=":",
         color=cc.alpha_to_solid_on_bg(colors["pre"], 0.3),
         zorder=0,
@@ -2012,13 +2188,13 @@ def sim_vs_exp_ibi(
     ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(20))
     ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(10))
 
-    ax.set_xlim(65, 110)
+    ax.set_xlim(65, 100)
     ax.set_ylim(0, 70)
 
     if show_xlabel:
-        ax.set_xlabel(r"Noise rate (Hz)")
+        ax.set_xlabel(r"Synaptic noise rate (Hz)")
     if show_ylabel:
-        ax.set_ylabel("Inter-event-interval\n(median, in seconds)")
+        ax.set_ylabel("Inter-event-interval\n(seconds)")
     if show_title:
         ax.set_title(r"Simulation IEI")
     if show_legend:
@@ -2077,6 +2253,7 @@ def sim_obs_vs_noise_for_all_k(
         "sys_mean_participating_fraction",
         "any_num_spikes_in_bursts",
         "sys_median_any_ibis",
+        "sys_mean_any_ibis",
         "sys_mean_core_delay",
     ]
 
@@ -2811,7 +2988,7 @@ def meso_obs_for_all_couplings(dset, obs):
             color=cc.alpha_to_solid_on_bg(
                 "#333", cc.fade(cdx, dset["coupling"].size, invert=True)
             ),
-            label=f"w = {coupling:.1f}",
+            label=f"w = {coupling}",
         )
     ax.legend()
 
@@ -2874,8 +3051,9 @@ def meso_resource_cycle(input_file):
     """
     if isinstance(input_file, str):
         h5f = mh.prepare_file(input_file)
-        mh.find_system_bursts_and_module_contributions(h5f)
-        mh.module_contribution(h5f)
+        # mh.find_system_bursts_and_module_contributions(h5f)
+        # mh.module_contribution(h5f)
+        mh.find_system_bursts_and_module_contributions2(h5f)
     else:
         h5f = input_file
 
@@ -2884,10 +3062,11 @@ def meso_resource_cycle(input_file):
     )
     ax.set_xlabel("Synaptic resources")
     ax.set_ylabel("Module rate")
-    ax.set_title(input_file)
-    ax.set_xlim(0, 5)
-    ax.set_ylim(-0.4, 4)
-    cc.set_size3(ax, 3.5, 3)
+    if isinstance(input_file, str):
+        ax.set_title(input_file)
+    # ax.set_xlim(0, 5)
+    # ax.set_ylim(-0.4, 4)
+    # cc.set_size3(ax, 3.5, 3)
 
     sns.despine(ax=ax, trim=True, offset=5)
 
