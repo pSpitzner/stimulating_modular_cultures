@@ -1,3 +1,7 @@
+# Legacy branch
+
+I created this to keep all the untidy detail at hand before cleaning the main branch.
+
 # Notes for Victor
 
 I did quite a bit of refactoring.
