@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-11-08 17:51:24
-# @Last Modified: 2022-04-04 10:08:21
+# @Last Modified: 2022-04-04 15:38:25
 # ------------------------------------------------------------------------------ #
 # collect the functions to create figure panels here
 # ------------------------------------------------------------------------------ #
@@ -585,6 +585,8 @@ def fig_4(skip_rasters=True, skip_cycles=True):
         "sys_mean_participating_fraction",
         "sys_mean_correlation",
         "sys_functional_complexity",
+        "mod_mean_correlation",
+        "mod_median_correlation",
     ]
     observables = unit_observables + [
         "any_num_spikes_in_bursts",
@@ -610,6 +612,8 @@ def fig_4(skip_rasters=True, skip_cycles=True):
     ylabels["sys_orderpar_baseline_neuron"] = "baseline neuron"
     ylabels["sys_orderpar_baseline_population"] = "baseline population"
     ylabels["sys_mean_core_delay"] = "Core delay (seconds)"
+    ylabels["mod_median_correlation"] = "mod rij median"
+    ylabels["mod_mean_correlation"] = "mod rij mean"
 
     coords = reference_coordinates.copy()
     coords["k_inter"] = [1, 5, 10, -1]
