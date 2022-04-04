@@ -2,8 +2,21 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2022-02-16 11:27:05
+# @Last Modified: 2022-04-01 17:29:36
 # ------------------------------------------------------------------------------ #
+# Here we collect all functions for importing and analyzing the data.
+# A central idea is that for every simulated/experimental trial, we have a
+# nested dictionary (a benedict) that is named `h5f` (because it reflects
+# an initially loaded hdf5 file).
+# We then step-by-step keep adding details to this dictionary: Many analysis
+# functions directly add into it, and we have a helper that can save such a
+# structure to disk.
+# This way, plot functions etc. can rely on the structure of the dictionary,
+# and we only have to pass a single argument to later functions.
+#
+# TODO: link to an overview of common items in the h5f structure
+# ------------------------------------------------------------------------------ #
+
 
 
 import os
@@ -17,7 +30,6 @@ import numpy as np
 import pandas as pd
 import networkx as nx
 
-# from hi5 import BetterDict
 import hi5 as h5
 from addict import Dict
 from benedict import benedict

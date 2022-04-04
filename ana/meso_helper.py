@@ -97,7 +97,8 @@ def write_xr_dset_to_hdf5(dset, output_path, **kwargs):
     `dset = xr.load_dataset("/path/to/file.hdf5")`
 
     # Parameters
-    kwargs : dict, passed to `xr.Dataset.to_netcdf()`
+    kwargs : dict, passed to `xr.Dataset.to_netcdf()`. Noteworthy:
+    group : str, hdf5 group where to place the dataset.
     """
     # enable compression
     encoding = {d: {"zlib": True, "complevel": 9} for d in dset.data_vars}

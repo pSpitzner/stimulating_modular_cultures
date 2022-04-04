@@ -2,12 +2,18 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2021-11-10 13:51:02
-#
+# @Last Modified: 2022-04-01 19:01:32
+# ------------------------------------------------------------------------------ #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
-# into an ndim array
+# into a single file, containing high-dimensional arrays.
+# How the coordinates at which results from every input file are placed in the
+# output are specified in the `d_obs` dictionary, below.
 #
-# use `ndim_plot.py` to visualize the result
+# Essentially, we construct an xarray.Dataset. But when I wrote this, I did not
+# know about xarrays so this is a poormans version. The resulting file can be
+# read with the `ndim_helper` that also has a function to cast to xarray.
+# dataset
+#
 # ------------------------------------------------------------------------------ #
 
 import os
