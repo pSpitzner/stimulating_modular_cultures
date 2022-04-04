@@ -20,7 +20,7 @@ if not use_cpp:
 #Set RNG seed and configure output folders
 rng_start_seed = 55436434
 n_trajectories =  1 
-output_folder  = "./dat/meso_in/"
+output_folder = "./dat/meso_in/"
 cpp_exe_folder = "./exe/"
 
 #Parameters we will use for the simulations. For each coupling span, all external inputs will be evaluated.
