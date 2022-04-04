@@ -2805,6 +2805,7 @@ def meso_obs_for_all_couplings(dset, obs):
     """
     ax = None
     for cdx, coupling in enumerate(dset["coupling"].to_numpy()):
+        #coupling = float(coupling) #From numpy array to float
         ax = meso_xr_with_errors(
             dset[obs].sel(coupling=coupling),
             ax=ax,
@@ -2886,7 +2887,7 @@ def meso_resource_cycle(input_file):
     ax.set_ylabel("Module rate")
     ax.set_title(input_file)
     ax.set_xlim(0, 5)
-    ax.set_ylim(-0.4, 4)
+    ax.set_ylim(-0.4, 10)
     cc.set_size3(ax, 3.5, 3)
 
     sns.despine(ax=ax, trim=True, offset=5)
@@ -2915,7 +2916,7 @@ def meso_module_contribution(coupling=0.3):
     events. so this is similar to `sim_modules_participating_in_bursts`
     """
 
-    dset = xr.load_dataset("./dat/meso_out/analysed.hdf5")
+    dset = xr.load_dataset("./dat/meso_out/analysed.hdf5", engine="h5netcdf", format="NETCDF4" )
     ax = sim_modules_participating_in_bursts(
         dset,
         simulation_coordinates=dict(coupling=coupling),

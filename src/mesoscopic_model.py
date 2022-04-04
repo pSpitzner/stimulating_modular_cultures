@@ -7,10 +7,18 @@ from genericpath import exists
 import numpy as np
 import pandas as pd
 import os
+from numba import jit
 
 
-# ps: we need to make this code more readable.
+
 def gate_deactivation_function(src_resources):
+    """
+    Auxiliar implementation of the response function of the gate to the number of resources. For plotting purposes only.
+
+    #Parameters:
+    src_resources: ndarray
+        Returns the response function of the given array
+    """
     def f2(inpt, thrs, gamma, lmbda):
         return lmbda / (1.0 + np.exp(-gamma * (inpt - thrs)))
 
@@ -23,51 +31,105 @@ def gate_deactivation_function(src_resources):
 
 def simulate_model(
     tf,
-    t_sti_start,
-    t_sti_end,
     output_filename,
-    no_gates=False,
-    m_=2.0,
-    tc_= 45.0,
-    td_= 15.0,
-    b_=1.55,
-    sigma_=0.1,
-    basefiring_=0.01,
-    w0_=0.3,
-    lamb_=0.6,
-    g_=0.1,
-    ext_str_=1.5,
-    ksig_=1.6,
-    basethr_=0.4,
-    gain_=10.0,
-    dt=0.01,
+    no_gates    = False,
+    m0          = 2.0,
+    tc          = 45.0,
+    td          = 15.0,
+    b           = 1.55,
+    sigma       = 0.1,
+    basefiring  = 0.01,
+    w0          = 0.3,
+    lamb        = 1.0,
+    g           = 0.7,
+    ext_str     = 1.5,
+    ksig        = 1.6,
+    basethr     = 0.4,
+    gain        = 10.0,
+    gatethr     = 0.5,
+    kgate       = 40.0,
+    dt          = 0.01,
+    rseed       = None 
 ):
     """
-    Simulate the simulated from t=0 to t=tf, stimulating from t_sti_start to t_sti_end. For model parameters please check function implementation.
+    Simulate the mesoscopic model up to time tf, with the given parameters. 
+
+    #Parameters:
+    tf : float
+        When does the simulation end.
+    output_filename : str
+        Name of the file that will be stored in disk, as output_filename.csv.    
+    
+    no_gates : bool, optional
+        Control whether gates are active. If False (default), the gates are used.
+    
+    m : float, optional
+        Maximum amount of synaptic resources. 
+    
+    tc : float, optional
+        Timescale of synaptical resource charging
+    td : float, optional
+        Timescale of synaptical resource discharge
+
+    b : float, optional
+        Timescale of activity exponential decay
+    
+    sigma : float, optional
+        Strenght of background noise fluctuations
+    
+    basefiring : float, optional
+        Firing rate in absence of stimulation.
+    
+    w0 : float, optional
+        Coupling strenght between different nodes
+    
+    lamb : float, optional
+        Rate of gate becoming inactive, thus not letting activity go through
+    g : float, optional
+        Rate of gate recovery
+    
+    ext_str : float, optional
+        Stimulation strength
+    
+    basethr : float, optional
+        Threshold for the non-linear sigmoidal function. Any activity which falls below this value will not affect the module
+    gain : float, optional
+        Gain that multiplies the result of the sigmoidal function, thus increasing the effect of the input
+
+    gatethr : float, optional
+        Threshold of activity needed in order to be able to affect the gate. Levels of activity below cannot inactivate a gate.
+    kgate : float, optional
+        Slope of the gate's response sigmoid
+
+    dt_ : float, optional
+        Timestep of the Euler integrator (default=0.01)
+    
+    rseed : float, optional
+        Use a custom random seed to ensure reproducitibility. If None (default), will use whatever Numpy selects 
+
     """
+
+    #Set random seed
+    if rseed != None:
+        np.random.seed(rseed)
+
     # Stochastic dt
     sqdt = np.sqrt(dt)
 
-    # Binnings associated to such a time
+    # Binnings associated to such a time 
     nt = int(tf / dt)
-    nt_start, nt_end = int(t_sti_start / dt), int(t_sti_end / dt)
 
     # Initialize variables
-    x = np.empty((4, nt))  # activity
-    mvar = np.empty((4, nt))  # current resources
-    gate = np.zeros((4, 4), dtype=int)  # state of each gate at this time (directed) gate[from, to]
+    x = np.empty((4, nt))     #activity
+    mvar = np.empty((4, nt))  #resources
+    gate = np.ones((4, 4), dtype=int)  # state of each gate at this time (directed) gate[from, to]
 
 
     # Model parameters!
-    m0 = m_  # Max amount of resources (spont, sti)
-    tc, td = tc_, td_  # Charge and discharge timescale of resources
-    b = b_  # Spontaneous decay of activity
-    sigma = sigma_  # Noise intensity
-    basefiring = np.ones(4) * basefiring_  # Minimum (small) firing rate
+    basefiring = np.ones(4) * basefiring  # Minimum (small) firing rate
 
     # Coupling matrix
     w = np.zeros((4, 4), dtype=int)  # Adjacency matrix
-    w0 = w0_  # Coupling between clusters
     w[0, 1] = 1
     w[1, 0] = 1
     w[0, 2] = 1
@@ -77,16 +139,14 @@ def simulate_model(
     w[2, 3] = 1
     w[3, 2] = 1
 
-    lamb = lamb_  # Gate open timescale
-    g = g_  # Gate recovery
+    #lamb = lamb   # Gate open timescale
+    #g = g   # Gate recovery
+    g = g / tc
 
     # External input
-    ext_input = np.ones(4) * ext_str_
+    ext_input = np.ones(4) * ext_str
 
     # Sigmoid definition (Wilson-Cowan type, such that f(x<=0)=0 and f(+infty)=gain)
-    ksig = ksig_  # Slope
-    basethr = basethr_  # Activation threshold
-    gain = gain_  # Final gain
     thrsig = np.exp(ksig * basethr)  # Shortcut to make computation faster
 
     def f(inpt):
@@ -95,14 +155,15 @@ def simulate_model(
             gain * (1.0 - expinpt) / (thrsig * expinpt + 1.0) if inpt >= basethr else 0.0
         )
 
-    def f2(inpt, thrs, gamma, lmbda):
+    #Sigmoid for gate response
+    def gate_sigm(inpt, thrs, gamma, lmbda):
         return lmbda / (1.0 + np.exp(-gamma * (inpt - thrs)))
 
     # Initialize parameters to spontaneous, get initial value of resources
     m = np.ones(4) * m0
 
-    mvar[:, 0] = m.copy()
-    x[:, 0] = 0.01
+    mvar[:, 0] = np.random.rand(4) * m0
+    x[:, 0] = np.random.rand(4) 
 
     # Define some auxiliary constants for gates
     GATE_OPEN = 0
@@ -115,6 +176,7 @@ def simulate_model(
     # Main computation loop: Milstein algorithm, assuming Ito interpretation
     t = 0.0
     for j in range(nt - 1):
+
         # Update each cluster
         old_gate = gate.copy()
         for c in range(4):
@@ -124,34 +186,34 @@ def simulate_model(
             for neigh in range(4):
                 if w[neigh, c] > 0.0:
 
+                    #Sum input to cluster c, only through open gates
                     suma += (
                         ((old_gate[neigh, c] == GATE_OPEN) or no_gates) * w0 * x[neigh, j]
                     )
 
-                    gatethr = 0.5
                     # Close door depending on activity of source
                     if old_gate[c, neigh] == GATE_OPEN:
-                        # prob = 1.0 - np.exp(-dt*lamb*x[c,j])
                         prob = 1.0 - np.exp(
-                            -dt * (1.0 - f2(mvar[c, j], gatethr, 40.0, 1.0))
+                            -dt * (1.0 - gate_sigm(mvar[c, j], gatethr, kgate, lamb))
                         )
-                        cosa = np.random.rand()
-                        if cosa < prob:
+                        ranumb = np.random.rand()
+                        if ranumb < prob:
                             gate[c, neigh] = GATE_CLOSED
                     # Open door with a characteristic time
                     else:
                         prob = 1.0 - np.exp(-dt * g)
-                        # prob = 1.0 - np.exp(-dt * f2(mvar[c,j], gatethr, 40.0, 1.0))
                         if np.random.rand() < prob:
                             gate[c, neigh] = GATE_OPEN
+            suma *= 0.5
 
             # Multiplicative noise (+ extra additive)
             noise = np.random.standard_normal() * sigma
             if x[c, j] > basefiring[c]:
-                noise += 2 * np.sqrt(x[c, j]) * np.random.standard_normal() * sigma
+                noise += np.sqrt(x[c, j]) * np.random.standard_normal() * sigma
 
             # Terms for the deterministic system
             t1 = b * (x[c, j] - basefiring[c])  # Spontaneous decay to small firing
+            #t2 = (1.0 - x[c,j]) * f(mvar[c, j] * (x[c, j] + suma + ext_input[c]))  # Input to the cluster
             t2 = f(mvar[c, j] * (x[c, j] + suma + ext_input[c]))  # Input to the cluster
 
             # Update our variables
@@ -165,14 +227,13 @@ def simulate_model(
     # ------------
     # Output
     # -----------
-
     os.makedirs(os.path.dirname(output_filename), exist_ok=True)
 
-    # Create a DataFrame easy to read in our workflow
+    # Create a DataFrame easy to read in our workflow and export as HDF
     df = pd.DataFrame(columns=["time"] + [f"mod_{m_cd}" for m_cd in range(1, 5)])
     df["time"] = np.arange(0, tf, dt)
     for m_cd in range(4):
         df[f"mod_{m_cd+1}"] = x[m_cd, :]
         df[f"mod_{m_cd+1}_res"] = mvar[m_cd, :]
-    # df.to_csv(f"{output_filename}.csv")
     df.to_hdf(f"{output_filename}.hdf5", f"/dataframe", complevel=9)
+

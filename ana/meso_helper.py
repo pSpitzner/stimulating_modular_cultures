@@ -13,18 +13,20 @@ import re
 import functools
 import numpy as np
 import pandas as pd
+from torch import threshold
 import xarray as xr
 from tqdm import tqdm
 
 # Cluster detection, very useful for avalanches
 from scipy.ndimage import measurements
 
-import hi5 as h5
 from benedict import benedict
 import ana_helper as ah
 
 import logging
 import warnings
+
+import hi5 as h5
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)-8s [%(name)s] %(message)s")
 log = logging.getLogger(__name__)
@@ -372,7 +374,7 @@ def f_event_size_and_friends(raw):
     raw = _load_if_path(raw)
     # lets reuse some of victors tricks
     h5f = prepare_file(raw)
-    find_system_bursts_and_module_contributions2(h5f)
+    find_system_bursts_and_module_contributions2(h5f, threshold_factor=0.2)
 
     res = dict()
     res["event_size"] = np.nanmean(h5f["ana.bursts.event_sizes"])
