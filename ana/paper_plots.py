@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-11-08 17:51:24
-# @Last Modified: 2021-11-16 11:53:15
+# @Last Modified: 2022-04-04 10:08:21
 # ------------------------------------------------------------------------------ #
 # collect the functions to create figure panels here
 # ------------------------------------------------------------------------------ #
@@ -695,14 +695,50 @@ def tables(output_folder):
     )
 
     for key in funcs.keys():
-        table = funcs[key]()
-        table.to_excel(f"{output_folder}/data_{key}.xlsx", engine="openpyxl")
-        table.to_latex(
+        func = funcs[key]
+        df = func()
+        # we want core delay in miliseconds
+        try:
+            df["Core delays (ms)"] = df["Core delays"].apply(lambda x: x * 1000)
+            df = df.drop("Core delays", axis=1)
+        except:
+            pass
+        try:
+            df["Inter-event-interval (seconds)"] = df["Inter-event-interval"]
+            df = df.drop("Inter-event-interval", axis=1)
+        except:
+            pass
+
+        # reorder columns
+        cols = df.columns.to_list()
+        for col in [
+            "Event size",
+            "Correlation Coefficient",
+            "Functional Complexity",
+            "Inter-event-interval (seconds)",
+            "Core delays (ms)",
+        ]:
+            try:
+                df.insert(len(cols)-1, col, df.pop(col))
+            except:
+                pass
+
+        df.to_excel(f"{output_folder}/data_{key}.xlsx", engine="openpyxl")
+
+        # add the number of trials of the trial data frame to the layout description
+        if func == table_for_trials:
+            df = df.reset_index()
+            df["layout"] = df["layout"] + " ($N=" + df["trials"].map(str) + "$ trials)"
+            df = df.drop("trials", axis=1)
+            df = df.set_index(["layout", "condition", "kind"])
+
+        df.to_latex(
             f"{output_folder}/data_{key}.tex",
             na_rep="",
-            bold_rows=True,
+            bold_rows=False,
             multirow=True,
             multicolumn=True,
+            float_format="{:2.2f}".format,
         )
 
 
@@ -865,6 +901,7 @@ def sm_exp_number_of_cells():
 
     ax.get_figure().savefig(f"./fig/paper/exp_layouts_sticks_num_cells.pdf", dpi=300)
 
+
 def table_for_violins():
     """
     Generate a table (pandas data frame) that holds all analysis results with calculated
@@ -934,7 +971,7 @@ def table_for_violins():
         condition=condition,
         observable="Inter-burst-interval",
     )
-    observables["Core delay"] = lambda layout, condition: f(
+    observables["Core delays"] = lambda layout, condition: f(
         df_path=ref[f"{layout}.df_path"],
         df_key="bursts",
         condition=condition,
