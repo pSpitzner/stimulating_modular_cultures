@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2022-04-01 19:01:32
+# @Last Modified: 2022-04-04 10:39:45
 # ------------------------------------------------------------------------------ #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into a single file, containing high-dimensional arrays.
@@ -123,6 +123,8 @@ def all_in_one(candidate=None):
         res["sys_orderpar_dist_median"] = 1
         res["sys_orderpar_dist_max"] = 1
         res["sys_modularity"] = 1
+        res["mod_mean_correlation"] = 1
+        res["mod_median_correlation"] = 1
 
         # histograms, use "vec" prefix to indicate that higher dimensional data
         res["vec_sys_hbins_participating_fraction"] = 21
@@ -295,15 +297,24 @@ def all_in_one(candidate=None):
     res["vec_sys_hvals_correlation_coefficients"] = rij_hist.copy()
     res["vec_sys_hvals_depletion_correlation_coefficients"] = rij_depletion_hist.copy()
 
-    # complexity on module level
+    # module level observables
     try:
-        C, _ = ah.find_functional_complexity(
+        rij_mod_level = ah.find_rij(h5f, which="modules")
+        C, rij_mod_level = ah.find_functional_complexity(
             h5f, which="modules", return_res=True, write_to_h5f=False, bins=bins
         )
     except Exception as e:
         log.exception(e)
         C = np.nan
     res["any_functional_complexity"] = C
+
+    try:
+        np.fill_diagonal(rij_mod_level, np.nan)
+        res["mod_mean_correlation"] = np.nanmean(rij_mod_level)
+        res["mod_median_correlation"] = np.nanmedian(rij_mod_level)
+    except:
+        res["mod_mean_correlation"] = np.nan
+        res["mod_median_correlation"] = np.nan
 
     # participating fraction
     try:
