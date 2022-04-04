@@ -392,7 +392,6 @@ def f_event_size_and_friends(raw):
     return res
 
 
-
 # this guy breaks convention
 # before was called `module_contribution`
 # I adapted this a bit to not return anything, but rather add the info to the h5f

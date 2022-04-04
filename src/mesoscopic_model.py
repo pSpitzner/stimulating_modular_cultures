@@ -10,7 +10,6 @@ import os
 from numba import jit
 
 
-
 def gate_deactivation_function(src_resources):
     """
     Auxiliar implementation of the response function of the gate to the number of resources. For plotting purposes only.
@@ -19,16 +18,17 @@ def gate_deactivation_function(src_resources):
     src_resources: ndarray
         Returns the response function of the given array
     """
+
     def f2(inpt, thrs, gamma, lmbda):
         return lmbda / (1.0 + np.exp(-gamma * (inpt - thrs)))
 
     dt = 0.01
-    prob = 1.0 - np.exp(
-        -dt * (1.0 - f2(src_resources, 0.5, 40.0, 1.0))
-    )
+    prob = 1.0 - np.exp(-dt * (1.0 - f2(src_resources, 0.5, 40.0, 1.0)))
 
     return prob
 
+
+# fmt:off
 def simulate_model(
     tf,
     output_filename,
@@ -49,23 +49,24 @@ def simulate_model(
     gatethr     = 0.5,
     kgate       = 40.0,
     dt          = 0.01,
-    rseed       = None 
+    rseed       = None
 ):
+# fmt:on
     """
-    Simulate the mesoscopic model up to time tf, with the given parameters. 
+    Simulate the mesoscopic model up to time tf, with the given parameters.
 
     #Parameters:
     tf : float
         When does the simulation end.
     output_filename : str
-        Name of the file that will be stored in disk, as output_filename.csv.    
-    
+        Name of the file that will be stored in disk, as output_filename.csv.
+
     no_gates : bool, optional
         Control whether gates are active. If False (default), the gates are used.
-    
+
     m : float, optional
-        Maximum amount of synaptic resources. 
-    
+        Maximum amount of synaptic resources.
+
     tc : float, optional
         Timescale of synaptical resource charging
     td : float, optional
@@ -73,24 +74,24 @@ def simulate_model(
 
     b : float, optional
         Timescale of activity exponential decay
-    
+
     sigma : float, optional
         Strenght of background noise fluctuations
-    
+
     basefiring : float, optional
         Firing rate in absence of stimulation.
-    
+
     w0 : float, optional
         Coupling strenght between different nodes
-    
+
     lamb : float, optional
         Rate of gate becoming inactive, thus not letting activity go through
     g : float, optional
         Rate of gate recovery
-    
+
     ext_str : float, optional
         Stimulation strength
-    
+
     basethr : float, optional
         Threshold for the non-linear sigmoidal function. Any activity which falls below this value will not affect the module
     gain : float, optional
@@ -103,9 +104,9 @@ def simulate_model(
 
     dt_ : float, optional
         Timestep of the Euler integrator (default=0.01)
-    
+
     rseed : float, optional
-        Use a custom random seed to ensure reproducitibility. If None (default), will use whatever Numpy selects 
+        Use a custom random seed to ensure reproducitibility. If None (default), will use whatever Numpy selects
 
     """
 
@@ -116,7 +117,7 @@ def simulate_model(
     # Stochastic dt
     sqdt = np.sqrt(dt)
 
-    # Binnings associated to such a time 
+    # Binnings associated to such a time
     nt = int(tf / dt)
 
     # Initialize variables
@@ -163,7 +164,7 @@ def simulate_model(
     m = np.ones(4) * m0
 
     mvar[:, 0] = np.random.rand(4) * m0
-    x[:, 0] = np.random.rand(4) 
+    x[:, 0] = np.random.rand(4)
 
     # Define some auxiliary constants for gates
     GATE_OPEN = 0
@@ -236,4 +237,3 @@ def simulate_model(
         df[f"mod_{m_cd+1}"] = x[m_cd, :]
         df[f"mod_{m_cd+1}_res"] = mvar[m_cd, :]
     df.to_hdf(f"{output_filename}.hdf5", f"/dataframe", complevel=9)
-

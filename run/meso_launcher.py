@@ -10,21 +10,21 @@ import os
 import sys
 from tqdm import tqdm
 
-#Select if we are using Python implementation or the C++ one.
-#Python is preferred
+# Select if we are using Python implementation or the C++ one.
+# Python is preferred
 use_cpp = False
 if not use_cpp:
     sys.path.append("./src/")
     import mesoscopic_model as mm
 
-#Set RNG seed and configure output folders
+# Set RNG seed and configure output folders
 rng_start_seed = 55436434
-n_trajectories =  1 
+n_trajectories = 1
 output_folder = "./dat/meso_in/"
 cpp_exe_folder = "./exe/"
 
-#Parameters we will use for the simulations. For each coupling span, all external inputs will be evaluated.
-#Each simulation can have a different length if needed.
+# Parameters we will use for the simulations. For each coupling span, all external inputs will be evaluated.
+# Each simulation can have a different length if needed.
 coupling_span = np.array([0.1, 0.3, 0.6])
 external_inputs = np.linspace(0.0, 0.5, 30)
 tf = np.array([1000 for j in range(30)])
@@ -35,7 +35,7 @@ def main():
     Used to execute the launcher and start the simulations.
     """
 
-    #Select C++ or Python implementations, both are similar
+    # Select C++ or Python implementations, both are similar
     if use_cpp:
         func = simulate_model_noise_cpp
     else:
@@ -60,13 +60,15 @@ def main():
             )
 
 
-def simulate_model_noise_python(ext_inputs, tf, coupling_folder, coupling, rseed=56454154):
+def simulate_model_noise_python(
+    ext_inputs, tf, coupling_folder, coupling, rseed=56454154
+):
     """
     Perform a simulation of the model using the Python implementation.
 
     #Parameters
     ext_inputs : numpy array
-        Array with different externals inputs where we want to perform simulations. 
+        Array with different externals inputs where we want to perform simulations.
     tf : numpy array
         Array with the time duration of each simulation (low estimulation might require larger times for statistics)
     coupling_folder : str
@@ -77,7 +79,7 @@ def simulate_model_noise_python(ext_inputs, tf, coupling_folder, coupling, rseed
         A random seed to ensure reproducibility of the simulations
     """
 
-    #Loop over different external inputs,
+    # Loop over different external inputs,
     for j, (h, t) in tqdm(
         enumerate(zip(ext_inputs, tf)), desc="noise", leave=False, total=len(tf)
     ):
@@ -87,8 +89,11 @@ def simulate_model_noise_python(ext_inputs, tf, coupling_folder, coupling, rseed
             ext_str=h,
             w0=coupling,
             sigma=0.1,
-            tc = 40.0, td = 5.0, b=1.0, gatethr=1.4, 
-            rseed=rseed
+            tc=40.0,
+            td=5.0,
+            b=1.0,
+            gatethr=1.4,
+            rseed=rseed,
         )
 
 
@@ -98,7 +103,7 @@ def simulate_model_noise_cpp(ext_inputs, tf, coupling_folder, coupling=0.3, rsee
 
     #Parameters
     ext_inputs : numpy array
-        Array with different externals inputs where we want to perform simulations. 
+        Array with different externals inputs where we want to perform simulations.
     tf : numpy array
         Array with the time duration of each simulation (low estimulation might require larger times for statistics)
     coupling_folder : str
