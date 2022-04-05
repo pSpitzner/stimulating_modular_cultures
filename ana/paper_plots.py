@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-11-08 17:51:24
-# @Last Modified: 2022-04-04 15:38:25
+# @Last Modified: 2022-04-05 16:36:13
 # ------------------------------------------------------------------------------ #
 # collect the functions to create figure panels here
 # ------------------------------------------------------------------------------ #
@@ -3033,7 +3033,7 @@ def meso_obs_for_all_couplings(dset, obs):
         )
     ax.legend()
 
-    if obs == "correlation_coefficient":
+    if "correlation_coefficient" in obs:
         ax.set_ylim(0, 1)
     # elif obs == "event_size":
     # ax.set_ylim(1, 4)
@@ -3129,13 +3129,15 @@ def meso_sketch_gate_deactivation():
     sns.despine(ax=ax, right=True, top=True, trim=True)
 
 
-def meso_module_contribution(coupling=0.3):
+def meso_module_contribution(dset=None, coupling=0.3):
     """
     fig 4 c but for mesoscopic model, how many modules contributed to bursting
     events. so this is similar to `sim_modules_participating_in_bursts`
     """
 
-    dset = xr.load_dataset("./dat/meso_out/analysed.hdf5")
+    if dset is None:
+        dset = xr.load_dataset("./dat/meso_out/analysed.hdf5")
+
     ax = sim_modules_participating_in_bursts(
         dset,
         simulation_coordinates=dict(coupling=coupling),

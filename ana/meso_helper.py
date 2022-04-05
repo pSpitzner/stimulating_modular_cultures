@@ -358,7 +358,10 @@ def f_correlation_coefficients(raw, return_matrix=False):
     if return_matrix:
         return rij
     else:
-        return dict(correlation_coefficient=np.nanmean(rij))
+        return dict(
+            mean_correlation_coefficient=np.nanmean(rij),
+            median_correlation_coefficient=np.nanmedian(rij),
+        )
 
 
 def f_functional_complexity(raw):

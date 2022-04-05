@@ -162,9 +162,9 @@ def simulate_model(
     # Binnings associated to such a time
     nt = int(simulation_time / dt)
 
-    # Initialize activity, resources, and gates 
-    x = np.ones(shape=(4, nt), dtype="float")*np.nan     
-    rsrc = np.ones(shape=(4, nt), dtype="float")*np.nan  
+    # Initialize activity, resources, and gates
+    x = np.ones(shape=(4, nt), dtype="float")*np.nan
+    rsrc = np.ones(shape=(4, nt), dtype="float")*np.nan
     gate = np.ones(shape=(4, 4), dtype="int")  # state of each gate at this time (directed) gate[from, to]
 
     # Coupling matrix
@@ -183,10 +183,10 @@ def simulate_model(
 
     # External input
     ext_input = np.ones(4) * ext_str
-    
-    # Auxiliary shortcut to pre-compute this constant 
+
+    # Auxiliary shortcut to pre-compute this constant
     # which is used in sigmoid transfer function
-    aux_thrsig = np.exp(k_sigm * thres_sigm)  
+    aux_thrsig = np.exp(k_sigm * thres_sigm)
 
     # Initialize parameters to spontaneous, get initial value of resources
     m = np.ones(4) * max_rsrc
@@ -276,7 +276,7 @@ def gate_deactivation_function(src_resources):
 @jit(nopython=True, parallel=False, fastmath=False, cache=True)
 def probability_to_close(resources, dt, thres_gate, k_gate, gate_cls):
     """
-    Returns the probability of the gate to be closed depending on sigmoid response and currently available resources 
+    Returns the probability of the gate to be closed depending on sigmoid response and currently available resources
 
     #Parameters:
     resources : float
@@ -289,11 +289,11 @@ def probability_to_close(resources, dt, thres_gate, k_gate, gate_cls):
         Knee of the sigmoidal
     gate_cls : float
         Typical rate at which the gate closes when all resources are available
-    
+
     # Returns
     prob_close: float
         Probability of gate closing for the currently available number of resources.
-    
+
     """
     return 1.0 - np.exp(-dt * (gate_cls - gate_sigm(resources, thres_gate, k_gate, gate_cls)))
 
@@ -312,11 +312,11 @@ def gate_sigm(inpt, thrs, k_gate, gate_cls):
         Knee of the sigmoidal
     gate_cls : float
         Typical rate at which the gate closes when all resources are available
-    
+
     # Returns
     gate_cls_effective : float
         Rate of gate closing for the currently available number of resources.
-    
+
     """
     return gate_cls / (1.0 + np.exp(-k_gate * (inpt - thrs)))
 
@@ -336,7 +336,7 @@ def transfer_function(inpt, gain, k_sigm, thres_sigm, aux_thrsig):
     thres_sigm : float
         Threshold. Below this value, function returns 0
     aux_thrsig : float
-        Auxiliary variable defined as exp(k_sigm * thres_sigm), precomputed for speed 
+        Auxiliary variable defined as exp(k_sigm * thres_sigm), precomputed for speed
 
     #Returns
     feedback : float
