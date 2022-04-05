@@ -83,17 +83,17 @@ def simulate_model_noise_python(
     for j, (h, t) in tqdm(
         enumerate(zip(ext_inputs, tf)), desc="noise", leave=False, total=len(tf)
     ):
-        mm.simulate_model(
-            t,
+        mm.simulate_and_save(
             output_filename=f"{coupling_folder}/noise{j}",
+            simulation_time=t,
             ext_str=h,
             w0=coupling,
             sigma=0.1,
             tc=40.0,
             td=5.0,
-            b=1.0,
-            gatethr=1.4,
-            rseed=rseed,
+            decay_r=1.0,
+            thres_gate=1.4,
+            rseed=rseed
         )
 
 
