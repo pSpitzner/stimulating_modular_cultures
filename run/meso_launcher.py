@@ -93,7 +93,7 @@ def simulate_model_noise_python(
             td=5.0,
             decay_r=1.0,
             thres_gate=1.4,
-            rseed=rseed
+            rseed=rseed,
         )
 
 
