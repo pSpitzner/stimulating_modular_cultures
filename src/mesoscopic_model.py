@@ -71,20 +71,20 @@ def simulate_model(
     simulation_time,
     no_gates    = False,
     max_rsrc    = 2.0,
-    tc          = 45.0,
-    td          = 15.0,
+    tc          = 40.0,
+    td          = 5.0,
     decay_r     = 1.0,
     sigma       = 0.1,
     basefiring  = 0.01,
     w0          = 0.3,
-    gate_cls    = 1.0,
-    gate_rec    = 0.7,
+    gate_cls    = 0.7,
+    gate_rec    = 0.03,
     ext_str     = 1.5,
     k_sigm      = 1.6,
     thres_sigm  = 0.4,
     gain        = 10.0,
-    thres_gate  = 0.5,
-    k_gate      = 40.0,
+    thres_gate  = 1.0,
+    k_gate      = 10.0,
     dt          = 0.01,
     rseed       = None
 ):
@@ -179,7 +179,7 @@ def simulate_model(
     w[3, 2] = 1
 
     #Gate timescales
-    gate_rec = gate_rec / tc
+    #gate_rec = gate_rec / tc
 
     # External input
     ext_input = np.ones(4) * ext_str
@@ -295,7 +295,7 @@ def probability_to_close(resources, dt, thres_gate, k_gate, gate_cls):
         Probability of gate closing for the currently available number of resources.
     
     """
-    return 1.0 - np.exp(-dt * (1.0 - gate_sigm(resources, thres_gate, k_gate, gate_cls)))
+    return 1.0 - np.exp(-dt * (gate_cls - gate_sigm(resources, thres_gate, k_gate, gate_cls)))
 
 #Sigmoid for gate response
 @jit(nopython=True, parallel=False, fastmath=False, cache=True)

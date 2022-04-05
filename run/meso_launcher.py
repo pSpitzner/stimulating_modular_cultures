@@ -88,11 +88,6 @@ def simulate_model_noise_python(
             simulation_time=t,
             ext_str=h,
             w0=coupling,
-            sigma=0.1,
-            tc=40.0,
-            td=5.0,
-            decay_r=1.0,
-            thres_gate=1.4,
             rseed=rseed
         )
 
