@@ -19,14 +19,14 @@ if not use_cpp:
 
 # Set RNG seed and configure output folders
 rng_start_seed = 55436434
-n_trajectories = 1
+n_trajectories = 10
 output_folder = "./dat/meso_in/"
 cpp_exe_folder = "./exe/"
 
 # Parameters we will use for the simulations. For each coupling span, all external inputs will be evaluated.
 # Each simulation can have a different length if needed.
-coupling_span = np.array([0.1, 0.3, 0.6])
-external_inputs = np.linspace(0.0, 0.5, 30)
+coupling_span = np.array([0.05, 0.1, 0.4])
+external_inputs = np.linspace(0.0, 0.3, 30)
 tf = np.array([1000 for j in range(30)])
 
 

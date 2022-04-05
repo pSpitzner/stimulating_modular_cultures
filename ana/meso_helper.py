@@ -377,7 +377,7 @@ def f_event_size_and_friends(raw):
     raw = _load_if_path(raw)
     # lets reuse some of victors tricks
     h5f = prepare_file(raw)
-    find_system_bursts_and_module_contributions2(h5f, threshold_factor=0.2)
+    find_system_bursts_and_module_contributions2(h5f, threshold_factor=0.1)
 
     res = dict()
     res["event_size"] = np.nanmean(h5f["ana.bursts.event_sizes"])
