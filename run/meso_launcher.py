@@ -20,7 +20,7 @@ output_folder = "./dat/meso_in/"
 # Parameters we will use for the simulations. For each coupling span, all external inputs will be evaluated.
 # Each simulation can have a different length if needed.
 coupling_span = np.array([0.05, 0.1, 0.4])
-external_inputs = np.linspace(0.0, 0.3, 30)
+external_inputs = np.linspace(0.0, 0.3, 16)
 simulation_time = 1000
 
 

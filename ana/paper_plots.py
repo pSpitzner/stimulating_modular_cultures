@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-11-08 17:51:24
-# @Last Modified: 2022-04-06 15:14:17
+# @Last Modified: 2022-04-06 16:11:29
 # ------------------------------------------------------------------------------ #
 # collect the functions to create figure panels here
 # ------------------------------------------------------------------------------ #
@@ -3012,8 +3012,10 @@ def fig_5(dset=None):
     ax = meso_module_contribution(dset, coupling=0.1)
 
     r = 1 # repetition
-    for n in [2, 20]:
+    for n in [1, 15]:
         for c in dset["coupling"].to_numpy():
+            if c == 0.1:
+                continue
             input_file = f"./dat/meso_in/coup{c:0.2f}-{r:d}/noise{n}.hdf5"
             coupling, noise, rep = mh._coords_from_file(input_file)
             ax = meso_resource_cycle(input_file)
@@ -3210,10 +3212,12 @@ def meso_module_contribution(dset=None, coupling=0.3):
 def meso_activity_snapshot(input_file):
 
     # get meta data
-    coupling, noise, rep = mh._coords_from_file(input_file)
+    # coupling, noise, rep = mh._coords_from_file(input_file)
 
     h5f = mh.prepare_file(input_file)
     mh.find_system_bursts_and_module_contributions2(h5f)
+    ph.overview_dynamic(h5f)
+
 
 
 
