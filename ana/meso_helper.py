@@ -57,6 +57,7 @@ def prepare_file(file_path):
     h5f["data.neuron_module_id"] = np.arange(4)
     h5f["ana.mods"] = [f"mod_{m}" for m in range(0, 4)]
     h5f["ana.mod_ids"] = np.arange(4)
+    h5f["ana.gate_ids"] = np.arange(2)
     h5f["ana.neuron_ids"] = np.arange(4)
 
     # keep a copy of the original pandas data frame
@@ -75,6 +76,11 @@ def prepare_file(file_path):
         h5f[f"ana.rates.module_level.{c}"] = df[c].to_numpy()
         h5f[f"ana.rates.cv.module_level.{c}"] = df[c].std() / df[c].mean()
         h5f[f"data.state_vars_D"][cdx, :] = df[f"{c}_res"].to_numpy()
+
+    #Load gate dynamics for plotting 
+    h5f["data.state_gate"] = np.ones(shape=(2,len(h5f[f"ana.rates.system_level"])))
+    for gateind in range(2):
+        h5f["data.state_gate"][gateind, :] = df[f"mod_gate_{gateind+1}"]
 
     # Get dt
     h5f[f"ana.rates.dt"] = df["time"][1] - df["time"][0]

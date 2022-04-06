@@ -167,6 +167,7 @@ def simulate_model(
     x = np.ones(shape=(4, nt), dtype="float")*np.nan
     rsrc = np.ones(shape=(4, nt), dtype="float")*np.nan
     gate = np.ones(shape=(4, 4), dtype="int")  # state of each gate at this time (directed) gate[from, to]
+    gate_state = np.zeros((2,nt))  #State of the gates of one module, saved only for plotting
 
     # Coupling matrix
     w = np.zeros(shape=(4, 4), dtype="int")  # Adjacency matrix
@@ -249,10 +250,15 @@ def simulate_model(
                 (m[c] - rsrc[c, j]) / tc - rsrc[c, j] * x[c, j] / td
             )
 
+            #Store state, using gates from first module
+            gate_state[0,j+1] = gate[0,1]
+            gate_state[1,j+1] = gate[0,2]
+
+
         t += dt  # Update the time
 
     time_axis = np.arange(0, simulation_time, dt)
-    return time_axis, x, rsrc
+    return time_axis, x, rsrc, gate_state 
 
 
 
@@ -364,7 +370,7 @@ def simulate_and_save(output_filename, meta_data=None, **kwargs):
     """
 
     #Perform model simulation
-    time, activity, resources = simulate_model(**kwargs)
+    time, activity, resources, gate_state = simulate_model(**kwargs)
 
     #Create the path if needed
     os.makedirs(os.path.dirname(output_filename), exist_ok=True)
@@ -376,6 +382,9 @@ def simulate_and_save(output_filename, meta_data=None, **kwargs):
         df[f"mod_{m_cd+1}"] = activity[m_cd, :]
         df[f"mod_{m_cd+1}_res"] = resources[m_cd, :]
 
+    #For the first module, store also the dynamics of its gate
+    for gateind in range(2):
+        df[f"mod_gate_{gateind+1}"] = gate_state[gateind, :] 
 
     df.to_hdf(f"{output_filename}.hdf5", f"/dataframe", complevel=9)
 

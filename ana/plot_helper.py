@@ -169,6 +169,7 @@ def overview_dynamic(h5f, filenames=None, threshold=None, states=True, skip=[]):
     if not "rates" in skip:
         plot_module_rates(h5f, axes[2])
         plot_system_rate(h5f, axes[2])
+        plot_gate_state(h5f, axes[3])
     if not "bursts" in skip:
         ax = plot_bursts_into_timeseries(h5f, axes[3], style="markers")
         _style_legend(ax.legend(loc=1))
@@ -457,6 +458,60 @@ def plot_system_rate(
         fig.tight_layout()
 
     return ax
+
+def plot_gate_state(
+    h5f, ax=None, apply_formatting=True, mark_burst_threshold=False, **kwargs
+):
+
+    assert "ana" in h5f.keypaths(), "`prepare_file(h5f)` before plotting!"
+    kwargs = kwargs.copy()
+    log.info("Plotting Module Rates")
+
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.get_figure()
+
+    if not "ana.rates" in h5f.keypaths():
+        ah.find_rates(h5f)
+
+    dt = h5f["ana.rates.dt"]
+
+    for gateind in h5f["ana.gate_ids"]:
+        gate_state = h5f["data.state_gate"][gateind]
+        plot_kwargs = kwargs.copy()
+        plot_kwargs.setdefault("color", h5f[f"ana.mod_colors"][gateind])
+        plot_kwargs.setdefault("alpha", 0.5)
+        ax.plot(np.arange(0, len(gate_state)) * dt, gate_state, **plot_kwargs)
+
+        if mark_burst_threshold:
+            try:
+                ax.axhline(
+                    y=h5f["ana.bursts.module_level.mod_0.rate_threshold"],
+                    ls=":",
+                    color=h5f[f"ana.mod_colors"][gateind],
+                )
+            except Exception as e:
+                log.debug(e)
+
+    leg = ax.legend(loc=1)
+
+    if apply_formatting:
+        leg.set_title("Module Rates")
+        leg.get_frame().set_linewidth(0.0)
+        leg.get_frame().set_facecolor("#e4e5e6")
+        leg.get_frame().set_alpha(0.95)
+
+        ax.margins(x=0, y=0)
+        ax.set_xlim(0, len(gate_state) * dt)
+        ax.set_ylabel("Rates [Hz]")
+        ax.set_xlabel("Time [seconds]")
+
+        fig.tight_layout()
+
+    return ax
+
+
 
 
 def plot_state_variable(h5f, ax=None, apply_formatting=True, variable="D", **kwargs):
