@@ -212,10 +212,7 @@ def process_data_from_folder(input_folder):
 
     # fetch the coordinates we may find in our folders, in order to create a 3d xarray
     for cdx, candidate in enumerate(candidates):
-        regex = re.search("coup(\d+.\d+)-(\d+)/noise(\d+).hdf5", candidate, re.IGNORECASE)
-        coupling = float(regex.group(1))
-        rep = int(regex.group(2))
-        noise = int(regex.group(3))
+        coupling, noise, rep = _coords_from_file(candidate)
 
         if coupling not in couplings:
             couplings.append(coupling)
@@ -242,10 +239,8 @@ def process_data_from_folder(input_folder):
     )
 
     for candidate in tqdm(candidates, desc="analysing files"):
-        regex = re.search("coup(\d+.\d+)-(\d+)/noise(\d+).hdf5", candidate, re.IGNORECASE)
-        coupling = float(regex.group(1))
-        rep = int(regex.group(2))
-        noise = int(regex.group(3))
+        coupling, noise, rep = _coords_from_file(candidate)
+
         cs = dict(noise=noise, coupling=coupling, repetition=rep)
 
         results = f(candidate)
@@ -264,6 +259,23 @@ def process_data_from_folder(input_folder):
 
     return dset
 
+def _coords_from_file(candidate):
+    # helper to get simulation coordinates from a file
+    try:
+        # get values from meta data of hdf5
+        coupling = h5.load(candidate, "/meta/coupling")
+        noise = h5.load(candidate, "/meta/noise")
+        rep = h5.load(candidate, "/meta/rep")
+    except:
+        # get values from regex, this gives noise values as integers, only.
+        regex = re.search(
+            "coup(\d+.\d+)-(\d+)/noise(\d+).hdf5", candidate, re.IGNORECASE
+        )
+        coupling = float(regex.group(1))
+        noise = int(regex.group(3))
+        rep = int(regex.group(2))
+
+    return coupling, noise, rep
 
 # ps: old version currently not used, afaik
 def _process_data_from_folder(folder_path, processing_functions, file_extension=".hdf5"):

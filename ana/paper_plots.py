@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-11-08 17:51:24
-# @Last Modified: 2022-04-05 16:36:13
+# @Last Modified: 2022-04-06 16:11:29
 # ------------------------------------------------------------------------------ #
 # collect the functions to create figure panels here
 # ------------------------------------------------------------------------------ #
@@ -3000,6 +3000,34 @@ def sim_resource_cycles(apply_formatting=True, k_list=None):
 # ------------------------------------------------------------------------------ #
 
 
+def fig_5(dset=None):
+
+    if dset is None:
+        try:
+            dset = xr.load_dataset("./dat/meso_out/analysed.hdf5")
+        except:
+            dset = mh.process_data_from_folder("./dat/meso_in/")
+
+    ax = meso_obs_for_all_couplings(dset, "mean_correlation_coefficient")
+    ax = meso_module_contribution(dset, coupling=0.1)
+
+    r = 1 # repetition
+    for n in [1, 15]:
+        for c in dset["coupling"].to_numpy():
+            if c == 0.1:
+                continue
+            input_file = f"./dat/meso_in/coup{c:0.2f}-{r:d}/noise{n}.hdf5"
+            coupling, noise, rep = mh._coords_from_file(input_file)
+            ax = meso_resource_cycle(input_file)
+            ax.set_title(f"coupling={c:.2f}, noise={noise:.3f}")
+            # print(f"coupling={c}, noise={noise}")
+            # cc.set_size2(ax, 1.6, 1.4) # this is the size of microscopic
+            ax.set_xlim(0, 2.5)
+            ax.set_ylim(0, 8)
+            cc.set_size3(ax, 4, 3)
+            sns.despine(ax=ax, trim=True, offset=5)
+
+
 def meso_obs_for_all_couplings(dset, obs):
     """
     Wrapper tjat reproduces the plots of the microscopic plots ~ fig 4:
@@ -3030,14 +3058,26 @@ def meso_obs_for_all_couplings(dset, obs):
                 "#333", cc.fade(cdx, dset["coupling"].size, invert=True)
             ),
             label=f"w = {coupling}",
+            zorder=cdx,
         )
     ax.legend()
 
     if "correlation_coefficient" in obs:
         ax.set_ylim(0, 1)
-    # elif obs == "event_size":
-    # ax.set_ylim(1, 4)
+        ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
+        ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
+
+        ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.1))
+        ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.025))
+
+    if not show_xlabel:
+        ax.set_xlabel("")
+
+    if not show_ylabel:
+        ax.set_ylabel("")
+
     cc.set_size2(ax, w=3.0, h=2.2)
+    # cc.set_size2(ax, 1.6, 1.4)
 
 
 def meso_xr_with_errors(da, ax=None, apply_formatting=True, **kwargs):
@@ -3083,6 +3123,16 @@ def meso_xr_with_errors(da, ax=None, apply_formatting=True, **kwargs):
         **plot_kwargs,
     )
 
+    plot_kwargs.setdefault("lw", 0.5)
+    plot_kwargs.pop("label")
+    plot_kwargs.pop("fmt")
+    plot_kwargs.pop("markersize")
+    plot_kwargs.pop("elinewidth")
+    plot_kwargs.pop("capsize")
+    plot_kwargs["zorder"] -= 1
+
+    ax.plot(da[x_name], da.mean(dim="repetition", skipna=True), **plot_kwargs)
+
     return ax
 
 
@@ -3109,7 +3159,7 @@ def meso_resource_cycle(input_file):
     # ax.set_ylim(-0.4, 4)
     # cc.set_size3(ax, 3.5, 3)
 
-    sns.despine(ax=ax, trim=True, offset=5)
+    # sns.despine(ax=ax, trim=True, offset=5)
 
     return ax
 
@@ -3145,8 +3195,31 @@ def meso_module_contribution(dset=None, coupling=0.3):
         dim1="noise",
         drop_zero_len=False,
     )
+    ax.set_xlabel("noise")
+    ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.1))
+    ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.025))
+
+    cc.set_size2(ax, w=3.0, h=2.2)
+
+    if not show_xlabel:
+        ax.set_xlabel("")
+
+    if not show_ylabel:
+        ax.set_ylabel("")
 
     return ax
+
+def meso_activity_snapshot(input_file):
+
+    # get meta data
+    # coupling, noise, rep = mh._coords_from_file(input_file)
+
+    h5f = mh.prepare_file(input_file)
+    mh.find_system_bursts_and_module_contributions2(h5f)
+    ph.overview_dynamic(h5f)
+
+
+
 
 
 # ------------------------------------------------------------------------------ #

@@ -7,6 +7,7 @@ from genericpath import exists
 import numpy as np
 import pandas as pd
 import os
+import h5py
 
 import logging
 import warnings
@@ -347,13 +348,17 @@ def transfer_function(inpt, gain, k_sigm, thres_sigm, aux_thrsig):
         gain * (1.0 - expinpt) / (aux_thrsig * expinpt + 1.0) if inpt >= thres_sigm else 0.0
     )
 
-def simulate_and_save(output_filename, **kwargs):
+def simulate_and_save(output_filename, meta_data=None, **kwargs):
     """
     Perform a simulation of the system and save it to the indicated path
 
     #Parameters
     output_filename : str
         Path to the output file. Extension (.hdf5) will be added automatically.
+    meta_data : dict, optional
+        key value pairs to save into the hdf5 file in the `/meta/` group.
+        (use for parameters so they can be read back in)
+
     **kwargs : dict
         Any parameters that can be given to mesoscopic_model.simulate_model
     """
@@ -373,3 +378,13 @@ def simulate_and_save(output_filename, **kwargs):
 
 
     df.to_hdf(f"{output_filename}.hdf5", f"/dataframe", complevel=9)
+
+    if meta_data is not None:
+        file = h5py.File(f"{output_filename}.hdf5", "r+")
+        for key in meta_data.keys():
+            try:
+                file.create_dataset(f"/meta/{key}", data=meta_data[key])
+            except Exception as e:
+                log.exception(e)
+        file.close()
+
