@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 # Set RNG seed and configure output folders
 rng_start_seed = 55436434
-n_trajectories = 10
+n_trajectories = 50
 output_folder = "./dat/meso_in/"
 
 # Parameters we will use for the simulations. For each coupling span, all external inputs will be evaluated.
