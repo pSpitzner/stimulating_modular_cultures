@@ -79,7 +79,7 @@ def simulate_model(
     w0          = 0.3,
     gate_cls    = 1.0,
     gate_rec    = 0.02,
-    ext_str     = 1.5,
+    ext_str     = 0.0,
     k_sigm      = 1.6,
     thres_sigm  = 0.4,
     gain        = 10.0,
