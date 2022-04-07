@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2021-11-17 09:29:23
+# @Last Modified: 2022-04-07 13:49:03
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -169,13 +169,16 @@ def overview_dynamic(h5f, filenames=None, threshold=None, states=True, skip=[]):
     if not "rates" in skip:
         plot_module_rates(h5f, axes[2])
         plot_system_rate(h5f, axes[2])
-        plot_gate_state(h5f, axes[3])
     if not "bursts" in skip:
         ax = plot_bursts_into_timeseries(h5f, axes[3], style="markers")
         _style_legend(ax.legend(loc=1))
         ax = plot_bursts_into_timeseries(
             h5f, axes[1], apply_formatting=False, style="fill_between"
         )
+        try:
+            plot_gate_history(h5f, axes[3])
+        except:
+            log.debug("Gate states are only defined for the mesoscopic model")
     if not "init" in skip:
         try:
             ax = plot_initiation_site(h5f, axes[4])
@@ -459,58 +462,77 @@ def plot_system_rate(
 
     return ax
 
-def plot_gate_state(
+def plot_gate_history(
     h5f, ax=None, apply_formatting=True, mark_burst_threshold=False, **kwargs
 ):
+    """
+    Plots times when gates allow transmission as continuous lines.
+    spreads all gates into the y interval between 0 and 1,
+    and colors by module id.
+    """
 
-    assert "ana" in h5f.keypaths(), "`prepare_file(h5f)` before plotting!"
     kwargs = kwargs.copy()
-    log.info("Plotting Module Rates")
+    log.info("Plotting Gate states")
 
     if ax is None:
         fig, ax = plt.subplots()
     else:
         fig = ax.get_figure()
 
-    if not "ana.rates" in h5f.keypaths():
-        ah.find_rates(h5f)
 
+
+    num_time_steps = h5f["data.gate_history"].shape[-1]
     dt = h5f["ana.rates.dt"]
+    time_axis = np.arange(0, num_time_steps) * dt
 
-    for gateind in h5f["ana.gate_ids"]:
-        gate_state = h5f["data.state_gate"][gateind]
+    # Coupling matrix, those modules are connected by a gate
+    w = np.zeros(shape=(4, 4), dtype="int")
+    w[0, 1] = 1
+    w[1, 0] = 1
+    w[0, 2] = 1
+    w[2, 0] = 1
+    w[1, 3] = 1
+    w[3, 1] = 1
+    w[2, 3] = 1
+    w[3, 2] = 1
+
+    # lets reshape the gate history so we have only the two actually existing gates:
+    # old: [from, to, time] 4,4,t
+    # new: [from, (target_one, target_two), time] 4,2,t
+    gate_history = np.ones(shape=(4,2,num_time_steps), dtype="int")*-1
+    for m_id in h5f["ana.mod_ids"]:
+        t1, t2 = np.where(w[m_id, :] == 1)[0]
+        gate_history[m_id,0,:] = h5f["data.gate_history"][m_id, t1, :]
+        gate_history[m_id,1,:] = h5f["data.gate_history"][m_id, t2, :]
+
+    # lets hard code the y coordinates.
+    total = 1.0
+    padding = 0.1
+    content = total - padding
+    dy = content / 8  # 4 modules, two gates each
+    y_pos = padding
+
+    for m_id in h5f["ana.mod_ids"]:
+        m_dc = h5f["ana.mods"][m_id]
         plot_kwargs = kwargs.copy()
-        plot_kwargs.setdefault("color", h5f[f"ana.mod_colors"][gateind])
-        plot_kwargs.setdefault("alpha", 0.5)
-        ax.plot(np.arange(0, len(gate_state)) * dt, gate_state, **plot_kwargs)
+        plot_kwargs.setdefault("color", h5f[f"ana.mod_colors"][m_id])
+        plot_kwargs.setdefault("solid_capstyle", "butt")
 
-        if mark_burst_threshold:
-            try:
-                ax.axhline(
-                    y=h5f["ana.bursts.module_level.mod_0.rate_threshold"],
-                    ls=":",
-                    color=h5f[f"ana.mod_colors"][gateind],
-                )
-            except Exception as e:
-                log.debug(e)
-
-    leg = ax.legend(loc=1)
+        for g_id in range(2):
+            array = gate_history[m_id, g_id, :].astype("float")
+            # we want a continuous line, where the gate is active that
+            # disappears when the gate closes.
+            array[array == 0] = np.nan
+            ax.plot(time_axis, array*y_pos, **plot_kwargs)
+            y_pos += dy
 
     if apply_formatting:
-        leg.set_title("Module Rates")
-        leg.get_frame().set_linewidth(0.0)
-        leg.get_frame().set_facecolor("#e4e5e6")
-        leg.get_frame().set_alpha(0.95)
-
-        ax.margins(x=0, y=0)
-        ax.set_xlim(0, len(gate_state) * dt)
-        ax.set_ylabel("Rates [Hz]")
+        ax.set_ylabel("Gate State")
         ax.set_xlabel("Time [seconds]")
 
         fig.tight_layout()
 
     return ax
-
 
 
 
@@ -1056,23 +1078,23 @@ def plot_resources_vs_activity(
 
 def plot_meso_nullclines(ext_inpt_array=None, tolerance=1e-3, **meso_args):
     """
-    Plots nullclines of the mesoscopic model for the selected set of parameters. 
+    Plots nullclines of the mesoscopic model for the selected set of parameters.
 
     #Parameters
     - ext_inpt_array : N-dim ndarray
-        If not None (default) generates a figure with several subplots following the same shape as ext_inpt_array. 
+        If not None (default) generates a figure with several subplots following the same shape as ext_inpt_array.
     - tolerance : float, optional
         Tolerance to detect when the two branches of the saddle node merge. Default is 1e-3
     - meso_args : dict
         Any argument that can be passed to the mesoscopic model simulation
-    
+
     #Returns
     - fig : matplotlib figure
         Returns a figure with the phase space and nullclines
     """
 
     if ext_inpt_array == None:
-        ext_str     = meso_args.get("ext_str", 0.0) 
+        ext_str     = meso_args.get("ext_str", 0.0)
         fig = plt.figure()
         plot_ax_nullcline(fig.gca(), ext_str, **meso_args)
         return fig
@@ -1095,7 +1117,7 @@ def plot_meso_nullclines(ext_inpt_array=None, tolerance=1e-3, **meso_args):
 
 def plot_ax_nullcline(ax, ext_str, tolerance=1e-3, **meso_args):
     """
-    Does the actual computation of the nullclines using the indicated control parameter and plots them into the selected axis 
+    Does the actual computation of the nullclines using the indicated control parameter and plots them into the selected axis
 
     #Parameters
     - ax : matplotlib axis
@@ -1110,13 +1132,13 @@ def plot_ax_nullcline(ax, ext_str, tolerance=1e-3, **meso_args):
 
     #Get arguments used for the model. This is needed because for fsolver we need to pass an ordered set of *args
     #Using the get method we can also set default values in case they are not specified in kwargs
-    max_rsrc    = meso_args.get("max_rsrc", 2.0) 
-    tc          = meso_args.get("tc", 40.0) 
-    td          = meso_args.get("td", 5.0) 
-    decay_r     = meso_args.get("decay_r", 1.0) 
-    basefiring  = meso_args.get("basefiring", 0.01) 
-    k           = meso_args.get("k_sigm", 1.6) 
-    thres       = meso_args.get("thres_sigm", 0.4) 
+    max_rsrc    = meso_args.get("max_rsrc", 2.0)
+    tc          = meso_args.get("tc", 40.0)
+    td          = meso_args.get("td", 5.0)
+    decay_r     = meso_args.get("decay_r", 1.0)
+    basefiring  = meso_args.get("basefiring", 0.01)
+    k           = meso_args.get("k_sigm", 1.6)
+    thres       = meso_args.get("thres_sigm", 0.4)
     gain        = meso_args.get("gain", 10.0)
 
     #Get the nullcline for resources, which is quite easy
@@ -1140,10 +1162,10 @@ def plot_ax_nullcline(ax, ext_str, tolerance=1e-3, **meso_args):
     # Function defined by dx/dt = 0 that we want to solve, it is transcendental so we will have to go for numerical
     def x_eq(x, *args):
         r              = args[0]
-        decay_r        = args[1] 
-        basefiring     = args[2] 
+        decay_r        = args[1]
+        basefiring     = args[2]
         ext_str        = args[3]
-        k, thr, gain   = args[4:7] 
+        k, thr, gain   = args[4:7]
         aux_thrsig     = args[7]
 
         xdot_1 = decay_r * (x - basefiring)  # Spontaneous decay to small firing
@@ -1153,13 +1175,13 @@ def plot_ax_nullcline(ax, ext_str, tolerance=1e-3, **meso_args):
 
     #Method of root finding: we know that for large enough resources system presents an oscillatory bifurcation type-I excitable, so we'll have a saddle node
     #Thus, use two different initial conditions to get all the branch
-    #Strategy: we know that for very large resources we have stable up-state near x=gain and unstable in down. So start here and then go 
+    #Strategy: we know that for very large resources we have stable up-state near x=gain and unstable in down. So start here and then go
     #backwards, using the latest found solution as initial seed for the next one, to make sure we stay in the stable manifold of the next solution (continuation algorithm)
-    x0_1 = gain 
+    x0_1 = gain
     x0_2 = 1.0
 
     x_nullc_up, x_nullc_dw = [], [] #Empty list that will have our saddle
-    is_saddle_found = False         #Integrate both branches till we find saddle 
+    is_saddle_found = False         #Integrate both branches till we find saddle
 
     #Initial value of r and change to get all r_values
     index = -1
@@ -1176,9 +1198,9 @@ def plot_ax_nullcline(ax, ext_str, tolerance=1e-3, **meso_args):
         x0_1, x0_2 = x_nullc_up[-1], x_nullc_dw[-1] + 0.2
 
         #Check termination condition
-        is_saddle_found = np.abs(x_nullc_up[-1] - x_nullc_dw[-1]) < tolerance 
+        is_saddle_found = np.abs(x_nullc_up[-1] - x_nullc_dw[-1]) < tolerance
         index -= 1
-    
+
     start_sn = index+1 #Store how many points we needed to get to saddle node, needed to plot lower branch
 
     #Then finish the reamining branch after the saddle, till we find the absorbing state
@@ -1198,16 +1220,16 @@ def plot_ax_nullcline(ax, ext_str, tolerance=1e-3, **meso_args):
     #Define single module ODE to be solved, in order to obtain a trajectory
     def module_ODE(vars, t, *args):
         x, r = vars
-        max_rsrc    = args[0]  
-        tc, td      = args[1:3] 
-        decay_r     = args[3] 
-        basefiring  = args[4] 
-        ext_str     = args[5] 
-        k, thr, gain= args[6:9] 
+        max_rsrc    = args[0]
+        tc, td      = args[1:3]
+        decay_r     = args[3]
+        basefiring  = args[4]
+        ext_str     = args[5]
+        k, thr, gain= args[6:9]
         aux_thrsig  = args[9]
 
-        xdot_1 = decay_r * (x - basefiring)  
-        xdot_2 = transfer_function(r * (x + ext_str), gain, k, thr, aux_thrsig)  
+        xdot_1 = decay_r * (x - basefiring)
+        xdot_2 = transfer_function(r * (x + ext_str), gain, k, thr, aux_thrsig)
         rdot =  (max_rsrc - r) / tc - r*x/ td
 
         return np.array([-xdot_1+xdot_2, rdot])
@@ -1224,12 +1246,12 @@ def plot_ax_nullcline(ax, ext_str, tolerance=1e-3, **meso_args):
     ax.plot(r_values, r_nullc, color="green")
 
     #Absorbing state is stable from beginning till the start of the bifurcation
-    #If external input is 0, whole x=0 is stable, if not, only a portion of it 
+    #If external input is 0, whole x=0 is stable, if not, only a portion of it
     if ext_str == 0.0:
         ax.axhline(0.0, color="red")
     else:
         ax.plot((r_values[0], r_values[start_sn]), (0.0, 0.0), color="red")
-    
+
     #up branch pre- and post- bifurcation
     ax.plot(r_values[start_sn:], x_nullc_up[start_sn:], color="red")
     ax.plot(r_values[:start_sn], x_nullc_up[:start_sn], color="red", ls="--")
@@ -1238,13 +1260,13 @@ def plot_ax_nullcline(ax, ext_str, tolerance=1e-3, **meso_args):
 
     #Trajectory
     ax.plot(traj[:,1], traj[:,0], color="black")
-    
+
     ax.set_xlim(0,2.8)
     ax.set_ylim(-1,12)
 
 
-    
-    
+
+
 
 
 # ------------------------------------------------------------------------------ #

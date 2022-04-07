@@ -148,6 +148,7 @@ def simulate_model(
 
     # Returns
 
+    time_axis : 1d array, time stemps for all other timeseries
     activity : 2d array, timeseries of module rate. Shape: (n_module, n_timepoints)
     resources : 2d array, timeseries of module resources. Shape: (n_module, n_timepoints)
 
@@ -167,7 +168,10 @@ def simulate_model(
     x = np.ones(shape=(4, nt), dtype="float")*np.nan
     rsrc = np.ones(shape=(4, nt), dtype="float")*np.nan
     gate = np.ones(shape=(4, 4), dtype="int")  # state of each gate at this time (directed) gate[from, to]
-    gate_state = np.zeros((2,nt))  #State of the gates of one module, saved only for plotting
+
+    # we want to be able to plot all gates. although we know that not all modules are
+    # connected, lets keep the shape simple and set all non-existing gates to zero.
+    gate_history = np.zeros(shape=(4, 4, nt), dtype="int")
 
     # Coupling matrix
     w = np.zeros(shape=(4, 4), dtype="int")  # Adjacency matrix
@@ -197,8 +201,8 @@ def simulate_model(
     x[:, 0] = np.random.rand(4)
 
     # Define some auxiliary constants for gates
-    GATE_OPEN = 0
-    GATE_CLOSED = 1
+    GATE_OPEN = 1
+    GATE_CLOSED = 0
 
     # -------------
     # Simulation
@@ -233,6 +237,11 @@ def simulate_model(
                         prob = 1.0 - np.exp(-dt * gate_rec)
                         if np.random.rand() < prob:
                             gate[c, neigh] = GATE_OPEN
+
+                    # Store gate state [from, to, time]
+                    gate_history[c,neigh, j] = gate[c, neigh]
+                    gate_history[c,neigh, j] = gate[c, neigh]
+
             module_input *= 0.5
 
             # Multiplicative noise (+ extra additive)
@@ -250,15 +259,11 @@ def simulate_model(
                 (m[c] - rsrc[c, j]) / tc - rsrc[c, j] * x[c, j] / td
             )
 
-            #Store state, using gates from first module
-            gate_state[0,j+1] = gate[0,1]
-            gate_state[1,j+1] = gate[0,2]
-
 
         t += dt  # Update the time
 
     time_axis = np.arange(0, simulation_time, dt)
-    return time_axis, x, rsrc, gate_state
+    return time_axis, x, rsrc, gate_history
 
 
 
@@ -370,7 +375,7 @@ def simulate_and_save(output_filename, meta_data=None, **kwargs):
     """
 
     #Perform model simulation
-    time, activity, resources, gate_state = simulate_model(**kwargs)
+    time, activity, resources, gate_history = simulate_model(**kwargs)
 
     #Create the path if needed
     os.makedirs(os.path.dirname(output_filename), exist_ok=True)
@@ -383,13 +388,20 @@ def simulate_and_save(output_filename, meta_data=None, **kwargs):
         df[f"mod_{m_cd+1}_res"] = resources[m_cd, :]
 
     #For the first module, store also the dynamics of its gate
-    for gateind in range(2):
-        df[f"mod_gate_{gateind+1}"] = gate_state[gateind, :]
+    # for gateind in range(2):
+        # df[f"mod_gate_{gateind+1}"] = gate_history[gateind, :]
 
     # overwrite data if it already exists
     if os.path.exists(f"{output_filename}.hdf5"):
         os.remove(f"{output_filename}.hdf5")
     df.to_hdf(f"{output_filename}.hdf5", f"/dataframe", complevel=9)
+
+
+    # This is quite inconsistent, most data is saved with pandas, only this is
+    # native hdf5. fixing requires a rewrite of meso_helper
+    file = h5py.File(f"{output_filename}.hdf5", "r+")
+    file.create_dataset(f"/data/gate_history", data=gate_history, compression="gzip")
+    file.close()
 
     if meta_data is not None:
         file = h5py.File(f"{output_filename}.hdf5", "r+")
