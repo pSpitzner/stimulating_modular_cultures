@@ -258,7 +258,7 @@ def simulate_model(
         t += dt  # Update the time
 
     time_axis = np.arange(0, simulation_time, dt)
-    return time_axis, x, rsrc, gate_state 
+    return time_axis, x, rsrc, gate_state
 
 
 
@@ -384,8 +384,11 @@ def simulate_and_save(output_filename, meta_data=None, **kwargs):
 
     #For the first module, store also the dynamics of its gate
     for gateind in range(2):
-        df[f"mod_gate_{gateind+1}"] = gate_state[gateind, :] 
+        df[f"mod_gate_{gateind+1}"] = gate_state[gateind, :]
 
+    # overwrite data if it already exists
+    if os.path.exists(f"{output_filename}.hdf5"):
+        os.remove(f"{output_filename}.hdf5")
     df.to_hdf(f"{output_filename}.hdf5", f"/dataframe", complevel=9)
 
     if meta_data is not None:
@@ -396,4 +399,3 @@ def simulate_and_save(output_filename, meta_data=None, **kwargs):
             except Exception as e:
                 log.exception(e)
         file.close()
-
