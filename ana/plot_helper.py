@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2022-04-07 13:49:03
+# @Last Modified: 2022-04-08 00:22:21
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -1243,20 +1243,20 @@ def plot_ax_nullcline(ax, ext_str, tolerance=1e-3, **meso_args):
     # --- Plot the graph
 
     #Nullcline for r is easy
-    ax.plot(r_values, r_nullc, color="green")
+    # ax.plot(r_values, r_nullc, color="green")
 
     #Absorbing state is stable from beginning till the start of the bifurcation
     #If external input is 0, whole x=0 is stable, if not, only a portion of it
-    if ext_str == 0.0:
-        ax.axhline(0.0, color="red")
-    else:
-        ax.plot((r_values[0], r_values[start_sn]), (0.0, 0.0), color="red")
+    # if ext_str == 0.0:
+    #     ax.axhline(0.0, color="red")
+    # else:
+    #     ax.plot((r_values[0], r_values[start_sn]), (0.0, 0.0), color="red")
 
-    #up branch pre- and post- bifurcation
-    ax.plot(r_values[start_sn:], x_nullc_up[start_sn:], color="red")
-    ax.plot(r_values[:start_sn], x_nullc_up[:start_sn], color="red", ls="--")
+    # up branch pre- and post- bifurcation
+    # ax.plot(r_values[start_sn:], x_nullc_up[start_sn:], color="red")
+    # ax.plot(r_values[:start_sn], x_nullc_up[:start_sn], color="red", ls="--")
     #down branch
-    ax.plot(r_values[start_sn:], x_nullc_dw, color="red", ls="--")
+    # ax.plot(r_values[start_sn:], x_nullc_dw, color="red", ls="--")
 
     #Trajectory
     ax.plot(traj[:,1], traj[:,0], color="black")

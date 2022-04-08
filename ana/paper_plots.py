@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-11-08 17:51:24
-# @Last Modified: 2022-04-06 16:11:29
+# @Last Modified: 2022-04-08 00:23:40
 # ------------------------------------------------------------------------------ #
 # collect the functions to create figure panels here
 # ------------------------------------------------------------------------------ #
@@ -723,7 +723,7 @@ def tables(output_folder):
             "Core delays (ms)",
         ]:
             try:
-                df.insert(len(cols)-1, col, df.pop(col))
+                df.insert(len(cols) - 1, col, df.pop(col))
             except:
                 pass
 
@@ -3009,23 +3009,41 @@ def fig_5(dset=None):
             dset = mh.process_data_from_folder("./dat/meso_in/")
 
     ax = meso_obs_for_all_couplings(dset, "mean_correlation_coefficient")
-    ax = meso_module_contribution(dset, coupling=0.1)
+    ax = meso_module_contribution(dset, coupling=0.5)
 
-    r = 1 # repetition
+    zoom = benedict(keypath_separator="/")
+    # zoom[noise_ineger][coupling_float] = start_time of zoom
+    zoom[f"1/0.05"] = 950
+    zoom[f"15/0.05"] = 950
+    zoom[f"1/0.8"] = 950
+    zoom[f"15/0.8"] = 950
+
+    r = 1  # repetition
     for n in [1, 15]:
         for c in dset["coupling"].to_numpy():
-            if c == 0.1:
-                continue
+            # if c == 0.1:
+                # continue
             input_file = f"./dat/meso_in/coup{c:0.2f}-{r:d}/noise{n}.hdf5"
             coupling, noise, rep = mh._coords_from_file(input_file)
-            ax = meso_resource_cycle(input_file)
+            h5f = mh.prepare_file(input_file)
+            mh.find_system_bursts_and_module_contributions2(h5f)
+            ax = meso_resource_cycle(h5f)
             ax.set_title(f"coupling={c:.2f}, noise={noise:.3f}")
             # print(f"coupling={c}, noise={noise}")
             # cc.set_size2(ax, 1.6, 1.4) # this is the size of microscopic
             ax.set_xlim(0, 2.5)
-            ax.set_ylim(0, 8)
+            ax.set_ylim(-1, 12)
             cc.set_size3(ax, 4, 3)
             sns.despine(ax=ax, trim=True, offset=5)
+
+            try:
+                z = zoom[f"{n}/{coupling}"]
+            except:
+                z = 950
+            fig = meso_activity_snapshot(h5f, zoom_start=z)
+            fig.suptitle(f"coupling={c:.2f}, noise={noise:.3f}")
+
+
 
 
 def meso_obs_for_all_couplings(dset, obs):
@@ -3160,6 +3178,12 @@ def meso_resource_cycle(input_file):
     # cc.set_size3(ax, 3.5, 3)
 
     # sns.despine(ax=ax, trim=True, offset=5)
+    coupling, noise, rep = mh._coords_from_file(input_file)
+    ph.plot_ax_nullcline(
+        ax=ax,
+        ext_str=noise,
+    )
+
 
     return ax
 
@@ -3209,17 +3233,112 @@ def meso_module_contribution(dset=None, coupling=0.3):
 
     return ax
 
-def meso_activity_snapshot(input_file):
 
+def meso_activity_snapshot(h5f=None, main_width=3.5, zoom_duration=50, zoom_start=100):
+    """
+    Create one of our activity snapshots for the mesoscopic model,
+    showing module rate, resources, gate state (and a zoom in?)
+
+    # Parameters
+    main_width : rough size of main column in cm
+    """
     # get meta data
     # coupling, noise, rep = mh._coords_from_file(input_file)
 
-    h5f = mh.prepare_file(input_file)
-    mh.find_system_bursts_and_module_contributions2(h5f)
-    ph.overview_dynamic(h5f)
+    if h5f is None:
+        h5f = mh.prepare_file(h5f)
+        mh.find_system_bursts_and_module_contributions2(h5f)
+
+    total_width = main_width + 0.7 + 0.8  # 7mm for labels on the left, 8mm for zoom
+    fig = plt.figure(figsize=[(total_width) / 2.54, 3.5 / 2.54])
+    axes = []
+    gs = fig.add_gridspec(
+        nrows=3,
+        ncols=2,
+        width_ratios=[main_width - 1.5, 0.8],
+        height_ratios=[
+            1,
+            0.5,
+            1,
+        ],
+        wspace=0.05,
+        hspace=0.1,
+        left=0.7 / total_width,
+        right=0.99,
+        top=0.95,
+        bottom=0.15,
+    )
+    axes.append(fig.add_subplot(gs[0, 0]))
+    axes.append(fig.add_subplot(gs[1, 0], sharex=axes[0]))
+    axes.append(fig.add_subplot(gs[2, 0], sharex=axes[0]))
+    axes.append(fig.add_subplot(gs[0, 1]))
+    axes.append(fig.add_subplot(gs[1, 1], sharex=axes[3]))
+    axes.append(fig.add_subplot(gs[2, 1], sharex=axes[3]))
+
+    # rates
+    ph.plot_module_rates(h5f, axes[0], alpha=1, lw=1.25)
+    ph.plot_module_rates(h5f, axes[3], alpha=1, lw=1.25)
+    ph.plot_system_rate(h5f, axes[0], mark_burst_threshold=False, lw=1)
+    ph.plot_system_rate(h5f, axes[3], mark_burst_threshold=False, lw=1)
+
+    # gates
+    ax = ph.plot_gate_history(h5f, axes[1])
+    ax = ph.plot_gate_history(h5f, axes[4])
+
+    # resources
+    ax = ph.plot_state_variable(h5f, axes[2], variable="D")
+    ax = ph.plot_state_variable(h5f, axes[5], variable="D")
+
+    # formatting
+    axes[3].set_xlim(zoom_start, zoom_start + zoom_duration)
+
+    # we did not share_y, do it manually
+    for a_id in [0, 3]:
+        axes[a_id].set_ylim(-1, 10)
+        axes[a_id].yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(5))
+        axes[a_id].yaxis.set_minor_locator(matplotlib.ticker.NullLocator())
+
+    for a_id in [1, 4]:
+        axes[a_id].set_ylim(0, 1)
+
+    for a_id in [2, 5]:
+        axes[a_id].set_ylim(0, 3)
+        axes[a_id].yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(3))
+        axes[a_id].yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(1))
 
 
 
+    for a_id in range(6):
+        axes[a_id].set_xlabel("")
+        axes[a_id].set_ylabel("")
+        try:
+            axes[a_id].get_legend().remove()
+        except:
+            pass
+        sns.despine(ax=axes[a_id], bottom=True, offset=5)
+
+        # keep ticks for bottom left, we might need them
+        if a_id != 2:
+            axes[a_id].xaxis.set_visible(False)
+
+    for a_id in [3, 4, 5]:
+        # cc.detick(axis=axes[a_id].yaxis)
+        axes[a_id].yaxis.set_visible(False)
+        sns.despine(ax=axes[a_id], left=True, bottom=True)
+
+    cc.detick(axis=axes[1].yaxis)
+    sns.despine(ax=axes[1], left=True, bottom=True)
+    sns.despine(ax=axes[0], left=False, bottom=True, trim=True)
+
+    # reenable one time axis label
+    ax = axes[2]
+    sns.despine(ax=ax, left=False, bottom=False, offset=5)
+    ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1000))
+    ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(250))
+
+
+
+    return fig
 
 
 # ------------------------------------------------------------------------------ #

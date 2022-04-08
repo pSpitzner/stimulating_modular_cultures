@@ -52,6 +52,14 @@ def prepare_file(file_path):
     # Create a dictionary and store the names of DF columns
     h5f = benedict()
 
+    # try meta data
+    try:
+        h5f["meta.coupling"] = h5.load(file_path, "/meta/coupling")
+        h5f["meta.noise"] = h5.load(file_path, "/meta/noise")
+        h5f["meta.rep"] = h5.load(file_path, "/meta/rep")
+    except:
+        pass
+
     # we may want to plot the gates, they are saved native to hdf5, not part of
     # the dataframe
     h5f["data.gate_history"] = h5.load(file_path, "/data/gate_history")
@@ -266,10 +274,16 @@ def process_data_from_folder(input_folder):
 def _coords_from_file(candidate):
     # helper to get simulation coordinates from a file
     try:
-        # get values from meta data of hdf5
-        coupling = h5.load(candidate, "/meta/coupling")
-        noise = h5.load(candidate, "/meta/noise")
-        rep = h5.load(candidate, "/meta/rep")
+        if isinstance(candidate, str):
+            # get values from meta data of hdf5 on disk
+            coupling = h5.load(candidate, "/meta/coupling")
+            noise = h5.load(candidate, "/meta/noise")
+            rep = h5.load(candidate, "/meta/rep")
+        else:
+            # already loaded as benedict
+            coupling = candidate["meta.coupling"]
+            noise = candidate["meta.noise"]
+            rep = candidate["meta.rep"]
     except:
         # get values from regex, this gives noise values as integers, only.
         regex = re.search(
@@ -322,8 +336,6 @@ def f_functional_complexity(raw):
 
 
 def f_event_size_and_friends(raw):
-    # this should be redundant with the prepping below
-    raw = _load_if_path(raw)
     # lets reuse some of victors tricks
     h5f = prepare_file(raw)
     find_system_bursts_and_module_contributions2(h5f, threshold_factor=0.1)

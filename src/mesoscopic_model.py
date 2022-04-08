@@ -87,7 +87,7 @@ def simulate_model(
     thres_gate  = 1.0,
     k_gate      = 10.0,
     dt          = 0.01,
-    rseed       = None
+    rseed       = None,
 ):
 # fmt:on
     """
@@ -157,6 +157,10 @@ def simulate_model(
     #Set random seed
     if rseed != None:
         np.random.seed(rseed)
+
+    thermalization_time = simulation_time * 0.1
+    recording_time = simulation_time
+    simulation_time = simulation_time + thermalization_time
 
     # Stochastic dt
     sqdt = np.sqrt(dt)
@@ -262,7 +266,13 @@ def simulate_model(
 
         t += dt  # Update the time
 
-    time_axis = np.arange(0, simulation_time, dt)
+    # this is a bit hacky...
+    rec_start = int(thermalization_time / dt)
+    x = x[:, rec_start:]
+    rsrc = rsrc[:, rec_start:]
+    gate_history = gate_history[:,:, rec_start:]
+
+    time_axis = np.arange(0, nt-rec_start) * dt
     return time_axis, x, rsrc, gate_history
 
 
@@ -374,10 +384,10 @@ def simulate_and_save(output_filename, meta_data=None, **kwargs):
         Any parameters that can be given to mesoscopic_model.simulate_model
     """
 
-    #Perform model simulation
+    # Perform model simulation
     time, activity, resources, gate_history = simulate_model(**kwargs)
 
-    #Create the path if needed
+    # Create the path if needed
     os.makedirs(os.path.dirname(output_filename), exist_ok=True)
 
     # Create a DataFrame easy to read in our workflow and export as HDF
