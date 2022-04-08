@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2022-04-08 00:22:21
+# @Last Modified: 2022-04-08 12:19:31
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -1024,7 +1024,7 @@ def plot_resources_vs_activity(
                 / h5f["ana.rates.dt"]
             )
         )
-        print(f"strides for rate vs adaptation: {stride}")
+        log.debug(f"strides for rate vs adaptation: {stride}")
         assert (
             len(mod_rate) == len(mod_adapt) * stride
         ), "len of rate v resources did not match."
@@ -1061,7 +1061,7 @@ def plot_resources_vs_activity(
                 idx = np.where((adap_times > last_end) & (adap_times <= next_end))
                 last_end = next_end
                 ax.plot(mod_adapt[idx], mod_rate[idx], **plot_kwargs)
-            print(f"plotted {num_traces} traces for {mod}")
+            log.info(f"plotted {num_traces} cycle traces for {mod}")
 
         else:
             ax.plot(mod_adapt, mod_rate, alpha=1, **plot_kwargs)

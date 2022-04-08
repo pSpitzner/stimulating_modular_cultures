@@ -66,30 +66,30 @@ except ImportError:
         return list(*args)
 
 
-# fmt:off
 @jit(nopython=True, parallel=False, fastmath=False, cache=True)
 def simulate_model(
+    # fmt:off
     simulation_time,
-    no_gates    = False,
-    max_rsrc    = 2.0,
-    tc          = 40.0,
-    td          = 5.0,
-    decay_r     = 1.0,
-    sigma       = 0.1,
-    basefiring  = 0.01,
-    w0          = 0.3,
-    gate_cls    = 1.0,
-    gate_rec    = 0.02,
-    ext_str     = 0.0,
-    k_sigm      = 1.6,
-    thres_sigm  = 0.4,
-    gain        = 10.0,
-    thres_gate  = 1.0,
-    k_gate      = 10.0,
-    dt          = 0.01,
-    rseed       = None,
+    gating_mechanism  = True,
+    max_rsrc          = 2.0,
+    tc                = 40.0,
+    td                = 5.0,
+    decay_r           = 1.0,
+    sigma             = 0.1,
+    basefiring        = 0.01,
+    w0                = 0.3,
+    gate_cls          = 1.0,
+    gate_rec          = 0.02,
+    ext_str           = 0.0,
+    k_sigm            = 1.6,
+    thres_sigm        = 0.4,
+    gain              = 10.0,
+    thres_gate        = 1.0,
+    k_gate            = 10.0,
+    dt                = 0.01,
+    rseed             = None,
+    # fmt:on
 ):
-# fmt:on
     """
     Simulate the mesoscopic model up to time tf, with the given parameters.
 
@@ -99,8 +99,9 @@ def simulate_model(
     output_filename : str
         Name of the file that will be stored in disk, as output_filename.csv.
 
-    no_gates : bool, optional
-        Control whether gates are active. If False (default), the gates are used.
+    gating_mechanism  : bool, optional
+        Control whether the gating mechanism is used (default: yes).
+        If False, gates are not updated and activity can pass at all times.
 
     max_rsrc : float, optional
         Maximum amount of synaptic resources.
@@ -154,7 +155,7 @@ def simulate_model(
 
     """
 
-    #Set random seed
+    # Set random seed
     if rseed != None:
         np.random.seed(rseed)
 
@@ -168,10 +169,14 @@ def simulate_model(
     # Binnings associated to such a time
     nt = int(simulation_time / dt)
 
+    GATE_OPEN = 1  # allow transmission
+    GATE_CLOSED = 0  # nothing goes through
+
     # Initialize activity, resources, and gates
-    x = np.ones(shape=(4, nt), dtype="float")*np.nan
-    rsrc = np.ones(shape=(4, nt), dtype="float")*np.nan
-    gate = np.ones(shape=(4, 4), dtype="int")  # state of each gate at this time (directed) gate[from, to]
+    x = np.ones(shape=(4, nt), dtype="float") * np.nan
+    rsrc = np.ones(shape=(4, nt), dtype="float") * np.nan
+    # state of each gate at this time (directed) gate[from, to]
+    gate = np.ones(shape=(4, 4), dtype="int") * GATE_OPEN
 
     # we want to be able to plot all gates. although we know that not all modules are
     # connected, lets keep the shape simple and set all non-existing gates to zero.
@@ -188,8 +193,8 @@ def simulate_model(
     w[2, 3] = 1
     w[3, 2] = 1
 
-    #Gate timescales
-    #gate_rec = gate_rec / tc
+    # Gate timescales
+    # gate_rec = gate_rec / tc
 
     # External input
     ext_input = np.ones(4) * ext_str
@@ -203,10 +208,6 @@ def simulate_model(
 
     rsrc[:, 0] = np.random.rand(4) * max_rsrc
     x[:, 0] = np.random.rand(4)
-
-    # Define some auxiliary constants for gates
-    GATE_OPEN = 1
-    GATE_CLOSED = 0
 
     # -------------
     # Simulation
@@ -225,15 +226,24 @@ def simulate_model(
             for neigh in range(4):
                 if w[neigh, c] > 0.0:
 
-                    #Sum input to cluster c, only through open gates
-                    if (no_gates or (old_gate[neigh, c] == GATE_OPEN)):
+                    # Sum input to cluster c, only through open gates
+                    if old_gate[neigh, c] == GATE_OPEN:
                         module_input += w0 * x[neigh, j]
+
+                    # Store gate state for export [from, to, time]
+                    gate_history[c, neigh, j] = gate[c, neigh]
+                    gate_history[c, neigh, j] = gate[c, neigh]
+
+                    # update gates, but only if the mechanism is enabled
+                    if not gating_mechanism:
+                        continue
 
                     # Close door depending on activity of source
                     if old_gate[c, neigh] == GATE_OPEN:
-                        prob = probability_to_close(rsrc[c, j], dt, thres_gate, k_gate, gate_cls)
-                        ranumb = np.random.rand()
-                        if ranumb < prob:
+                        prob = probability_to_close(
+                            rsrc[c, j], dt, thres_gate, k_gate, gate_cls
+                        )
+                        if np.random.rand() < prob:
                             gate[c, neigh] = GATE_CLOSED
 
                     # Open door with a characteristic time
@@ -242,10 +252,6 @@ def simulate_model(
                         if np.random.rand() < prob:
                             gate[c, neigh] = GATE_OPEN
 
-                    # Store gate state [from, to, time]
-                    gate_history[c,neigh, j] = gate[c, neigh]
-                    gate_history[c,neigh, j] = gate[c, neigh]
-
             module_input *= 0.5
 
             # Multiplicative noise (+ extra additive)
@@ -253,9 +259,17 @@ def simulate_model(
             if x[c, j] > basefiring:
                 noise += np.sqrt(x[c, j]) * np.random.standard_normal() * sigma
 
-            # Terms for the deterministic system
-            t1 = decay_r * (x[c, j] - basefiring)  # Spontaneous decay to small firing
-            t2 = transfer_function(rsrc[c, j] * (x[c, j] + module_input + ext_input[c]), gain, k_sigm, thres_sigm, aux_thrsig)  # Input to the cluster
+            # Terms for the deterministic system:
+            # Spontaneous decay to small firing
+            t1 = decay_r * (x[c, j] - basefiring)
+            # Input to the cluster
+            t2 = transfer_function(
+                rsrc[c, j] * (x[c, j] + module_input + ext_input[c]),
+                gain,
+                k_sigm,
+                thres_sigm,
+                aux_thrsig,
+            )
 
             # Update our variables
             x[c, j + 1] = x[c, j] + dt * (-t1 + t2) + sqdt * noise
@@ -263,18 +277,16 @@ def simulate_model(
                 (m[c] - rsrc[c, j]) / tc - rsrc[c, j] * x[c, j] / td
             )
 
-
         t += dt  # Update the time
 
     # this is a bit hacky...
     rec_start = int(thermalization_time / dt)
     x = x[:, rec_start:]
     rsrc = rsrc[:, rec_start:]
-    gate_history = gate_history[:,:, rec_start:]
+    gate_history = gate_history[:, :, rec_start:]
 
-    time_axis = np.arange(0, nt-rec_start) * dt
+    time_axis = np.arange(0, nt - rec_start) * dt
     return time_axis, x, rsrc, gate_history
-
 
 
 # this should be the same?
@@ -294,6 +306,7 @@ def gate_deactivation_function(src_resources):
     prob = 1.0 - np.exp(-dt * (1.0 - f2(src_resources, 0.5, 40.0, 1.0)))
 
     return prob
+
 
 @jit(nopython=True, parallel=False, fastmath=False, cache=True)
 def probability_to_close(resources, dt, thres_gate, k_gate, gate_cls):
@@ -317,9 +330,12 @@ def probability_to_close(resources, dt, thres_gate, k_gate, gate_cls):
         Probability of gate closing for the currently available number of resources.
 
     """
-    return 1.0 - np.exp(-dt * (gate_cls - gate_sigm(resources, thres_gate, k_gate, gate_cls)))
+    return 1.0 - np.exp(
+        -dt * (gate_cls - gate_sigm(resources, thres_gate, k_gate, gate_cls))
+    )
 
-#Sigmoid for gate response
+
+# Sigmoid for gate response
 @jit(nopython=True, parallel=False, fastmath=False, cache=True)
 def gate_sigm(inpt, thrs, k_gate, gate_cls):
     """
@@ -341,6 +357,7 @@ def gate_sigm(inpt, thrs, k_gate, gate_cls):
 
     """
     return gate_cls / (1.0 + np.exp(-k_gate * (inpt - thrs)))
+
 
 #
 @jit(nopython=True, parallel=False, fastmath=False, cache=True)
@@ -366,8 +383,11 @@ def transfer_function(inpt, gain, k_sigm, thres_sigm, aux_thrsig):
     """
     expinpt = np.exp(-k_sigm * (inpt - thres_sigm))
     return (
-        gain * (1.0 - expinpt) / (aux_thrsig * expinpt + 1.0) if inpt >= thres_sigm else 0.0
+        gain * (1.0 - expinpt) / (aux_thrsig * expinpt + 1.0)
+        if inpt >= thres_sigm
+        else 0.0
     )
+
 
 def simulate_and_save(output_filename, meta_data=None, **kwargs):
     """
@@ -397,15 +417,14 @@ def simulate_and_save(output_filename, meta_data=None, **kwargs):
         df[f"mod_{m_cd+1}"] = activity[m_cd, :]
         df[f"mod_{m_cd+1}_res"] = resources[m_cd, :]
 
-    #For the first module, store also the dynamics of its gate
+    # For the first module, store also the dynamics of its gate
     # for gateind in range(2):
-        # df[f"mod_gate_{gateind+1}"] = gate_history[gateind, :]
+    # df[f"mod_gate_{gateind+1}"] = gate_history[gateind, :]
 
     # overwrite data if it already exists
     if os.path.exists(f"{output_filename}.hdf5"):
         os.remove(f"{output_filename}.hdf5")
     df.to_hdf(f"{output_filename}.hdf5", f"/dataframe", complevel=9)
-
 
     # This is quite inconsistent, most data is saved with pandas, only this is
     # native hdf5. fixing requires a rewrite of meso_helper

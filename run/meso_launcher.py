@@ -17,6 +17,8 @@ rng_start_seed = 55436434
 n_trajectories = 20
 output_folder = "./dat/meso_in/"
 
+gating_mechanism = True
+
 # Parameters we will use for the simulations. For each coupling span, all external inputs will be evaluated.
 # Each simulation can have a different length if needed.
 coupling_span = np.array([0.05, 0.1, 0.8])
@@ -48,10 +50,12 @@ def main():
                     ext_str=h,
                     w0=c,
                     rseed=rng_start_seed + rep * 41533,
+                    gating_mechanism=gating_mechanism,
                     meta_data=dict(
                         coupling=c,
                         noise=h,
                         rep=rep,
+                        gating_mechanism=gating_mechanism,
                     ),
                 )
 
