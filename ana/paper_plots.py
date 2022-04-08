@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-11-08 17:51:24
-# @Last Modified: 2022-04-08 00:23:40
+# @Last Modified: 2022-04-08 12:45:10
 # ------------------------------------------------------------------------------ #
 # collect the functions to create figure panels here
 # ------------------------------------------------------------------------------ #
@@ -3000,7 +3000,7 @@ def sim_resource_cycles(apply_formatting=True, k_list=None):
 # ------------------------------------------------------------------------------ #
 
 
-def fig_5(dset=None):
+def fig_5(dset=None, skip_snapshots=False, skip_cycles=False):
 
     if dset is None:
         try:
@@ -3018,30 +3018,36 @@ def fig_5(dset=None):
     zoom[f"1/0.8"] = 950
     zoom[f"15/0.8"] = 950
 
-    r = 1  # repetition
+    r = 0  # repetition
     for n in [1, 15]:
         for c in dset["coupling"].to_numpy():
-            # if c == 0.1:
-                # continue
+            if c == 0.1:
+                continue
+
             input_file = f"./dat/meso_in/coup{c:0.2f}-{r:d}/noise{n}.hdf5"
+            if not os.path.exists(input_file):
+                continue
             coupling, noise, rep = mh._coords_from_file(input_file)
             h5f = mh.prepare_file(input_file)
             mh.find_system_bursts_and_module_contributions2(h5f)
-            ax = meso_resource_cycle(h5f)
-            ax.set_title(f"coupling={c:.2f}, noise={noise:.3f}")
-            # print(f"coupling={c}, noise={noise}")
-            # cc.set_size2(ax, 1.6, 1.4) # this is the size of microscopic
-            ax.set_xlim(0, 2.5)
-            ax.set_ylim(-1, 12)
-            cc.set_size3(ax, 4, 3)
-            sns.despine(ax=ax, trim=True, offset=5)
 
-            try:
-                z = zoom[f"{n}/{coupling}"]
-            except:
-                z = 950
-            fig = meso_activity_snapshot(h5f, zoom_start=z)
-            fig.suptitle(f"coupling={c:.2f}, noise={noise:.3f}")
+            if not skip_cycles:
+                ax = meso_resource_cycle(h5f)
+                ax.set_title(f"coupling={c:.2f}, noise={noise:.3f}")
+                # print(f"coupling={c}, noise={noise}")
+                # cc.set_size2(ax, 1.6, 1.4) # this is the size of microscopic
+                ax.set_xlim(0, 2.5)
+                ax.set_ylim(-1, 12)
+                cc.set_size3(ax, 4, 3)
+                sns.despine(ax=ax, trim=True, offset=5)
+
+            if not skip_snapshots:
+                try:
+                    z = zoom[f"{n}/{coupling}"]
+                except:
+                    z = 950
+                fig = meso_activity_snapshot(h5f, zoom_start=z)
+                fig.suptitle(f"coupling={c:.2f}, noise={noise:.3f}")
 
 
 
@@ -3167,7 +3173,8 @@ def meso_resource_cycle(input_file):
         h5f = input_file
 
     ax = ph.plot_resources_vs_activity(
-        h5f, apply_formatting=False, max_traces_per_mod=20, clip_on=False
+        h5f, apply_formatting=False, max_traces_per_mod=200, clip_on=False,
+        alpha=0.05
     )
     ax.set_xlabel("Synaptic resources")
     ax.set_ylabel("Module rate")

@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 # Set RNG seed and configure output folders
 rng_start_seed = 55436434
-n_trajectories = 20
+n_trajectories = 1
 output_folder = "./dat/meso_in/"
 
 gating_mechanism = True
@@ -23,7 +23,7 @@ gating_mechanism = True
 # Each simulation can have a different length if needed.
 coupling_span = np.array([0.05, 0.1, 0.8])
 external_inputs = np.linspace(0.0, 0.3, 16)
-simulation_time = 1000
+simulation_time = 10000
 
 
 def main():
