@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-01-24 13:43:39
-# @Last Modified: 2022-04-11 15:31:12
+# @Last Modified: 2022-04-11 15:31:46
 # ------------------------------------------------------------------------------- #
 # Create a movie of the network for a given time range and visualize
 # firing neurons. Save to mp4.
@@ -25,13 +25,13 @@ import ana_helper as ah
 import seaborn as sns
 import colors as cc
 
-# matplotlib.use("Agg")
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from matplotlib.collections import LineCollection
 from matplotlib.animation import FFMpegWriter
 
-# plt.ioff()
+plt.ioff()
 plt.style.use("dark_background")
 
 
