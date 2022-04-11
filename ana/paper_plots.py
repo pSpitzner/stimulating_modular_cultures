@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-11-08 17:51:24
-# @Last Modified: 2022-04-08 12:45:10
+# @Last Modified: 2022-04-11 09:43:05
 # ------------------------------------------------------------------------------ #
 # collect the functions to create figure panels here
 # ------------------------------------------------------------------------------ #
@@ -3000,16 +3000,17 @@ def sim_resource_cycles(apply_formatting=True, k_list=None):
 # ------------------------------------------------------------------------------ #
 
 
-def fig_5(dset=None, skip_snapshots=False, skip_cycles=False):
+def fig_5(dset=None, skip_snapshots=False, skip_cycles=False, skip_observables=False):
 
-    if dset is None:
-        try:
-            dset = xr.load_dataset("./dat/meso_out/analysed.hdf5")
-        except:
-            dset = mh.process_data_from_folder("./dat/meso_in/")
+    if not skip_observables:
+        if dset is None:
+            try:
+                dset = xr.load_dataset("./dat/meso_out/analysed.hdf5")
+            except:
+                dset = mh.process_data_from_folder("./dat/meso_in/")
 
-    ax = meso_obs_for_all_couplings(dset, "mean_correlation_coefficient")
-    ax = meso_module_contribution(dset, coupling=0.5)
+        ax = meso_obs_for_all_couplings(dset, "mean_correlation_coefficient")
+        ax = meso_module_contribution(dset, coupling=0.1)
 
     zoom = benedict(keypath_separator="/")
     # zoom[noise_ineger][coupling_float] = start_time of zoom
@@ -3020,12 +3021,12 @@ def fig_5(dset=None, skip_snapshots=False, skip_cycles=False):
 
     r = 0  # repetition
     for n in [1, 15]:
-        for c in dset["coupling"].to_numpy():
-            if c == 0.1:
-                continue
+        for c in [0.05, 0.1, 0.8]:
+            # for c in [2.5]:
 
             input_file = f"./dat/meso_in/coup{c:0.2f}-{r:d}/noise{n}.hdf5"
             if not os.path.exists(input_file):
+                log.info(f"File not found {input_file}")
                 continue
             coupling, noise, rep = mh._coords_from_file(input_file)
             h5f = mh.prepare_file(input_file)
@@ -3036,9 +3037,13 @@ def fig_5(dset=None, skip_snapshots=False, skip_cycles=False):
                 ax.set_title(f"coupling={c:.2f}, noise={noise:.3f}")
                 # print(f"coupling={c}, noise={noise}")
                 # cc.set_size2(ax, 1.6, 1.4) # this is the size of microscopic
-                ax.set_xlim(0, 2.5)
+                ax.set_xlim(0, 2.0)
                 ax.set_ylim(-1, 12)
-                cc.set_size3(ax, 4, 3)
+                cc.set_size3(ax, 1.6, 1.4)
+                ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(2))
+                ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(1))
+                ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(10.0))
+                ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(2.5))
                 sns.despine(ax=ax, trim=True, offset=5)
 
             if not skip_snapshots:
@@ -3048,8 +3053,6 @@ def fig_5(dset=None, skip_snapshots=False, skip_cycles=False):
                     z = 950
                 fig = meso_activity_snapshot(h5f, zoom_start=z)
                 fig.suptitle(f"coupling={c:.2f}, noise={noise:.3f}")
-
-
 
 
 def meso_obs_for_all_couplings(dset, obs):
@@ -3173,8 +3176,7 @@ def meso_resource_cycle(input_file):
         h5f = input_file
 
     ax = ph.plot_resources_vs_activity(
-        h5f, apply_formatting=False, max_traces_per_mod=200, clip_on=False,
-        alpha=0.05
+        h5f, apply_formatting=False, max_traces_per_mod=200, clip_on=False, alpha=0.05
     )
     ax.set_xlabel("Synaptic resources")
     ax.set_ylabel("Module rate")
@@ -3186,11 +3188,10 @@ def meso_resource_cycle(input_file):
 
     # sns.despine(ax=ax, trim=True, offset=5)
     coupling, noise, rep = mh._coords_from_file(input_file)
-    ph.plot_ax_nullcline(
+    mh.plot_ax_nullcline(
         ax=ax,
         ext_str=noise,
     )
-
 
     return ax
 
@@ -3302,18 +3303,16 @@ def meso_activity_snapshot(h5f=None, main_width=3.5, zoom_duration=50, zoom_star
     # we did not share_y, do it manually
     for a_id in [0, 3]:
         axes[a_id].set_ylim(-1, 10)
-        axes[a_id].yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(5))
-        axes[a_id].yaxis.set_minor_locator(matplotlib.ticker.NullLocator())
+        axes[a_id].yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(10))
+        axes[a_id].yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(2.5))
 
     for a_id in [1, 4]:
         axes[a_id].set_ylim(0, 1)
 
     for a_id in [2, 5]:
-        axes[a_id].set_ylim(0, 3)
-        axes[a_id].yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(3))
+        axes[a_id].set_ylim(0, 2.95)
+        axes[a_id].yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(2))
         axes[a_id].yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(1))
-
-
 
     for a_id in range(6):
         axes[a_id].set_xlabel("")
@@ -3322,7 +3321,7 @@ def meso_activity_snapshot(h5f=None, main_width=3.5, zoom_duration=50, zoom_star
             axes[a_id].get_legend().remove()
         except:
             pass
-        sns.despine(ax=axes[a_id], bottom=True, offset=5)
+        sns.despine(ax=axes[a_id], bottom=True, offset=5, trim=True)
 
         # keep ticks for bottom left, we might need them
         if a_id != 2:
@@ -3342,8 +3341,6 @@ def meso_activity_snapshot(h5f=None, main_width=3.5, zoom_duration=50, zoom_star
     sns.despine(ax=ax, left=False, bottom=False, offset=5)
     ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1000))
     ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(250))
-
-
 
     return fig
 
