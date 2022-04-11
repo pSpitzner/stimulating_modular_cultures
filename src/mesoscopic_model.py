@@ -289,27 +289,8 @@ def simulate_model(
     return time_axis, x, rsrc, gate_history
 
 
-# this should be the same?
-def gate_deactivation_function(src_resources):
-    """
-    Auxiliar implementation of the response function of the gate to the number of resources. For plotting purposes only.
-
-    #Parameters:
-    src_resources: ndarray
-        Returns the response function of the given array
-    """
-
-    def f2(inpt, thrs, gamma, lmbda):
-        return lmbda / (1.0 + np.exp(-gamma * (inpt - thrs)))
-
-    dt = 0.01
-    prob = 1.0 - np.exp(-dt * (1.0 - f2(src_resources, 0.5, 40.0, 1.0)))
-
-    return prob
-
-
 @jit(nopython=True, parallel=False, fastmath=False, cache=True)
-def probability_to_close(resources, dt, thres_gate, k_gate, gate_cls):
+def probability_to_close(resources, dt=0.01, thres_gate=1.0, k_gate=10.0, gate_cls=1.0):
     """
     Returns the probability of the gate to be closed depending on sigmoid response and currently available resources
 

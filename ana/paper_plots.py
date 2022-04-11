@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-11-08 17:51:24
-# @Last Modified: 2022-04-11 11:19:56
+# @Last Modified: 2022-04-11 12:02:06
 # ------------------------------------------------------------------------------ #
 # collect the functions to create figure panels here
 # ------------------------------------------------------------------------------ #
@@ -3011,10 +3011,19 @@ def fig_5(dset=None, skip_snapshots=False, skip_cycles=False, skip_observables=F
 
         ax = meso_obs_for_all_couplings(dset, "mean_correlation_coefficient")
         ax.get_legend().set_visible(False)
-        ax.get_figure().savefig(f"./fig/paper/meso_mean_rij.pdf", dpi=300, transparent=True)
+        ax.get_figure().savefig(
+            f"./fig/paper/meso_mean_rij.pdf", dpi=300, transparent=True
+        )
         c = 0.1
         ax = meso_module_contribution(dset, coupling=c)
-        ax.get_figure().savefig(f"./fig/paper/meso_module_contrib_{c}.pdf", dpi=300, transparent=True)
+        ax.get_figure().savefig(
+            f"./fig/paper/meso_module_contrib_{c}.pdf", dpi=300, transparent=True
+        )
+
+        ax = meso_sketch_gate_deactivation()
+        ax.get_figure().savefig(
+            f"./fig/paper/meso_gate_sketch.pdf", dpi=300, transparent=True
+        )
 
     zoom = benedict(keypath_separator="/")
     # zoom[noise_ineger][coupling_float] = start_time of zoom
@@ -3057,7 +3066,9 @@ def fig_5(dset=None, skip_snapshots=False, skip_cycles=False, skip_observables=F
                 ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(2.5))
                 sns.despine(ax=ax, trim=True, offset=1)
 
-                ax.get_figure().savefig(f"{out_path}_cycles_{c}_{noise}.pdf", dpi=300, transparent=True)
+                ax.get_figure().savefig(
+                    f"{out_path}_cycles_{c}_{noise}.pdf", dpi=300, transparent=True
+                )
 
             if not skip_snapshots:
                 try:
@@ -3067,7 +3078,9 @@ def fig_5(dset=None, skip_snapshots=False, skip_cycles=False, skip_observables=F
                 fig = meso_activity_snapshot(h5f, zoom_start=z)
                 if show_title:
                     fig.suptitle(f"coupling={c:.2f}, noise={noise:.3f}")
-                fig.savefig(f"{out_path}_snapshot_{c}_{noise}.pdf", dpi=300, transparent=True)
+                fig.savefig(
+                    f"{out_path}_snapshot_{c}_{noise}.pdf", dpi=300, transparent=True
+                )
 
 
 def meso_obs_for_all_couplings(dset, obs):
@@ -3124,6 +3137,7 @@ def meso_obs_for_all_couplings(dset, obs):
     # cc.set_size2(ax, 1.6, 1.4)
 
     return ax
+
 
 def meso_xr_with_errors(da, ax=None, apply_formatting=True, **kwargs):
     """
@@ -3198,8 +3212,11 @@ def meso_resource_cycle(input_file):
     ax = ph.plot_resources_vs_activity(
         h5f,
         ax=ax,
-        apply_formatting=False, max_traces_per_mod=200, clip_on=False, alpha=0.05,
-        zorder=-1
+        apply_formatting=False,
+        max_traces_per_mod=200,
+        clip_on=False,
+        alpha=0.05,
+        zorder=-1,
     )
     ax.set_xlabel("Synaptic resources")
     ax.set_ylabel("Module rate")
@@ -3227,17 +3244,19 @@ def meso_resource_cycle(input_file):
 
 def meso_sketch_gate_deactivation():
     sys.path.append("./src")
-    from mesoscopic_model import gate_deactivation_function
+    from mesoscopic_model import probability_to_close
 
     # currently using probabilities for y. better as rates?
-    src_resources = np.arange(0.25, 0.75, 0.01)
+    src_resources = np.arange(0.0, 2., 0.01)
     fig, ax = plt.subplots()
-    ax.plot(src_resources, gate_deactivation_function(src_resources))
+    ax.plot(src_resources, probability_to_close(src_resources))
     ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.01))
     ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.002))
     ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1))
     ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.2))
     sns.despine(ax=ax, right=True, top=True, trim=True)
+
+    return ax
 
 
 def meso_module_contribution(dset=None, coupling=0.3):
