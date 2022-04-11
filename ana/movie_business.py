@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-01-24 13:43:39
-# @Last Modified: 2022-04-11 15:30:19
+# @Last Modified: 2022-04-11 15:31:12
 # ------------------------------------------------------------------------------- #
 # Create a movie of the network for a given time range and visualize
 # firing neurons. Save to mp4.
@@ -12,7 +12,6 @@
 # ------------------------------------------------------------------------------- #
 
 import os
-from re import I
 import sys
 import glob
 import h5py
