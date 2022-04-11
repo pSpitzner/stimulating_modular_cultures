@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-01-24 13:43:39
-# @Last Modified: 2022-04-10 17:16:06
+# @Last Modified: 2022-04-11 15:30:19
 # ------------------------------------------------------------------------------- #
 # Create a movie of the network for a given time range and visualize
 # firing neurons. Save to mp4.
@@ -12,6 +12,7 @@
 # ------------------------------------------------------------------------------- #
 
 import os
+from re import I
 import sys
 import glob
 import h5py
@@ -23,29 +24,33 @@ import hi5 as h5
 import plot_helper as ph
 import ana_helper as ah
 import seaborn as sns
+import colors as cc
 
-matplotlib.use("Agg")
+# matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
+from matplotlib.collections import LineCollection
 from matplotlib.animation import FFMpegWriter
 
-plt.ioff()
-plt.style.use('dark_background')
-
+# plt.ioff()
+plt.style.use("dark_background")
 
 
 def main(args):
 
     metadata = dict(title=f"{args.title}", artist="Matplotlib", comment="Yikes! Spikes!")
     writer = FFMpegWriter(fps=args.fps, metadata=metadata)
-
+    num_frames = (args.fps * args.length) + 1
 
     # 1800x900 px at 300 dpi, where fonts are decent
     fig, axes = plt.subplots(ncols=2, figsize=(6, 3))
 
     global topo
-    topo = TopologyRenderer(input_path=args.input_path, ax = axes[0])
+    topo = TopologyRenderer(input_path=args.input_path, ax=axes[0])
 
+    # its helpful to set the decay time propto movie playback speed
+    time_ratio = args.length / (args.tend - args.tbeg)
+    topo.decay_time = 0.5 / time_ratio
 
     # ------------------------------------------------------------------------------ #
     # population activity plot
@@ -55,24 +60,19 @@ def main(args):
     h5f = ah.prepare_file(args.input_path)
     ah.find_rates(h5f)
 
-    ph.plot_system_rate(h5f=h5f, ax = ax, color = "white")
+    ph.plot_system_rate(h5f=h5f, ax=ax, color="white")
 
     ax.get_legend().set_visible(False)
     # window = 5
     # ax.set_xlim(-window/2, window/2)
     ax.set_xlim(args.tbeg, args.tend)
     reference = ax.axvline(0, ls=":")
-    sns.despine(ax=ax, right=True, top=True, offset = 5)
-
-
-
-
+    sns.despine(ax=ax, right=True, top=True, offset=5)
 
     # ------------------------------------------------------------------------------ #
     # movie loop
     # ------------------------------------------------------------------------------ #
 
-    num_frames = (args.fps * args.length) + 1
     with writer.saving(fig=topo.fig, outfile=args.output_path, dpi=300):
         print(f"Rendering {args.length:.0f} seconds with {num_frames} frames ...")
 
@@ -158,7 +158,6 @@ def frame_index_to_experimental_time(this_frame, total_frames, exp_start, exp_en
     return exp_start + this_frame * exp_timer_per_frame
 
 
-
 class TopologyRenderer(object):
     """
     This guy provides the helpers to plot soma and axons and lets them light
@@ -179,7 +178,7 @@ class TopologyRenderer(object):
 
         # fade time of neurons after spiking mimicing calcium indicator decay
         # time in seconds of the experimental time
-        self.decay_time = 2.0
+        self.decay_time = 5.0
 
         # experimental time
         self.time_unit = "s"
@@ -294,57 +293,118 @@ class TopologyRenderer(object):
         """
         spikes = self.spiketimes[n_id]
         try:
-            last_time = np.where(spikes <= time)[0][-1]
-            last_time = spikes[last_time]
+            times_to_show = np.where(
+                (spikes <= time) & (spikes >= time - 10 * self.decay_time)
+            )[0]
+            times_to_show = spikes[times_to_show]
         except:
             # no spike occured yet
-            last_time = -np.infty
+            times_to_show = []
 
-        dt = time - last_time
+        # calculate total alpha (brightness) by adding up past spikes
+        total_alpha = 0
+        for last_time in times_to_show:
+            dt = time - last_time
+            alpha = np.exp(-dt / self.decay_time)
+            # alpha = 1.0 - dt / self.decay_time
+            # at least x consecutive spikes needed to reach full brightness
+            alpha /= 10
+            total_alpha += alpha
+        total_alpha = np.clip(total_alpha, 0.0, 1.0)
 
-        # set color if time difference is shorter than our decay time
-        # or clear to fully transparent
-        if dt >= 0 and dt <= self.decay_time:
-            ax_edge = self.axon_clr_dt(dt)
-            sm_edge, sm_face = self.soma_clr_dt(dt)
-        else:
-            ax_edge = (0, 0, 0, 0)
-            sm_edge = (0, 0, 0, 0)
-            sm_face = (0, 0, 0, 0)
+        # rgba as 4-tuple, between 0 and 1
+        # make soma a bit brighter than axons
+        ax_edge = (*mcolors.to_rgb(self.neuron_clr), total_alpha * 0.6)
+        sm_edge = (*mcolors.to_rgb(self.neuron_clr), total_alpha * 0.8)
+        sm_face = (*mcolors.to_rgb(self.neuron_clr), total_alpha * 1.0)
 
         # update the actual foreground layer
         self.art_axons[n_id].set_color(ax_edge)
         self.art_soma[n_id].set_edgecolor(sm_edge)
         self.art_soma[n_id].set_facecolor(sm_face)
 
-    def axon_clr_dt(self, time_ago):
-        """
-        calculate the color of an axon given a spike occured `time_ago`.
-        `time_ago` in experimental time.
-        needs to return a color that will be applied to the foreground of axons
-        """
-        alpha = 1.0 - (time_ago) / self.decay_time  # linear
-        # alpha = 1.0 / (time_ago) # 1/x, pretty steep
-        alpha = np.clip(alpha, 0.0, 1.0)
-        rgb = mcolors.to_rgb(self.neuron_clr)
-        return (*rgb, alpha * 0.6)
 
-    def soma_clr_dt(self, time_ago):
+class FadingLineRenderer(object):
+    """
+    Think of an oldschool osci, where the electron beam draws the line and fades,
+    draw line transparency as exponential
+
+    Create plot lines as line segments so that styles can be updated later
+    c.f. https://github.com/dpsanders/matplotlib-examples/blob/master/colorline.py
+    """
+
+    def __init__(self, x, y, ax=None, dt=1, tbeg=0, **kwargs):
         """
-        calculate the color of an axon given a spike occured `time_ago`.
-        `time_ago` in experimental time.
-        needs to return two colors, for cell body and outline
+        # Parameters:
+        x, y : 1d arrays of the data to plot,
+        dt : float, how to map from time to data index, every point in x is assumed
+            to have length dt (and do start at t=0)
+        tbeg : float, if x does not start at time 0, when does it start?
+        ax : matplotlib axis element to draw into
+        kwargs : passed to LineCollection
         """
-        alpha = 1.0 - (time_ago) / self.decay_time  # linear
-        alpha = np.clip(alpha, 0.0, 1.0)
-        rgb = mcolors.to_rgb(self.neuron_clr)
-        # edge = (1,1,1, alpha * 0.8)
-        edge = (*rgb, alpha * 0.8)
-        face = (*rgb, alpha)
-        return edge, face
+        if ax is None:
+            self.fig, self.ax = plt.subplots(figsize=[6.4, 6.4])
+        else:
+            self.ax = ax
+            self.fig = ax.get_figure()
 
+        points = np.array([x, y]).T.reshape(-1, 1, 2)
+        segments = np.concatenate([points[:-1], points[1:]], axis=1)
 
+        kwargs = kwargs.copy()
+        # this cmap is white at 1 and transparent at 0
+        kwargs.setdefault("cmap", cc.cmap["alpha_white"])
+        if isinstance(kwargs["cmap"], str):
+            self.cmap = plt.get_cmap(kwargs["cmap"])
+        else:
+            self.cmap = kwargs["cmap"]
 
+        self.num_timesteps = len(x)
+
+        self.lc = LineCollection(segments, array=np.ones_like(x, dtype="float"), **kwargs)
+        # now, the lc array is a helper array of same length as data, to set the color
+        # along the line, e.g. with floats between 0 and 1, that is mapped using colormap
+        self.ax.add_collection(self.lc)
+
+        # casting experimental time to the data array
+        self.dt = dt
+        self.tbeg = tbeg
+
+        # fade transparency,
+        self.decay_time = 15.0  # exponential decay time in experimental time units
+        # after around 3 decay times we are sufficiently close to zero
+        self.decay_bins = int(3 * self.decay_time / self.dt)
+
+        t = np.arange(0, self.decay_bins) * -self.dt
+        mask = np.exp(-t / self.decay_time)
+        # make sure last entry is zero
+        m_min = np.nanmin(mask)
+        m_max = np.nanmax(mask)
+        m_diff = m_max - m_min
+        self.decay_mask = (mask - m_min) / m_diff
+
+    def set_array(self, z):
+        self.lc.set_array(z)
+
+        # unfortunately, setting the lc array does not directly
+        # refresh the colors of the line collection.
+        self.lc.set_colors([self.cmap(f) for f in z])
+
+    def set_time(self, time):
+        time_index = int((time - self.tbeg) / self.dt)
+        first_visible = time_index - self.decay_bins
+        if time_index < 0:
+            time_index = 0
+        if first_visible < 0:
+            first_visible = 0
+
+        num_bins = time_index - first_visible
+        new_z = np.zeros(self.num_timesteps)
+        if num_bins > 0:
+            new_z[time_index-num_bins:time_index] = self.decay_mask[-num_bins:]
+
+        self.set_array(new_z)
 
 
 if __name__ == "__main__":
