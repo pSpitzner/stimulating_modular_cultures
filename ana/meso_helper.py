@@ -60,6 +60,7 @@ def prepare_file(file_path):
         h5f["meta.coupling"] = h5.load(file_path, "/meta/coupling")
         h5f["meta.noise"] = h5.load(file_path, "/meta/noise")
         h5f["meta.rep"] = h5.load(file_path, "/meta/rep")
+        h5f["meta.gating_mechanism"] = h5.load(file_path, "/meta/gating_mechanism")
     except:
         pass
 
@@ -698,7 +699,7 @@ def plot_ax_nullcline(ax, ext_str, tolerance=1e-3, **meso_args):
     # ax.plot(r_values[start_sn:], x_nullc_dw, color="red", ls="--")
 
     #Trajectory
-    ax.plot(traj[:,1], traj[:,0], color="black")
+    ax.plot(traj[:,1], traj[:,0], color="black", clip_on=False, zorder=4)
 
     ax.set_xlim(0,2.8)
     ax.set_ylim(-1,12)

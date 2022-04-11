@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-11-08 17:51:24
-# @Last Modified: 2022-04-11 09:43:05
+# @Last Modified: 2022-04-11 11:19:56
 # ------------------------------------------------------------------------------ #
 # collect the functions to create figure panels here
 # ------------------------------------------------------------------------------ #
@@ -42,7 +42,7 @@ log.setLevel("INFO")
 warnings.filterwarnings("ignore")  # suppress numpy warnings
 
 # select things to draw for every panel
-show_title = False
+show_title = True
 show_xlabel = True
 show_ylabel = True
 show_legend = False
@@ -3010,7 +3010,11 @@ def fig_5(dset=None, skip_snapshots=False, skip_cycles=False, skip_observables=F
                 dset = mh.process_data_from_folder("./dat/meso_in/")
 
         ax = meso_obs_for_all_couplings(dset, "mean_correlation_coefficient")
-        ax = meso_module_contribution(dset, coupling=0.1)
+        ax.get_legend().set_visible(False)
+        ax.get_figure().savefig(f"./fig/paper/meso_mean_rij.pdf", dpi=300, transparent=True)
+        c = 0.1
+        ax = meso_module_contribution(dset, coupling=c)
+        ax.get_figure().savefig(f"./fig/paper/meso_module_contrib_{c}.pdf", dpi=300, transparent=True)
 
     zoom = benedict(keypath_separator="/")
     # zoom[noise_ineger][coupling_float] = start_time of zoom
@@ -3031,10 +3035,17 @@ def fig_5(dset=None, skip_snapshots=False, skip_cycles=False, skip_observables=F
             coupling, noise, rep = mh._coords_from_file(input_file)
             h5f = mh.prepare_file(input_file)
             mh.find_system_bursts_and_module_contributions2(h5f)
+            gates = h5f["meta.gating_mechanism"]
+            out_path = "./fig/paper/meso_"
+            if gates:
+                out_path += "gates_on"
+            else:
+                out_path += "gates_off"
 
             if not skip_cycles:
                 ax = meso_resource_cycle(h5f)
-                ax.set_title(f"coupling={c:.2f}, noise={noise:.3f}")
+                if show_title:
+                    ax.set_title(f"coupling={c:.2f}, noise={noise:.3f}")
                 # print(f"coupling={c}, noise={noise}")
                 # cc.set_size2(ax, 1.6, 1.4) # this is the size of microscopic
                 ax.set_xlim(0, 2.0)
@@ -3044,7 +3055,9 @@ def fig_5(dset=None, skip_snapshots=False, skip_cycles=False, skip_observables=F
                 ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(1))
                 ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(10.0))
                 ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(2.5))
-                sns.despine(ax=ax, trim=True, offset=5)
+                sns.despine(ax=ax, trim=True, offset=1)
+
+                ax.get_figure().savefig(f"{out_path}_cycles_{c}_{noise}.pdf", dpi=300, transparent=True)
 
             if not skip_snapshots:
                 try:
@@ -3052,7 +3065,9 @@ def fig_5(dset=None, skip_snapshots=False, skip_cycles=False, skip_observables=F
                 except:
                     z = 950
                 fig = meso_activity_snapshot(h5f, zoom_start=z)
-                fig.suptitle(f"coupling={c:.2f}, noise={noise:.3f}")
+                if show_title:
+                    fig.suptitle(f"coupling={c:.2f}, noise={noise:.3f}")
+                fig.savefig(f"{out_path}_snapshot_{c}_{noise}.pdf", dpi=300, transparent=True)
 
 
 def meso_obs_for_all_couplings(dset, obs):
@@ -3091,6 +3106,7 @@ def meso_obs_for_all_couplings(dset, obs):
 
     if "correlation_coefficient" in obs:
         ax.set_ylim(0, 1)
+        ax.set_xlim(0, 0.3125)
         ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
         ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
 
@@ -3103,9 +3119,11 @@ def meso_obs_for_all_couplings(dset, obs):
     if not show_ylabel:
         ax.set_ylabel("")
 
-    cc.set_size2(ax, w=3.0, h=2.2)
+    # cc.set_size2(ax, w=3.0, h=2.2)
+    cc.set_size2(ax, w=3.0, h=1.41)
     # cc.set_size2(ax, 1.6, 1.4)
 
+    return ax
 
 def meso_xr_with_errors(da, ax=None, apply_formatting=True, **kwargs):
     """
@@ -3175,8 +3193,13 @@ def meso_resource_cycle(input_file):
     else:
         h5f = input_file
 
+    _, ax = plt.subplots()
+    ax.set_rasterization_zorder(0)
     ax = ph.plot_resources_vs_activity(
-        h5f, apply_formatting=False, max_traces_per_mod=200, clip_on=False, alpha=0.05
+        h5f,
+        ax=ax,
+        apply_formatting=False, max_traces_per_mod=200, clip_on=False, alpha=0.05,
+        zorder=-1
     )
     ax.set_xlabel("Synaptic resources")
     ax.set_ylabel("Module rate")
@@ -3192,6 +3215,12 @@ def meso_resource_cycle(input_file):
         ax=ax,
         ext_str=noise,
     )
+
+    if not show_xlabel:
+        ax.set_xlabel("")
+
+    if not show_ylabel:
+        ax.set_ylabel("")
 
     return ax
 
@@ -3230,8 +3259,10 @@ def meso_module_contribution(dset=None, coupling=0.3):
     ax.set_xlabel("noise")
     ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.1))
     ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.025))
+    ax.set_xlim(0, 0.3125)
 
-    cc.set_size2(ax, w=3.0, h=2.2)
+    # cc.set_size2(ax, w=3.0, h=2.2)
+    cc.set_size2(ax, w=3.0, h=1.41)
 
     if not show_xlabel:
         ax.set_xlabel("")
@@ -3258,7 +3289,7 @@ def meso_activity_snapshot(h5f=None, main_width=3.5, zoom_duration=50, zoom_star
         mh.find_system_bursts_and_module_contributions2(h5f)
 
     total_width = main_width + 0.7 + 0.8  # 7mm for labels on the left, 8mm for zoom
-    fig = plt.figure(figsize=[(total_width) / 2.54, 3.5 / 2.54])
+    fig = plt.figure(figsize=[(total_width) / 2.54, 4.05 / 2.54])
     axes = []
     gs = fig.add_gridspec(
         nrows=3,
@@ -3310,7 +3341,7 @@ def meso_activity_snapshot(h5f=None, main_width=3.5, zoom_duration=50, zoom_star
         axes[a_id].set_ylim(0, 1)
 
     for a_id in [2, 5]:
-        axes[a_id].set_ylim(0, 2.95)
+        axes[a_id].set_ylim(0, 2.5)
         axes[a_id].yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(2))
         axes[a_id].yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(1))
 
@@ -3321,7 +3352,7 @@ def meso_activity_snapshot(h5f=None, main_width=3.5, zoom_duration=50, zoom_star
             axes[a_id].get_legend().remove()
         except:
             pass
-        sns.despine(ax=axes[a_id], bottom=True, offset=5, trim=True)
+        sns.despine(ax=axes[a_id], bottom=True, offset=3, trim=True)
 
         # keep ticks for bottom left, we might need them
         if a_id != 2:
@@ -3338,7 +3369,7 @@ def meso_activity_snapshot(h5f=None, main_width=3.5, zoom_duration=50, zoom_star
 
     # reenable one time axis label
     ax = axes[2]
-    sns.despine(ax=ax, left=False, bottom=False, offset=5)
+    sns.despine(ax=ax, left=False, bottom=False, offset=3)
     ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1000))
     ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(250))
 
