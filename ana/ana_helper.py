@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2022-04-01 17:29:36
+# @Last Modified: 2022-04-12 10:38:35
 # ------------------------------------------------------------------------------ #
 # Here we collect all functions for importing and analyzing the data.
 # A central idea is that for every simulated/experimental trial, we have a
@@ -1185,6 +1185,28 @@ def find_state_variable(h5f, variable, write_to_h5f=True, return_res=False):
     if return_res:
         return states
 
+
+def find_module_level_adaptation(h5f):
+    """
+    Create time series of module-level adaptation values by averaging over
+    `data.state_vars_D` for the neurons of each module.
+
+    Overwrite entries in `ana.adaptation`
+    """
+    mod_ids = h5f["ana.mod_ids"]
+
+    for mdx, mod_id in enumerate(mod_ids):
+        mod = f"mod_{mod_id}"
+        n_ids = np.where(h5f["data.neuron_module_id"][:] == mod_id)[0]
+        mod_adapt = np.mean(h5f["data.state_vars_D"][n_ids, :], axis=0)
+        h5f[f"ana.adaptation.module_level.{mod}"] = mod_adapt
+        try:
+            dt = h5f["data.state_vars_dt"]
+        except:
+            # this entry was added later, maybe we have to guess from data.
+            dt = h5f["data.state_vars_time"][1] - h5f["data.state_vars_time"][0]
+
+        h5f[f"ana.adaptation.dt"] = dt
 
 def find_rij_within_across(h5f):
     """
