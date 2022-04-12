@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2022-04-11 09:38:02
+# @Last Modified: 2022-04-12 11:55:15
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -46,7 +46,7 @@ matplotlib.rcParams["figure.figsize"] = [3.4, 2.7]  # APS single column
 matplotlib.rcParams['figure.dpi'] = 150
 matplotlib.rcParams["axes.prop_cycle"] = matplotlib.cycler("color", [
     "#233954", "#ea5e48", "#1e7d72", "#f49546", "#e8bf58", # dark
-    "#5886be", "#f3a093", "#53d8c9", "#f2da9c", "#f9c192", # light
+    "#5886be", "#f3a093", "#53d8c9", "#f9c192", "#f2da9c" # light
     ]) # qualitative, somewhat color-blind friendly, in mpl words 'tab5'
 
 

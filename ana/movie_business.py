@@ -2,16 +2,14 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-01-24 13:43:39
-# @Last Modified: 2022-04-11 15:31:46
+# @Last Modified: 2022-04-12 12:21:37
 # ------------------------------------------------------------------------------- #
 # Create a movie of the network for a given time range and visualize
-# firing neurons. Save to mp4.
-# This version includes the visualization of stimuli.
-#
-# conda install h5py matplotlib ffmpeg tqdm
+# firing neurons. Saves to mp4.
 # ------------------------------------------------------------------------------- #
 
 import os
+from re import L
 import sys
 import glob
 import h5py
@@ -25,37 +23,58 @@ import ana_helper as ah
 import seaborn as sns
 import colors as cc
 
+# fmt:off
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from matplotlib.collections import LineCollection
 from matplotlib.animation import FFMpegWriter
 
-plt.ioff()
 plt.style.use("dark_background")
+plt.ioff()
+matplotlib.rcParams["axes.prop_cycle"] = matplotlib.cycler("color", [
+    # "#233954", "#ea5e48", "#1e7d72", "#f49546", "#e8bf58", # dark
+    "#5886be", "#f3a093", "#53d8c9", "#f9c192", "#f2da9c", # light
+])
+# fmt:on
+
 
 
 def main(args):
 
+    global topo, axes, x, y, dt, flr, h5f
+
     metadata = dict(title=f"{args.title}", artist="Matplotlib", comment="Yikes! Spikes!")
     writer = FFMpegWriter(fps=args.fps, metadata=metadata)
-    num_frames = (args.fps * args.length) + 1
+    num_frames = int(args.fps * args.movie_duration) + 1
 
     # 1800x900 px at 300 dpi, where fonts are decent
-    fig, axes = plt.subplots(ncols=2, figsize=(6, 3))
+    # fig, axes = plt.subplots(ncols=2, figsize=(6, 3))
+    fig = plt.figure(figsize=(6, 3))
+    gs = fig.add_gridspec(
+        nrows=2,
+        ncols=2,
+    )
+    axes = []
+    axes.append(fig.add_subplot(gs[0, 0]))
+    axes.append(fig.add_subplot(gs[1, 0]))
+    axes.append(fig.add_subplot(gs[:, 1]))
 
-    global topo
-    topo = TopologyRenderer(input_path=args.input_path, ax=axes[0])
+    # ------------------------------------------------------------------------------ #
+    # Topology plot
+    # ------------------------------------------------------------------------------ #
+
+    topo = TopologyRenderer(input_path=args.input_path, ax=axes[-1])
 
     # its helpful to set the decay time propto movie playback speed
-    time_ratio = args.length / (args.tend - args.tbeg)
+    time_ratio = args.movie_duration / (args.tend - args.tbeg)
     topo.decay_time = 0.5 / time_ratio
 
     # ------------------------------------------------------------------------------ #
     # population activity plot
     # ------------------------------------------------------------------------------ #
 
-    ax = axes[1]
+    ax = axes[0]
     h5f = ah.prepare_file(args.input_path)
     ah.find_rates(h5f)
 
@@ -69,11 +88,48 @@ def main(args):
     sns.despine(ax=ax, right=True, top=True, offset=5)
 
     # ------------------------------------------------------------------------------ #
+    # Resource cycles
+    # ------------------------------------------------------------------------------ #
+
+    ax = axes[1]
+
+    ah.find_module_level_adaptation(h5f)
+    x_sets = []
+    y_sets = []
+    colors = []
+    for mod_id in [0, 1, 2, 3]:
+        x = h5f[f"ana.adaptation.module_level.mod_{mod_id}"]
+        y = h5f[f"ana.rates.module_level.mod_{mod_id}"]
+        dt = h5f[f"ana.rates.dt"]
+        assert (
+            h5f[f"ana.adaptation.dt"] == dt
+        ), "adaptation and rates need to share the same time step"
+        # limit data range to whats needed
+        x = x[0 : int(args.tend / dt) + 2]
+        y = y[0 : int(args.tend / dt) + 2]
+        x_sets.append(x)
+        y_sets.append(y)
+        colors.append(f"C{mod_id}")
+
+    flr = FadingLineRenderer(
+        x=x_sets, y=y_sets, colors=colors, dt=dt, ax=ax, tbeg=args.tbeg
+    )
+    flr.decay_time = 0.5 / time_ratio
+
+    ax.set_xlim(0, 1)
+    ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1.0))
+    ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.2))
+    ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(100))
+    ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(50))
+    ax.set_ylim(-15, 145)
+    sns.despine(ax=ax, right=True, top=True, trim=True, offset=1)
+
+    # ------------------------------------------------------------------------------ #
     # movie loop
     # ------------------------------------------------------------------------------ #
 
     with writer.saving(fig=topo.fig, outfile=args.output_path, dpi=300):
-        print(f"Rendering {args.length:.0f} seconds with {num_frames} frames ...")
+        print(f"Rendering {args.movie_duration:.0f} seconds with {num_frames} frames ...")
 
         for fdx in tqdm(range(num_frames)):
             exp_time = frame_index_to_experimental_time(
@@ -85,6 +141,7 @@ def main(args):
             topo.update_to_time(exp_time)
             # ax.set_xlim(exp_time - window/2, exp_time + window/2)
             reference.set_xdata(exp_time)
+            flr.set_time(exp_time)
 
             writer.grab_frame(facecolor=topo.canvas_clr)
 
@@ -108,9 +165,9 @@ def parse_args():
     )
     parser.add_argument(
         "--length",
-        dest="length",
+        dest="movie_duration",
         help="desired length of the movie, in seconds",
-        type=int,
+        type=float,
         default=10,
     )
     parser.add_argument(
@@ -157,6 +214,11 @@ def frame_index_to_experimental_time(this_frame, total_frames, exp_start, exp_en
     return exp_start + this_frame * exp_timer_per_frame
 
 
+# ------------------------------------------------------------------------------ #
+# Topology
+# ------------------------------------------------------------------------------ #
+
+
 class TopologyRenderer(object):
     """
     This guy provides the helpers to plot soma and axons and lets them light
@@ -171,6 +233,10 @@ class TopologyRenderer(object):
         self.canvas_clr = "black"
         self.title_clr = "white"
         self.neuron_clr = "white"
+
+        # try to color neurons differently, according to modules
+        mod_ids = h5.load(self.input_path, "/data/neuron_module_id")
+        self.n_id_clr = []
 
         # neuron radius, um
         self.rad_n = 7.5
@@ -194,6 +260,7 @@ class TopologyRenderer(object):
         for n_id in range(self.num_n):
             idx = np.where(spikes[:, 0] == n_id)[0]
             self.spiketimes.append(spikes[idx, 1])
+            self.n_id_clr.append(f"C{mod_ids[n_id]}")
 
         # create a bunch of artists that we can update later
         if ax is None:
@@ -311,16 +378,26 @@ class TopologyRenderer(object):
             total_alpha += alpha
         total_alpha = np.clip(total_alpha, 0.0, 1.0)
 
+        try:
+            clr = self.n_id_clr[n_id]
+        except:
+            clr = self.neuron_clr
+
         # rgba as 4-tuple, between 0 and 1
         # make soma a bit brighter than axons
-        ax_edge = (*mcolors.to_rgb(self.neuron_clr), total_alpha * 0.6)
-        sm_edge = (*mcolors.to_rgb(self.neuron_clr), total_alpha * 0.8)
-        sm_face = (*mcolors.to_rgb(self.neuron_clr), total_alpha * 1.0)
+        ax_edge = (*mcolors.to_rgb(clr), total_alpha * 0.6)
+        sm_edge = (*mcolors.to_rgb(clr), total_alpha * 0.8)
+        sm_face = (*mcolors.to_rgb(clr), total_alpha * 1.0)
 
         # update the actual foreground layer
         self.art_axons[n_id].set_color(ax_edge)
         self.art_soma[n_id].set_edgecolor(sm_edge)
         self.art_soma[n_id].set_facecolor(sm_face)
+
+
+# ------------------------------------------------------------------------------ #
+# Fading Lines
+# ------------------------------------------------------------------------------ #
 
 
 class FadingLineRenderer(object):
@@ -332,10 +409,13 @@ class FadingLineRenderer(object):
     c.f. https://github.com/dpsanders/matplotlib-examples/blob/master/colorline.py
     """
 
-    def __init__(self, x, y, ax=None, dt=1, tbeg=0, **kwargs):
+    def __init__(
+        self, x, y, ax=None, dt=1, tbeg=0, colors=None, background="transparent"
+    ):
         """
         # Parameters:
-        x, y : 1d arrays of the data to plot,
+        x, y : 1d arrays of the data to plot, or list of arrays, if multiple lines
+            should go into the same axis
         dt : float, how to map from time to data index, every point in x is assumed
             to have length dt (and do start at t=0)
         tbeg : float, if x does not start at time 0, when does it start?
@@ -348,23 +428,39 @@ class FadingLineRenderer(object):
             self.ax = ax
             self.fig = ax.get_figure()
 
-        points = np.array([x, y]).T.reshape(-1, 1, 2)
-        segments = np.concatenate([points[:-1], points[1:]], axis=1)
+        # cast to list if only one array given
+        if not isinstance(x, list):
+            x = [x]
+            y = [y]
 
-        kwargs = kwargs.copy()
-        # this cmap is white at 1 and transparent at 0
-        kwargs.setdefault("cmap", cc.cmap["alpha_white"])
-        if isinstance(kwargs["cmap"], str):
-            self.cmap = plt.get_cmap(kwargs["cmap"])
-        else:
-            self.cmap = kwargs["cmap"]
+        if not isinstance(colors, list):
+            colors = [colors] * len(x)
 
-        self.num_timesteps = len(x)
+        # default colors
+        for idx, c in enumerate(colors):
+            if c is None:
+                if len(colors) == 1:
+                    colors[idx] = "white"
+                else:
+                    colors[idx] = f"C{idx}"
 
-        self.lc = LineCollection(segments, array=np.ones_like(x, dtype="float"), **kwargs)
-        # now, the lc array is a helper array of same length as data, to set the color
-        # along the line, e.g. with floats between 0 and 1, that is mapped using colormap
-        self.ax.add_collection(self.lc)
+        self.num_timesteps = len(x[0])
+
+        self.x_sets = x
+        self.y_sets = y
+        self.colors = colors
+        self.lcs = []
+        self.cmaps = []
+
+        for clr in self.colors:
+            if background == "transparent":
+                background = cc.to_rgb(clr)
+                background += (0,)
+            cmap = cc.create_cmap(
+                start=background,
+                end=clr,
+            )
+            self.cmaps.append(cmap)
 
         # casting experimental time to the data array
         self.dt = dt
@@ -372,38 +468,71 @@ class FadingLineRenderer(object):
 
         # fade transparency,
         self.decay_time = 15.0  # exponential decay time in experimental time units
+
+        # keep handles for drawn elements so we can update them later
+        self.art_time = ax.text(0.02, 0.95, "current time", fontsize=8, color="white")
+
+        # print("FadineLineRenderer:")
+        # print(f"{self.num_timesteps} timesteps")
+        # print(f"{self.dt} dt")
+        # print(f"{self.tbeg + self.num_timesteps*self.dt} data duration")
+        # print(f"{self.decay_bins} decay bins")
+        # print(f"{self.decay_time} decay time")
+
+    @property
+    def decay_time(self):
+        return self._decay_time
+
+    @decay_time.setter
+    def decay_time(self, tau):
+        self._decay_time = tau
+        # now update mask and bins
         # after around 3 decay times we are sufficiently close to zero
-        self.decay_bins = int(3 * self.decay_time / self.dt)
+        self.decay_bins = int(3 * tau / self.dt)
 
         t = np.arange(0, self.decay_bins) * -self.dt
-        mask = np.exp(-t / self.decay_time)
+        mask = np.exp(-t / tau)
         # make sure last entry is zero
         m_min = np.nanmin(mask)
         m_max = np.nanmax(mask)
         m_diff = m_max - m_min
         self.decay_mask = (mask - m_min) / m_diff
 
-    def set_array(self, z):
-        self.lc.set_array(z)
-
-        # unfortunately, setting the lc array does not directly
-        # refresh the colors of the line collection.
-        self.lc.set_colors([self.cmap(f) for f in z])
-
     def set_time(self, time):
+
+        self.art_time.set_text(f"t = {time :.2f}")
+
+        # get time range we need to show
         time_index = int((time - self.tbeg) / self.dt)
         first_visible = time_index - self.decay_bins
         if time_index < 0:
             time_index = 0
+        if time_index >= self.num_timesteps:
+            time_index = self.num_timesteps
         if first_visible < 0:
             first_visible = 0
-
         num_bins = time_index - first_visible
-        new_z = np.zeros(self.num_timesteps)
-        if num_bins > 0:
-            new_z[time_index-num_bins:time_index] = self.decay_mask[-num_bins:]
 
-        self.set_array(new_z)
+        # remove old lines
+        for lc in self.lcs:
+            lc.remove()
+            del lc
+        self.lcs = []
+
+        # draw new lines
+        for idx in range(0, len(self.x_sets)):
+            x = self.x_sets[idx]
+            y = self.y_sets[idx]
+
+            x = x[time_index - num_bins : time_index]
+            y = y[time_index - num_bins : time_index]
+            z = self.decay_mask[-num_bins:]
+
+            points = np.array([x, y]).T.reshape(-1, 1, 2)
+            segments = np.concatenate([points[:-1], points[1:]], axis=1)
+            lc = LineCollection(segments, array=z, cmap=self.cmaps[idx], capstyle="round")
+            self.ax.add_collection(lc)
+            self.lcs.append(lc)
 
 
 if __name__ == "__main__":
