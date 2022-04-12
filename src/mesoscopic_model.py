@@ -193,9 +193,6 @@ def simulate_model(
     w[2, 3] = 1
     w[3, 2] = 1
 
-    # Gate timescales
-    # gate_rec = gate_rec / tc
-
     # External input
     ext_input = np.ones(4) * ext_str
 

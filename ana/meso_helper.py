@@ -11,10 +11,13 @@ import sys
 import glob
 import re
 import functools
+import matplotlib
 import numpy as np
 import pandas as pd
 import xarray as xr
 from tqdm import tqdm
+
+import matplotlib.pyplot as plt
 
 # Cluster detection, very useful for avalanches
 from scipy.ndimage import measurements
@@ -676,7 +679,7 @@ def plot_ax_nullcline(ax, ext_str, tolerance=1e-3, **meso_args):
 
     #Initial conditions are such that we will have an excitable trajectory: full of resources and small kick
     x0 = np.array([0.5, max_rsrc])
-    t = np.concatenate((np.linspace(0,20, 1000), np.linspace(20.01, 300, 500))) #Being excitable, spike is very fast and the other is slow, so sample differently to ensure continuity
+    t = np.concatenate((np.linspace(0,20, 1000), np.linspace(20.01, 100, 700))) #Being excitable, spike is very fast and the other is slow, so sample differently to ensure continuity
     traj = odeint(module_ODE, x0, t, args=(max_rsrc, tc, td, decay_r, basefiring, ext_str, k, thres, gain, aux_thrsig))
 
 
