@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2022-04-12 11:55:15
+# @Last Modified: 2022-04-13 11:21:51
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -1058,7 +1058,7 @@ def plot_resources_vs_activity(
                 idx = np.where((adap_times > last_end) & (adap_times <= next_end))
                 last_end = next_end
                 ax.plot(mod_adapt[idx], mod_rate[idx], **plot_kwargs)
-            log.info(f"plotted {num_traces} cycle traces for {mod}")
+            log.info(f"plotted {num_traces} cycle-traces for {mod}")
 
         else:
             ax.plot(mod_adapt, mod_rate, alpha=1, **plot_kwargs)

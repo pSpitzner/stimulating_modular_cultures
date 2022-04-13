@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-11-08 17:51:24
-# @Last Modified: 2022-04-11 12:02:06
+# @Last Modified: 2022-04-13 15:07:56
 # ------------------------------------------------------------------------------ #
 # collect the functions to create figure panels here
 # ------------------------------------------------------------------------------ #
@@ -69,7 +69,7 @@ matplotlib.rcParams["legend.frameon"] = True
 matplotlib.rcParams["axes.spines.right"] = False
 matplotlib.rcParams["axes.spines.top"] = False
 matplotlib.rcParams["figure.figsize"] = [3.4, 2.7]  # APS single column
-matplotlib.rcParams["figure.dpi"] = 300
+matplotlib.rcParams["figure.dpi"] = 150
 matplotlib.rcParams["savefig.facecolor"] = (
     0.0,
     0.0,
@@ -1809,129 +1809,6 @@ def exp_rij_for_layouts():
 
 
 # Fig 3
-def sim_raster_plots_old(
-    bs_large=20 / 1000,  # width of the gaussian kernel for rate
-    threshold_factor=2.5 / 100,  # fraction of max peak height for burst
-    zoomin=False,
-):
-
-    rates = [80, 90]
-
-    # exclude_nids_from_raster = np.delete(np.arange(0, 160), np.arange(0, 160, 8))
-    exclude_nids_from_raster = []
-
-    for rdx, rate in enumerate(rates):
-
-        c_str = f"{rate} Hz"
-
-        h5f = ah.prepare_file(
-            f"./dat/the_last_one/dyn/stim=off_k=5_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate={rate:.1f}_rep=001.hdf5"
-        )
-
-        # ------------------------------------------------------------------------------ #
-        # raster
-        # ------------------------------------------------------------------------------ #
-        figsize = [3.5 / 2.54, 3 / 2.54]
-        if zoomin:
-            figsize = [1 / 2.54, 3 / 2.54]
-        fig, axes = plt.subplots(nrows=3, ncols=1, sharex=True, figsize=figsize)
-
-        ax = axes[1]
-        ax.set_rasterization_zorder(0)
-        ph.plot_raster(
-            h5f,
-            ax,
-            exclude_nids=exclude_nids_from_raster,
-            clip_on=True,
-            zorder=-1,
-            markersize=0.75,
-            alpha=0.5,
-        )
-
-        ax.set_ylim(-1, None)
-        ax.set_ylabel("")
-        ax.set_xlabel("")
-        ax.tick_params(axis="both", which="both", bottom=False)
-        ax.set_yticks([])
-        # sns.despine(ax=ax, left=False, right=False, bottom=False, top=False)
-        sns.despine(ax=ax, left=True, right=True, bottom=True, top=True)
-
-        # ------------------------------------------------------------------------------ #
-        # rates
-        # ------------------------------------------------------------------------------ #
-
-        ax = axes[0]
-        ah.find_rates(h5f, bs_large=bs_large)
-        threshold = threshold_factor * np.nanmax(h5f["ana.rates.system_level"])
-        ah.find_system_bursts_from_global_rate(
-            h5f, rate_threshold=threshold, merge_threshold=0.1
-        )
-
-        ph.plot_system_rate(
-            h5f,
-            ax,
-            mark_burst_threshold=False,
-            color="#333",
-            apply_formatting=False,
-            clip_on=True,
-            lw=0.5,
-        )
-        ax.margins(x=0, y=0)
-        ax.set_xticks([])
-
-        ax.set_ylim(0, 80)
-        ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(40))
-        ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(20))
-        if rate == 90:
-            ax.yaxis.set_major_locator(matplotlib.ticker.FixedLocator(([0, 40])))
-            ax.yaxis.set_minor_locator(matplotlib.ticker.FixedLocator(([20])))
-        sns.despine(ax=ax, left=False, bottom=False, trim=True, offset=0)
-        ax.tick_params(axis="x", which="both", bottom=False)
-
-        # ------------------------------------------------------------------------------ #
-        # adaptation
-        # ------------------------------------------------------------------------------ #
-
-        # fig, ax = plt.subplots()
-        ax = axes[2]
-        ph.plot_state_variable(h5f, ax, variable="D", lw=0.5, apply_formatting=False)
-
-        ax.margins(x=0, y=0)
-        ax.set_xlim(0, 360)
-        ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(180))
-        ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(60))
-
-        ax.set_ylim(0, 1)
-        ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
-        ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.25))
-        sns.despine(ax=ax, left=False, bottom=False, trim=True, offset=0)
-        plt.subplots_adjust(hspace=0.1)
-
-        if zoomin == False:
-            ax.get_figure().savefig(
-                f"./fig/paper/sim_ts_combined_nozoom_{c_str}.pdf",
-                dpi=300,
-                transparent=False,
-            )
-        else:
-            if rate == 80:
-                x_ref = 298.35
-            elif rate == 90:
-                x_ref = 288.05
-            for ax in [axes[0], axes[2]]:
-                sns.despine(ax=ax, left=True, bottom=False, trim=False, offset=0)
-                ax.tick_params(axis="both", which="both", left=False, bottom=False)
-            ax.set_xlim(x_ref, x_ref + 0.25)
-            ax.get_figure().savefig(
-                f"./fig/paper/sim_ts_combined_zoom_{c_str}.pdf",
-                dpi=300,
-                transparent=False,
-            )
-
-        h5.close_hot()
-
-
-# Fig 3
 def sim_raster_plots(
     path,
     time_range=None,
@@ -3000,7 +2877,19 @@ def sim_resource_cycles(apply_formatting=True, k_list=None):
 # ------------------------------------------------------------------------------ #
 
 
-def fig_5(dset=None, skip_snapshots=False, skip_cycles=False, skip_observables=False):
+def fig_5(
+    dset=None,
+    rep_path="./dat/meso_in",
+    out_path="./fig/paper/meso_gates_on",
+    skip_snapshots=False,
+    skip_cycles=False,
+    skip_observables=False,
+    zoom_times=None,
+):
+
+    # ------------------------------------------------------------------------------ #
+    # Observables changing as a function of input
+    # ------------------------------------------------------------------------------ #
 
     if not skip_observables:
         if dset is None:
@@ -3008,53 +2897,71 @@ def fig_5(dset=None, skip_snapshots=False, skip_cycles=False, skip_observables=F
                 dset = xr.load_dataset("./dat/meso_out/analysed.hdf5")
             except:
                 dset = mh.process_data_from_folder("./dat/meso_in/")
+                mh.write_xr_dset_to_hdf5("./dat/meso_out/analysed.hdf5")
+            dset = dset.sel(coupling=[0.05, 0.1, 0.8])
 
         ax = meso_obs_for_all_couplings(dset, "mean_correlation_coefficient")
         ax.get_legend().set_visible(False)
-        ax.get_figure().savefig(
-            f"./fig/paper/meso_mean_rij.pdf", dpi=300, transparent=True
-        )
+        ax.get_figure().savefig(f"{out_path}_mean_rij.pdf", dpi=300, transparent=True)
         c = 0.1
         ax = meso_module_contribution(dset, coupling=c)
         ax.get_figure().savefig(
-            f"./fig/paper/meso_module_contrib_{c}.pdf", dpi=300, transparent=True
+            f"{out_path}_module_contrib_{c}.pdf", dpi=300, transparent=True
         )
 
         ax = meso_sketch_gate_deactivation()
-        ax.get_figure().savefig(
-            f"./fig/paper/meso_gate_sketch.pdf", dpi=300, transparent=True
-        )
+        ax.get_figure().savefig(f"{out_path}_gate_sketch.pdf", dpi=300, transparent=True)
 
-    zoom = benedict(keypath_separator="/")
-    # zoom[noise_ineger][coupling_float] = start_time of zoom
-    zoom[f"1/0.05"] = 950
-    zoom[f"15/0.05"] = 950
-    zoom[f"1/0.8"] = 950
-    zoom[f"15/0.8"] = 950
+    # ------------------------------------------------------------------------------ #
+    # Snapshots and resource cycles use a single realization
+    # ------------------------------------------------------------------------------ #
+
+    # get file path, try to use the longer time series
+    if rep_path[-1] == "/":
+        rep_path = rep_path[:-1]
+    if os.path.exists(rep_path + "_long_ts"):
+        rep_path += "_long_ts"
+
+    # for snapshots we have zoomed insets. where should they be anchored?
+    # zoom_times[coupling_float][noise_float] = start_time of zoom
+    if zoom_times is None:
+        zoom_times = benedict(keypath_separator="/")
+        zoom_times[f"0.1/0.02"] = 673
+        zoom_times[f"0.05/0.02"] = 890
+        zoom_times[f"0.8/0.02"] = 885
 
     r = 0  # repetition
-    for n in [1, 15]:
-        for c in [0.05, 0.1, 0.8]:
-            # for c in [2.5]:
+    for c in [0.05, 0.1, 0.8]:
+        for n in [1, 15]:
 
-            input_file = f"./dat/meso_in/coup{c:0.2f}-{r:d}/noise{n}.hdf5"
+            input_file = f"{rep_path}/coup{c:0.2f}-{r:d}/noise{n}.hdf5"
             if not os.path.exists(input_file):
                 log.info(f"File not found {input_file}")
                 continue
+
             coupling, noise, rep = mh._coords_from_file(input_file)
             h5f = mh.prepare_file(input_file)
             mh.find_system_bursts_and_module_contributions2(h5f)
             gates = h5f["meta.gating_mechanism"]
-            out_path = "./fig/paper/meso_"
-            if gates:
-                out_path += "gates_on"
-            else:
-                out_path += "gates_off"
+
+            if ("gates_on" in out_path and not gates) or (
+                "gates_off" in out_path and gates
+            ):
+                log.warning(f"out_path '{out_path}' seems to mismatch gates {gates}")
 
             if not skip_cycles:
-                ax = meso_resource_cycle(h5f)
+                ode_coords = None
+                max_rsrc = 2.0
+                # defaults work well for low noise
+                if noise >= 0.125:
+                    ode_coords = np.concatenate(
+                        (np.linspace(0, 20, 1000), np.linspace(20.01, 60, 500))
+                    )
+                    max_rsrc = 1.3
+
+                ax = meso_resource_cycle(h5f, ode_coords=ode_coords, max_rsrc=max_rsrc)
                 if show_title:
-                    ax.set_title(f"coupling={c:.2f}, noise={noise:.3f}")
+                    ax.set_title(f"coupling={c:.2f}\nnoise={noise:.2f}")
                 # print(f"coupling={c}, noise={noise}")
                 # cc.set_size2(ax, 1.6, 1.4) # this is the size of microscopic
                 ax.set_xlim(0, 2.0)
@@ -3072,15 +2979,42 @@ def fig_5(dset=None, skip_snapshots=False, skip_cycles=False, skip_observables=F
 
             if not skip_snapshots:
                 try:
-                    z = zoom[f"{n}/{coupling}"]
+                    z = zoom_times[f"{coupling}"][f"{noise}"]
                 except:
                     z = 950
                 fig = meso_activity_snapshot(h5f, zoom_start=z)
                 if show_title:
-                    fig.suptitle(f"coupling={c:.2f}, noise={noise:.3f}")
+                    fig.suptitle(f"coupling={c:.2f}, noise={noise:.2f}")
                 fig.savefig(
                     f"{out_path}_snapshot_{c}_{noise}.pdf", dpi=300, transparent=True
                 )
+
+
+def sm_meso_no_gates():
+    """
+    Simply calls figure 5 with changed input / output paths
+    """
+    rep_path = "./dat/meso_in_no_gates"
+    try:
+        dset = xr.load_dataset("./dat/meso_out/analysed_no_gates.hdf5")
+    except:
+        dset = mh.process_data_from_folder(rep_path)
+        mh.write_xr_dset_to_hdf5("./dat/meso_out/analysed_no_gates.hdf5")
+
+    zoom_times = benedict(keypath_separator="/")
+    zoom_times[f"0.1/0.02"] = 915
+    zoom_times[f"0.05/0.02"] = 920
+    zoom_times[f"0.8/0.02"] = 900
+
+    fig_5(
+        dset=dset,
+        rep_path=rep_path,
+        out_path="./fig/paper/meso_gates_off",
+        skip_snapshots=False,
+        skip_cycles=False,
+        skip_observables=False,
+        zoom_times=zoom_times,
+    )
 
 
 def meso_obs_for_all_couplings(dset, obs):
@@ -3195,9 +3129,11 @@ def meso_xr_with_errors(da, ax=None, apply_formatting=True, **kwargs):
     return ax
 
 
-def meso_resource_cycle(input_file):
+def meso_resource_cycle(input_file, **kwargs):
     """
     Wrapper to plot a resource cycle for a single file created from the mesoscopic model
+
+    kwargs are passed to mh.plot_ax_nullcline
     """
     if isinstance(input_file, str):
         h5f = mh.prepare_file(input_file)
@@ -3213,9 +3149,10 @@ def meso_resource_cycle(input_file):
         h5f,
         ax=ax,
         apply_formatting=False,
-        max_traces_per_mod=200,
+        max_traces_per_mod=100,
         clip_on=False,
-        alpha=0.05,
+        alpha=0.1,
+        lw=0.25,
         zorder=-1,
     )
     ax.set_xlabel("Synaptic resources")
@@ -3228,10 +3165,7 @@ def meso_resource_cycle(input_file):
 
     # sns.despine(ax=ax, trim=True, offset=5)
     coupling, noise, rep = mh._coords_from_file(input_file)
-    mh.plot_ax_nullcline(
-        ax=ax,
-        ext_str=noise,
-    )
+    mh.plot_nullcline(ax=ax, ext_str=noise, **kwargs.copy())
 
     if not show_xlabel:
         ax.set_xlabel("")
@@ -3247,7 +3181,7 @@ def meso_sketch_gate_deactivation():
     from mesoscopic_model import probability_to_close
 
     # currently using probabilities for y. better as rates?
-    src_resources = np.arange(0.0, 2., 0.01)
+    src_resources = np.arange(0.0, 2.0, 0.01)
     fig, ax = plt.subplots()
     ax.plot(src_resources, probability_to_close(src_resources))
     ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.01))
@@ -3292,7 +3226,9 @@ def meso_module_contribution(dset=None, coupling=0.3):
     return ax
 
 
-def meso_activity_snapshot(h5f=None, main_width=3.5, zoom_duration=50, zoom_start=100):
+def meso_activity_snapshot(
+    h5f=None, main_width=3.5, zoom_duration=50, zoom_start=100, mark_zoomin_location=True
+):
     """
     Create one of our activity snapshots for the mesoscopic model,
     showing module rate, resources, gate state (and a zoom in?)
@@ -3334,21 +3270,22 @@ def meso_activity_snapshot(h5f=None, main_width=3.5, zoom_duration=50, zoom_star
     axes.append(fig.add_subplot(gs[2, 1], sharex=axes[3]))
 
     # rates
-    ph.plot_module_rates(h5f, axes[0], alpha=1, lw=1.25)
-    ph.plot_module_rates(h5f, axes[3], alpha=1, lw=1.25)
-    ph.plot_system_rate(h5f, axes[0], mark_burst_threshold=False, lw=1)
-    ph.plot_system_rate(h5f, axes[3], mark_burst_threshold=False, lw=1)
+    ph.plot_module_rates(h5f, axes[0], alpha=1, lw=0.75)
+    ph.plot_module_rates(h5f, axes[3], alpha=1, lw=0.75)
+    ph.plot_system_rate(h5f, axes[0], mark_burst_threshold=False, lw=0.5)
+    ph.plot_system_rate(h5f, axes[3], mark_burst_threshold=False, lw=0.5)
 
     # gates
     ax = ph.plot_gate_history(h5f, axes[1])
     ax = ph.plot_gate_history(h5f, axes[4])
 
     # resources
-    ax = ph.plot_state_variable(h5f, axes[2], variable="D")
-    ax = ph.plot_state_variable(h5f, axes[5], variable="D")
+    ax = ph.plot_state_variable(h5f, axes[2], variable="D", lw=0.5)
+    ax = ph.plot_state_variable(h5f, axes[5], variable="D", lw=0.5)
 
     # formatting
     axes[3].set_xlim(zoom_start, zoom_start + zoom_duration)
+    axes[0].set_xlim(0, 1000)
 
     # we did not share_y, do it manually
     for a_id in [0, 3]:
@@ -3391,6 +3328,20 @@ def meso_activity_snapshot(h5f=None, main_width=3.5, zoom_duration=50, zoom_star
     sns.despine(ax=ax, left=False, bottom=False, offset=3)
     ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1000))
     ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(250))
+
+    if mark_zoomin_location:
+        for ax in [axes[2], axes[5]]:
+            ph._plot_bursts_into_timeseries(
+                ax=ax,
+                beg_times=[zoom_start + zoom_duration/2],
+                end_times=[zoom_start + zoom_duration/2],
+                style="markers",
+                y_offset=-0.05,
+                markersize=1.5,
+                clip_on=False
+            )
+
+    h5.close_hot()
 
     return fig
 
