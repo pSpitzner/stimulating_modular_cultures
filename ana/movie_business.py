@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-01-24 13:43:39
-# @Last Modified: 2022-04-12 12:21:37
+# @Last Modified: 2022-04-12 16:05:53
 # ------------------------------------------------------------------------------- #
 # Create a movie of the network for a given time range and visualize
 # firing neurons. Saves to mp4.
@@ -33,11 +33,10 @@ from matplotlib.animation import FFMpegWriter
 plt.style.use("dark_background")
 plt.ioff()
 matplotlib.rcParams["axes.prop_cycle"] = matplotlib.cycler("color", [
-    # "#233954", "#ea5e48", "#1e7d72", "#f49546", "#e8bf58", # dark
     "#5886be", "#f3a093", "#53d8c9", "#f9c192", "#f2da9c", # light
 ])
+matplotlib.rcParams["figure.dpi"] = 300
 # fmt:on
-
 
 
 def main(args):
@@ -48,50 +47,92 @@ def main(args):
     writer = FFMpegWriter(fps=args.fps, metadata=metadata)
     num_frames = int(args.fps * args.movie_duration) + 1
 
+    # keep a list of renderer objects that will be updated in the main loop.
+    # everyone needs to have a function `set_time` that takes the experimental
+    # timestamp as input.
+    renderers = []
+
     # 1800x900 px at 300 dpi, where fonts are decent
     # fig, axes = plt.subplots(ncols=2, figsize=(6, 3))
     fig = plt.figure(figsize=(6, 3))
     gs = fig.add_gridspec(
         nrows=2,
         ncols=2,
+        width_ratios=[0.33, 0.66],
+        # wspace=0.05,
+        hspace=0.1,
+        left=0.1,
+        right=0.99,
+        top=0.99,
+        bottom=0.15,
     )
-    axes = []
-    axes.append(fig.add_subplot(gs[0, 0]))
-    axes.append(fig.add_subplot(gs[1, 0]))
-    axes.append(fig.add_subplot(gs[:, 1]))
+
 
     # ------------------------------------------------------------------------------ #
     # Topology plot
     # ------------------------------------------------------------------------------ #
 
-    topo = TopologyRenderer(input_path=args.input_path, ax=axes[-1])
+    ax = fig.add_subplot(gs[0, 0])
+    topo = TopologyRenderer(input_path=args.input_path, ax=ax)
 
     # its helpful to set the decay time propto movie playback speed
     time_ratio = args.movie_duration / (args.tend - args.tbeg)
     topo.decay_time = 0.5 / time_ratio
+    renderers.append(topo)
 
     # ------------------------------------------------------------------------------ #
     # population activity plot
     # ------------------------------------------------------------------------------ #
 
-    ax = axes[0]
+    ax = fig.add_subplot(gs[1, 1])
     h5f = ah.prepare_file(args.input_path)
     ah.find_rates(h5f)
 
     ph.plot_system_rate(h5f=h5f, ax=ax, color="white")
-
     ax.get_legend().set_visible(False)
-    # window = 5
-    # ax.set_xlim(-window/2, window/2)
-    ax.set_xlim(args.tbeg, args.tend)
-    reference = ax.axvline(0, ls=":")
     sns.despine(ax=ax, right=True, top=True, offset=5)
+    ax.set_xlabel("Time (seconds)")
+    ax.set_ylabel("Rate (Hz)")
+    sns.despine(ax=ax, bottom=True)
+    # cc.detick(axis=ax.xaxis, keep_labels=True)
+
+    ar = MovingWindowRenderer(
+        ax=ax,
+        data_beg=args.tbeg,
+        data_end=args.tend,
+        window_from=-20.0,
+        window_to=100,
+    )
+
+    renderers.append(ar)
+
+    # ------------------------------------------------------------------------------ #
+    # raster plot
+    # ------------------------------------------------------------------------------ #
+
+    ax = fig.add_subplot(gs[0, 1])
+
+    ph.plot_raster(h5f=h5f, ax=ax)
+    sns.despine(ax=ax, right=True, top=True, left=True, bottom=True)
+    ax.yaxis.set_visible(False)
+    ax.xaxis.set_visible(False)
+    ax.set_xlabel("")
+
+    sr = MovingWindowRenderer(
+        ax=ax,
+        data_beg=args.tbeg,
+        data_end=args.tend,
+        window_from=-20.0,
+        window_to=100,
+    )
+
+    renderers.append(sr)
 
     # ------------------------------------------------------------------------------ #
     # Resource cycles
     # ------------------------------------------------------------------------------ #
 
-    ax = axes[1]
+    ax = fig.add_subplot(gs[1, 0])
 
     ah.find_module_level_adaptation(h5f)
     x_sets = []
@@ -123,6 +164,12 @@ def main(args):
     ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(50))
     ax.set_ylim(-15, 145)
     sns.despine(ax=ax, right=True, top=True, trim=True, offset=1)
+    ax.set_xlabel("Resources")
+    ax.set_ylabel("Rates (Hz)")
+
+    renderers.append(flr)
+
+    fig.tight_layout()
 
     # ------------------------------------------------------------------------------ #
     # movie loop
@@ -138,10 +185,9 @@ def main(args):
                 exp_start=args.tbeg,
                 exp_end=args.tend,
             )
-            topo.update_to_time(exp_time)
-            # ax.set_xlim(exp_time - window/2, exp_time + window/2)
-            reference.set_xdata(exp_time)
-            flr.set_time(exp_time)
+
+            for r in renderers:
+                r.set_time(exp_time)
 
             writer.grab_frame(facecolor=topo.canvas_clr)
 
@@ -344,7 +390,7 @@ class TopologyRenderer(object):
             art_soma.append(circle)
         self.art_soma = art_soma
 
-    def update_to_time(self, time):
+    def set_time(self, time):
         """
         Update the whole figure to a given experimental time stamp
         """
@@ -533,6 +579,87 @@ class FadingLineRenderer(object):
             lc = LineCollection(segments, array=z, cmap=self.cmaps[idx], capstyle="round")
             self.ax.add_collection(lc)
             self.lcs.append(lc)
+
+
+class MovingWindowRenderer(object):
+    """
+    Plot into an axis and dynamically change the shown range, and maybe
+    an indicator for the current time point.
+
+    Used for e.g. raster plots.
+    """
+
+    def __init__(
+        self,
+        window_from,
+        window_to,
+        time_indicator = "default",
+        data_beg = None,
+        data_end = None,
+        ax=None,
+    ):
+        """
+        # Parameters:
+        window_from : float, relative to time, where does the window start
+            e.g. at -20 seconds
+        window_to : float, relative to time, where does the window end
+        time_indicator : "default" to use a dashed line to show current time, or
+            provide a callback function that takes the timestamp
+        data_beg : where does the data start / end. dont change window to exceed.
+        """
+        if ax is None:
+            self.fig, self.ax = plt.subplots(figsize=[6.4, 6.4])
+        else:
+            self.ax = ax
+            self.fig = ax.get_figure()
+
+        self.window_from = window_from
+        self.window_to = window_to
+        self.window_size = window_to - window_from
+
+        if time_indicator is None:
+            self.set_time_indicator = lambda x : None
+        if time_indicator == "default":
+            indicator = ax.axvline(window_from, ls=":")
+            self.set_time_indicator = indicator.set_xdata
+        else:
+            self.set_time_indicator = time_indicator
+
+        if data_beg is not None:
+            self.data_beg = data_beg
+        else:
+            # try to infer
+            self.data_beg = ax.get_xlim()[0]
+
+        if data_end is not None:
+            self.data_end = data_end
+        else:
+            self.data_end = ax.get_xlim()[1]
+
+        assert self.window_size <= self.data_end - self.data_beg
+
+        self.ax.set_xlim(self.data_beg, self.data_beg + self.window_size)
+
+    def set_time(self, time):
+
+        old_beg, old_end = self.ax.get_xlim()
+        beg = time + self.window_from
+        end = time + self.window_to
+        if beg >= self.data_beg and end <= self.data_end:
+            # all good
+            pass
+        elif beg <= self.data_beg:
+            # starting, let the time indicator run from zero to where it stays
+            beg = self.data_beg
+            end = self.data_beg + self.window_size
+        elif end >= self.data_end:
+            end = self.data_end
+            beg = self.data_end - self.window_size
+
+        if beg != old_beg and end != old_end:
+            self.ax.set_xlim(beg, end)
+
+        self.set_time_indicator(time)
 
 
 if __name__ == "__main__":
