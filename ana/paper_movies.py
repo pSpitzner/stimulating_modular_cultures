@@ -68,8 +68,8 @@ def main():
     writer.renderers.append(
         MovingWindowRenderer(
             ax=ax,
-            data_beg=writer.tbeg,
-            data_end=writer.tend,
+            tbeg=writer.tbeg,
+            tend=writer.tend,
             # use a 120 second sliding window
             window_from=-20.0,
             window_to=100,
@@ -91,8 +91,8 @@ def main():
     writer.renderers.append(
         MovingWindowRenderer(
             ax=ax,
-            data_beg=writer.tbeg,
-            data_end=writer.tend,
+            tbeg=writer.tbeg,
+            tend=writer.tend,
             window_from=-20.0,
             window_to=100,
         )

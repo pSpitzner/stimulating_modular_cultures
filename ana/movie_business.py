@@ -2,12 +2,13 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-01-24 13:43:39
-# @Last Modified: 2022-04-13 17:41:36
+# @Last Modified: 2022-04-14 09:53:18
 # ------------------------------------------------------------------------------- #
 # Create a movie of the network for a given time range and visualize
 # firing neurons. Saves to mp4.
 # ------------------------------------------------------------------------------- #
 
+import os
 import numpy as np
 from tqdm import tqdm
 import matplotlib
@@ -60,13 +61,17 @@ class MovieWriter(object):
         passed to FFMpegWriter.
     """
 
-    def __init__(self, output_path, tbeg, tend, renderers=None, fps=30, movie_duration=30, **kwargs):
+    def __init__(
+        self, output_path, tbeg, tend, renderers=None, fps=30, movie_duration=30, **kwargs
+    ):
 
         kwargs = kwargs.copy()
         kwargs.setdefault(
             "metadata",
             dict(title="Plot movie", artist="Matplotlib", comment="Yikes! Spikes!"),
         )
+
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
         self.writer = FFMpegWriter(fps=fps, **kwargs)
         self.fps = fps
@@ -81,9 +86,14 @@ class MovieWriter(object):
         self.tend = tend
         self.output_path = output_path
 
+        log.info(
+            f"Created MovieWriter for {output_path} and {movie_duration} seconds movie"
+            " duration"
+        )
+
     def render(self):
         assert len(self.renderers) > 0, "Dont forget to add renderers"
-        fig = self.renderers[0].get_figure()
+        fig = self.renderers[0].ax.get_figure()
         with self.writer.saving(fig=fig, outfile=self.output_path, dpi=300):
             log.info(f"Rendering {self.movie_duration:.0f} seconds at {self.fps} fps")
 
@@ -120,7 +130,15 @@ class FadingLineRenderer(object):
     """
 
     def __init__(
-        self, x, y, ax=None, dt=1, tbeg=0, colors=None, background="transparent"
+        self,
+        x,
+        y,
+        ax=None,
+        dt=1,
+        tbeg=0,
+        colors=None,
+        background="transparent",
+        decay_time=10.0,
     ):
         """
         # Parameters:
@@ -177,17 +195,20 @@ class FadingLineRenderer(object):
         self.tbeg = tbeg
 
         # fade transparency,
-        self.decay_time = 15.0  # exponential decay time in experimental time units
+        # exponential decay time in experimental time units
+        self.decay_time = decay_time
 
         # keep handles for drawn elements so we can update them later
         self.art_time = ax.text(0.02, 0.95, "current time", fontsize=8, color="white")
 
-        # print("FadineLineRenderer:")
-        # print(f"{self.num_timesteps} timesteps")
-        # print(f"{self.dt} dt")
-        # print(f"{self.tbeg + self.num_timesteps*self.dt} data duration")
-        # print(f"{self.decay_bins} decay bins")
-        # print(f"{self.decay_time} decay time")
+
+
+        log.info(f"Created FadingLineRender for {len(self.x_sets)} lines")
+        log.info(f"{self.num_timesteps} timesteps at {self.dt}")
+        log.info(f"data time from {self.tbeg} to {self.num_timesteps*self.dt}")
+        log.info(
+            f"decay time is {self.decay_time}, spanning {self.decay_bins} time steps"
+        )
 
     @property
     def decay_time(self):
@@ -258,8 +279,8 @@ class MovingWindowRenderer(object):
         window_from,
         window_to,
         time_indicator="default",
-        data_beg=None,
-        data_end=None,
+        tbeg=None,
+        tend=None,
         ax=None,
     ):
         """
@@ -269,7 +290,8 @@ class MovingWindowRenderer(object):
         window_to : float, relative to time, where does the window end
         time_indicator : "default" to use a dashed line to show current time, or
             provide a callback function that takes the timestamp
-        data_beg : where does the data start / end. dont change window to exceed.
+        tbeg, tend : where does the data start / end. window should not be larger
+            than the data range.
         """
         if ax is None:
             self.fig, self.ax = plt.subplots(figsize=[6.4, 6.4])
@@ -289,36 +311,39 @@ class MovingWindowRenderer(object):
         else:
             self.set_time_indicator = time_indicator
 
-        if data_beg is not None:
-            self.data_beg = data_beg
+        if tbeg is not None:
+            self.tbeg = tbeg
         else:
             # try to infer
-            self.data_beg = ax.get_xlim()[0]
+            self.tbeg = ax.get_xlim()[0]
 
-        if data_end is not None:
-            self.data_end = data_end
+        if tend is not None:
+            self.tend = tend
         else:
-            self.data_end = ax.get_xlim()[1]
+            self.tend = ax.get_xlim()[1]
 
-        assert self.window_size <= self.data_end - self.data_beg
+        assert self.window_size <= self.tend - self.tbeg
 
-        self.ax.set_xlim(self.data_beg, self.data_beg + self.window_size)
+        self.ax.set_xlim(self.tbeg, self.tbeg + self.window_size)
+
+        log.info(f"Created MovingWindowRenderer with window size {self.window_size}")
+        log.info(f"data time from {self.tbeg} to {self.tend}")
 
     def set_time(self, time):
 
         old_beg, old_end = self.ax.get_xlim()
         beg = time + self.window_from
         end = time + self.window_to
-        if beg >= self.data_beg and end <= self.data_end:
+        if beg >= self.tbeg and end <= self.tend:
             # all good
             pass
-        elif beg <= self.data_beg:
+        elif beg <= self.tbeg:
             # starting, let the time indicator run from zero to where it stays
-            beg = self.data_beg
-            end = self.data_beg + self.window_size
-        elif end >= self.data_end:
-            end = self.data_end
-            beg = self.data_end - self.window_size
+            beg = self.tbeg
+            end = self.tbeg + self.window_size
+        elif end >= self.tend:
+            end = self.tend
+            beg = self.tend - self.window_size
 
         if beg != old_beg and end != old_end:
             self.ax.set_xlim(beg, end)
@@ -326,11 +351,10 @@ class MovingWindowRenderer(object):
         self.set_time_indicator(time)
 
 
-
-
 # ------------------------------------------------------------------------------ #
 # Topology, this one is only useful for neurons in a h5f following my data format
 # ------------------------------------------------------------------------------ #
+
 
 class TopologyRenderer(object):
     """
@@ -339,7 +363,8 @@ class TopologyRenderer(object):
     the experiment
     """
 
-    def __init__(self, input_path, ax=None):
+    def __init__(self, input_path, ax=None, decay_time=10.0):
+
         self.input_path = input_path
 
         # some styling options
@@ -356,7 +381,7 @@ class TopologyRenderer(object):
 
         # fade time of neurons after spiking mimicing calcium indicator decay
         # time in seconds of the experimental time
-        self.decay_time = 5.0
+        self.decay_time = decay_time
 
         # experimental time
         self.time_unit = "s"
@@ -382,6 +407,15 @@ class TopologyRenderer(object):
             self.ax = ax
             self.fig = ax.get_figure()
         self.init_background()
+
+        log.info(
+            f"Created TopologyRenderer for {input_path}"
+        )
+        try:
+            log.info(f"Spiketimes between {spikes[0, 1]} and {spikes[-1, 1]}")
+        except:
+            log.warning("No spikes found in the data")
+
 
     def init_background(
         self,
@@ -508,10 +542,10 @@ class TopologyRenderer(object):
         self.art_soma[n_id].set_facecolor(sm_face)
 
 
-
 # ------------------------------------------------------------------------------ #
 # helper
 # ------------------------------------------------------------------------------ #
+
 
 def _rgba_to_rgb(c, bg="white"):
     bg = mcolors.to_rgb(bg)
@@ -523,4 +557,3 @@ def _rgba_to_rgb(c, bg="white"):
         (1 - alpha) * bg[2] + alpha * c[2],
     )
     return res
-
