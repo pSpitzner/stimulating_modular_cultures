@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-10-25 17:28:21
-# @Last Modified: 2021-11-16 12:02:10
+# @Last Modified: 2022-04-14 13:10:08
 # ------------------------------------------------------------------------------ #
 # Hard coded script to analyse experimental data
 # ------------------------------------------------------------------------------ #
@@ -46,6 +46,9 @@ import colors as cc
 # only affects simulations, as in the experiments we have only few neurons
 # per module, thus the 20% of neurons in the module are just one neuron.
 remove_null_sequences = False
+
+# whether to store the analysis of each trial as hdf5 in the usual format
+save_analysed_hdf5 = False
 
 # for correlation coefficients, size of time steps in which number of spikes are counted
 time_bin_size_for_rij = 500 / 1000  # in seconds
@@ -364,6 +367,17 @@ def main():
                     df["Mean Depletion rij"] = np.nanmean(drij)
                     df["Median Depletion rij"] = np.nanmedian(drij)
                 dataframes["trials"].append(df)
+
+                # ------------------------------------------------------------------------------ #
+                # Finalize, and save a copy of the analyzed file for this trial
+                # ------------------------------------------------------------------------------ #
+
+                if "exp" in args.etype and save_analysed_h5f:
+                    h5.recursive_write(
+                        filename=f"{output_path}/{layout}/{trial}/{condition}_analyzed.hdf5",
+                        h5_data=h5f,
+                    )
+
                 h5.close_hot()
                 del h5f
 

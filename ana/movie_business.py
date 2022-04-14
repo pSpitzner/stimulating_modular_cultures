@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-01-24 13:43:39
-# @Last Modified: 2022-04-14 09:53:18
+# @Last Modified: 2022-04-14 13:42:50
 # ------------------------------------------------------------------------------- #
 # Create a movie of the network for a given time range and visualize
 # firing neurons. Saves to mp4.
@@ -20,14 +20,14 @@ import logging
 log = logging.getLogger(__name__)
 log.setLevel("INFO")
 
-matplotlib.use("Agg")
+# matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from matplotlib.collections import LineCollection
 from matplotlib.animation import FFMpegWriter
 
 plt.style.use("dark_background")
-plt.ioff()
+# plt.ioff()
 # use custom colors to match the paper
 matplotlib.rcParams["axes.prop_cycle"] = matplotlib.cycler("color", [
     "#5886be", "#f3a093", "#53d8c9", "#f9c192", "#f2da9c", # light
@@ -123,10 +123,23 @@ class MovieWriter(object):
 class FadingLineRenderer(object):
     """
     Think of an oldschool osci, where the electron beam draws the line and fades,
-    draw line transparency as exponential
+    draw line transparency as exponential.
 
     Create plot lines as line segments so that styles can be updated later
     c.f. https://github.com/dpsanders/matplotlib-examples/blob/master/colorline.py
+
+    For my use case, it turned out to be faster to recreate the linecollection rather
+    then changing the colors of an existing (super large) one.
+
+    # Parameters
+
+    x, y : 1d arrays of the data to plot, or list of arrays, if multiple lines
+        should go into the same axis
+    dt : float, how to map from time to data index, every point in x is assumed
+        to have length dt (and do start at t=0)
+    tbeg : float, if x does not start at time 0, when does it start?
+    ax : matplotlib axis element to draw into
+    kwargs : passed to LineCollection
     """
 
     def __init__(
@@ -139,17 +152,9 @@ class FadingLineRenderer(object):
         colors=None,
         background="transparent",
         decay_time=10.0,
+        show_time=False,
+        **kwargs,
     ):
-        """
-        # Parameters:
-        x, y : 1d arrays of the data to plot, or list of arrays, if multiple lines
-            should go into the same axis
-        dt : float, how to map from time to data index, every point in x is assumed
-            to have length dt (and do start at t=0)
-        tbeg : float, if x does not start at time 0, when does it start?
-        ax : matplotlib axis element to draw into
-        kwargs : passed to LineCollection
-        """
         if ax is None:
             self.fig, self.ax = plt.subplots(figsize=[6.4, 6.4])
         else:
@@ -199,9 +204,12 @@ class FadingLineRenderer(object):
         self.decay_time = decay_time
 
         # keep handles for drawn elements so we can update them later
-        self.art_time = ax.text(0.02, 0.95, "current time", fontsize=8, color="white")
+        self.show_time = show_time
+        self.art_time = ax.text(0.02, 0.95, "", fontsize=8, color="white")
 
-
+        assert "cmap" not in kwargs.keys(), "cmaps are set via `colors` argument"
+        self.lc_kwargs = kwargs.copy()
+        self.lc_kwargs.setdefault("capstyle", "round")
 
         log.info(f"Created FadingLineRender for {len(self.x_sets)} lines")
         log.info(f"{self.num_timesteps} timesteps at {self.dt}")
@@ -231,7 +239,8 @@ class FadingLineRenderer(object):
 
     def set_time(self, time):
 
-        self.art_time.set_text(f"t = {time :.2f}")
+        if self.show_time:
+            self.art_time.set_text(f"t = {time :.2f}")
 
         # get time range we need to show
         time_index = int((time - self.tbeg) / self.dt)
@@ -261,7 +270,7 @@ class FadingLineRenderer(object):
 
             points = np.array([x, y]).T.reshape(-1, 1, 2)
             segments = np.concatenate([points[:-1], points[1:]], axis=1)
-            lc = LineCollection(segments, array=z, cmap=self.cmaps[idx], capstyle="round")
+            lc = LineCollection(segments, array=z, cmap=self.cmaps[idx], **self.lc_kwargs)
             self.ax.add_collection(lc)
             self.lcs.append(lc)
 
@@ -351,6 +360,14 @@ class MovingWindowRenderer(object):
         self.set_time_indicator(time)
 
 
+class TextRenderer(object):
+    def __init__(self, text_object):
+        self.text_object = text_object
+
+    def set_time(self, time):
+        self.text_object.set_text(f"t = {time :.2f}")
+
+
 # ------------------------------------------------------------------------------ #
 # Topology, this one is only useful for neurons in a h5f following my data format
 # ------------------------------------------------------------------------------ #
@@ -363,12 +380,14 @@ class TopologyRenderer(object):
     the experiment
     """
 
-    def __init__(self, input_path, ax=None, decay_time=10.0):
+    def __init__(
+        self, input_path, ax=None, decay_time=10.0, canvas_clr="black", show_time=False
+    ):
 
         self.input_path = input_path
 
         # some styling options
-        self.canvas_clr = "black"
+        self.canvas_clr = canvas_clr
         self.title_clr = "white"
         self.neuron_clr = "white"
 
@@ -400,6 +419,8 @@ class TopologyRenderer(object):
             self.spiketimes.append(spikes[idx, 1])
             self.n_id_clr.append(f"C{mod_ids[n_id]}")
 
+        self.show_time = show_time
+
         # create a bunch of artists that we can update later
         if ax is None:
             self.fig, self.ax = plt.subplots(figsize=[6.4, 6.4])
@@ -408,14 +429,11 @@ class TopologyRenderer(object):
             self.fig = ax.get_figure()
         self.init_background()
 
-        log.info(
-            f"Created TopologyRenderer for {input_path}"
-        )
+        log.info(f"Created TopologyRenderer for {input_path}")
         try:
             log.info(f"Spiketimes between {spikes[0, 1]} and {spikes[-1, 1]}")
         except:
             log.warning("No spikes found in the data")
-
 
     def init_background(
         self,
@@ -434,24 +452,33 @@ class TopologyRenderer(object):
         ax = self.ax
         fig = self.fig
 
-        fig.patch.set_facecolor(self.canvas_clr)
         # ax.set_title(f"{args.title}", fontsize=16, color=title_clr)
         ax.set_facecolor(self.canvas_clr)
         ax.set_axis_off()
         ax.set_aspect(1)
 
-        # load data
-        pos_x = h5.load(self.input_path, "/data/neuron_pos_x")  # soma centers
-        pos_y = h5.load(self.input_path, "/data/neuron_pos_y")
-        seg_x = h5.load(self.input_path, "/data/neuron_axon_segments_x")  # 2d array
-        seg_y = h5.load(self.input_path, "/data/neuron_axon_segments_y")
-        seg_x = np.where(seg_x == 0, np.nan, seg_x)  # overwrite padding 0 at the end
-        seg_y = np.where(seg_y == 0, np.nan, seg_y)
-
         # keep handles for drawn elements so we can update them later
-        self.art_time = fig.text(
-            0.02, 0.95, "current time", fontsize=8, color=self.title_clr
-        )
+        self.art_time = fig.text(0.02, 0.95, "", fontsize=8, color=self.title_clr)
+
+        # ------------------------------------------------------------------------------ #
+        # axons
+        # ------------------------------------------------------------------------------ #
+
+        try:
+            seg_x = h5.load(
+                self.input_path, "/data/neuron_axon_segments_x", raise_ex=True
+            )
+            seg_y = h5.load(
+                self.input_path, "/data/neuron_axon_segments_y", raise_ex=True
+            )
+            # overwrite padding 0 at the end
+            seg_x = np.where(seg_x == 0, np.nan, seg_x)
+            seg_y = np.where(seg_y == 0, np.nan, seg_y)
+        except:
+            log.warning("No axons found in the data")
+            # this happens for experimental data
+            seg_x = []
+            seg_y = []
 
         art_axons = []
         for i in range(len(seg_x)):
@@ -474,6 +501,13 @@ class TopologyRenderer(object):
             art_axons.append(tmp[0])
         self.art_axons = art_axons
 
+        # ------------------------------------------------------------------------------ #
+        # soma
+        # ------------------------------------------------------------------------------ #
+
+        pos_x = h5.load(self.input_path, "/data/neuron_pos_x")
+        pos_y = h5.load(self.input_path, "/data/neuron_pos_y")
+
         art_soma = []
         for i in range(len(pos_x)):
             # background
@@ -495,7 +529,8 @@ class TopologyRenderer(object):
         """
         Update the whole figure to a given experimental time stamp
         """
-        self.art_time.set_text(f"t = {time :.2f} {self.time_unit}")
+        if self.show_time:
+            self.art_time.set_text(f"t = {time :.2f} {self.time_unit}")
 
         for n_id in range(self.num_n):
             self.style_neuron_to_time(n_id, time)
@@ -537,9 +572,10 @@ class TopologyRenderer(object):
         sm_face = (*mcolors.to_rgb(clr), total_alpha * 1.0)
 
         # update the actual foreground layer
-        self.art_axons[n_id].set_color(ax_edge)
         self.art_soma[n_id].set_edgecolor(sm_edge)
         self.art_soma[n_id].set_facecolor(sm_face)
+        if len(self.art_axons) != 0:
+            self.art_axons[n_id].set_color(ax_edge)
 
 
 # ------------------------------------------------------------------------------ #
