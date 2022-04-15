@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-01-24 13:43:39
-# @Last Modified: 2022-04-14 13:42:50
+# @Last Modified: 2022-04-14 18:00:49
 # ------------------------------------------------------------------------------- #
 # Create a movie of the network for a given time range and visualize
 # firing neurons. Saves to mp4.
@@ -20,14 +20,14 @@ import logging
 log = logging.getLogger(__name__)
 log.setLevel("INFO")
 
-# matplotlib.use("Agg")
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from matplotlib.collections import LineCollection
 from matplotlib.animation import FFMpegWriter
 
 plt.style.use("dark_background")
-# plt.ioff()
+plt.ioff()
 # use custom colors to match the paper
 matplotlib.rcParams["axes.prop_cycle"] = matplotlib.cycler("color", [
     "#5886be", "#f3a093", "#53d8c9", "#f9c192", "#f2da9c", # light

@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-10-25 17:28:21
-# @Last Modified: 2022-04-14 13:10:08
+# @Last Modified: 2022-04-15 14:10:51
 # ------------------------------------------------------------------------------ #
 # Hard coded script to analyse experimental data
 # ------------------------------------------------------------------------------ #
@@ -48,7 +48,7 @@ import colors as cc
 remove_null_sequences = False
 
 # whether to store the analysis of each trial as hdf5 in the usual format
-save_analysed_hdf5 = False
+save_analysed_h5f = False
 
 # for correlation coefficients, size of time steps in which number of spikes are counted
 time_bin_size_for_rij = 500 / 1000  # in seconds
