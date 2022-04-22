@@ -3178,12 +3178,12 @@ def meso_resource_cycle(input_file, **kwargs):
 
 def meso_sketch_gate_deactivation():
     sys.path.append("./src")
-    from mesoscopic_model import probability_to_close
+    from mesoscopic_model import probability_to_disconnect
 
     # currently using probabilities for y. better as rates?
     src_resources = np.arange(0.0, 2.0, 0.01)
     fig, ax = plt.subplots()
-    ax.plot(src_resources, probability_to_close(src_resources))
+    ax.plot(src_resources, probability_to_disconnect(src_resources))
     ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.01))
     ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.002))
     ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1))
@@ -3239,7 +3239,7 @@ def meso_activity_snapshot(
     # get meta data
     # coupling, noise, rep = mh._coords_from_file(input_file)
 
-    if h5f is None:
+    if isinstance(h5f, str):
         h5f = mh.prepare_file(h5f)
         mh.find_system_bursts_and_module_contributions2(h5f)
 
@@ -3345,6 +3345,16 @@ def meso_activity_snapshot(
 
     return fig
 
+
+def meso_explore_single(**kwargs):
+    sys.path.append("./src")
+    import mesoscopic_model as mm
+    import tempfile
+
+    path = tempfile.gettempdir() + "/meso_test.hdf5"
+    mm.simulate_and_save(output_filename=path, **kwargs)
+
+    meso_activity_snapshot(path)
 
 # ------------------------------------------------------------------------------ #
 # helper

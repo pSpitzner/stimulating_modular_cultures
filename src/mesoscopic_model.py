@@ -79,7 +79,7 @@ def simulate_model(
     basefiring        = 0.01,
     w0                = 0.3,
     gate_cls          = 1.0,
-    gate_rec          = 0.02,
+    gate_rec          = 0.02, # 1/50, here still specified as rate
     ext_str           = 0.0,
     k_sigm            = 1.6,
     thres_sigm        = 0.4,
@@ -163,35 +163,37 @@ def simulate_model(
     recording_time = simulation_time
     simulation_time = simulation_time + thermalization_time
 
-    # Stochastic dt
-    sqdt = np.sqrt(dt)
-
     # Binnings associated to such a time
     nt = int(simulation_time / dt)
 
-    GATE_OPEN = 1  # allow transmission
-    GATE_CLOSED = 0  # nothing goes through
+    GATE_CONNECTED = 1  # allow transmission
+    GATE_DISCONNECTED = 0  # nothing goes through
 
-    # Initialize activity, resources, and gates
-    x = np.ones(shape=(4, nt), dtype="float") * np.nan
+    # time series of variables
+    # activity (firing rate), init to random
+    rate = np.ones(shape=(4, nt), dtype="float") * np.nan
+    rate[:, 0] = np.random.rand(4)
+    # reources
     rsrc = np.ones(shape=(4, nt), dtype="float") * np.nan
-    # state of each gate at this time (directed) gate[from, to]
-    gate = np.ones(shape=(4, 4), dtype="int") * GATE_OPEN
+    rsrc[:, 0] = np.random.rand(4) * max_rsrc
 
-    # we want to be able to plot all gates. although we know that not all modules are
-    # connected, lets keep the shape simple and set all non-existing gates to zero.
+    # state of each gate at this time (directed) gate[from, to]
+    gate = np.ones(shape=(4, 4), dtype="int") * GATE_CONNECTED
+
+    # keep track of geates. lets keep the shape simple and set all non-existing gates to zero.
     gate_history = np.zeros(shape=(4, 4, nt), dtype="int")
 
+
     # Coupling matrix
-    w = np.zeros(shape=(4, 4), dtype="int")  # Adjacency matrix
-    w[0, 1] = 1
-    w[1, 0] = 1
-    w[0, 2] = 1
-    w[2, 0] = 1
-    w[1, 3] = 1
-    w[3, 1] = 1
-    w[2, 3] = 1
-    w[3, 2] = 1
+    Aij = np.zeros(shape=(4, 4), dtype="int")  # Adjacency matrix
+    Aij[0, 1] = 1
+    Aij[1, 0] = 1
+    Aij[0, 2] = 1
+    Aij[2, 0] = 1
+    Aij[1, 3] = 1
+    Aij[3, 1] = 1
+    Aij[2, 3] = 1
+    Aij[3, 2] = 1
 
     # External input
     ext_input = np.ones(4) * ext_str
@@ -200,94 +202,102 @@ def simulate_model(
     # which is used in sigmoid transfer function
     aux_thrsig = np.exp(k_sigm * thres_sigm)
 
-    # Initialize parameters to spontaneous, get initial value of resources
-    m = np.ones(4) * max_rsrc
-
-    rsrc[:, 0] = np.random.rand(4) * max_rsrc
-    x[:, 0] = np.random.rand(4)
-
     # -------------
     # Simulation
     # -------------
 
     # Main computation loop: Milstein algorithm, assuming Ito interpretation
-    t = 0.0
-    for j in range(nt - 1):
+    for t in range(nt - 1):
 
-        # Update each cluster
-        old_gate = gate.copy()
-        for c in range(4):
-
+        # Update each module
+        for tar in range(4):
+            # Collect the part of input that arrives from other modules
             module_input = 0.0
-            # Interaction with other connected clusters (usually one keeps a list of neighbours, etc. but we only have 4 clusters...)
-            for neigh in range(4):
-                if w[neigh, c] > 0.0:
+            for src in range(4):
+                # connection matrix. [from, to]
+                if Aij[src, tar] == 1:
+                    # Sum input to module tar, only through open gates
+                    if gate[src, tar] == GATE_CONNECTED:
+                        module_input += w0 * rate[src, t]
+                        # module_input += w0 * rate[src, t] * rsrc[src, t]
 
-                    # Sum input to cluster c, only through open gates
-                    if old_gate[neigh, c] == GATE_OPEN:
-                        module_input += w0 * x[neigh, j]
-
-                    # Store gate state for export [from, to, time]
-                    gate_history[c, neigh, j] = gate[c, neigh]
-                    gate_history[c, neigh, j] = gate[c, neigh]
-
-                    # update gates, but only if the mechanism is enabled
-                    if not gating_mechanism:
-                        continue
-
-                    # Close door depending on activity of source
-                    if old_gate[c, neigh] == GATE_OPEN:
-                        prob = probability_to_close(
-                            rsrc[c, j], dt, thres_gate, k_gate, gate_cls
-                        )
-                        if np.random.rand() < prob:
-                            gate[c, neigh] = GATE_CLOSED
-
-                    # Open door with a characteristic time
-                    else:
-                        prob = 1.0 - np.exp(-dt * gate_rec)
-                        if np.random.rand() < prob:
-                            gate[c, neigh] = GATE_OPEN
-
+            # this should not happen?
             module_input *= 0.5
 
-            # Multiplicative noise (+ extra additive)
-            noise = np.random.standard_normal() * sigma
-            if x[c, j] > basefiring:
-                noise += np.sqrt(x[c, j]) * np.random.standard_normal() * sigma
 
-            # Terms for the deterministic system:
+            # Collect pieces to update our firing rate, Milstein algorithm
             # Spontaneous decay to small firing
-            t1 = decay_r * (x[c, j] - basefiring)
-            # Input to the cluster
-            t2 = transfer_function(
-                rsrc[c, j] * (x[c, j] + module_input + ext_input[c]),
+            term1 = dt*( - decay_r * (rate[tar, t] - basefiring))
+
+            # Input from all sources
+            total_input = rsrc[tar, t] * (rate[tar, t] + module_input + ext_input[tar])
+            term2 = dt*transfer_function(
+                total_input,
                 gain,
                 k_sigm,
                 thres_sigm,
                 aux_thrsig,
             )
 
-            # Update our variables
-            x[c, j + 1] = x[c, j] + dt * (-t1 + t2) + sqdt * noise
-            rsrc[c, j + 1] = rsrc[c, j] + dt * (
-                (m[c] - rsrc[c, j]) / tc - rsrc[c, j] * x[c, j] / td
+            # Noise (multiplicative under conditions! and additive)
+            noise = np.random.standard_normal() * sigma
+            if rate[tar, t] > basefiring:
+                noise += np.sqrt(rate[tar, t]) * np.random.standard_normal() * sigma
+            # noise only sqrt dt?
+            term3 = np.sqrt(dt) * noise
+
+            rate[tar, t + 1] = rate[tar, t] + term1 + term2 + term3
+
+            # resources are easier
+            rsrc[tar, t + 1] = rsrc[tar, t] + dt * (
+                (max_rsrc - rsrc[tar, t]) / tc - rate[tar, t] * rsrc[tar, t]  / td
             )
 
-        t += dt  # Update the time
+        # update gates for next time step
+        old_gate = gate.copy()
+        for src in range(4):
+            for tar in range(4):
+                # Store gate history for export, before updating [from, to, time]
+                gate_history[src, tar, t] = gate[src, tar]
+                gate_history[src, tar, t] = gate[src, tar]
+
+                # update outgoing(!) gates, but only if the mechanism is enabled
+                if not gating_mechanism:
+                    continue
+
+                # dont touch non-existing gate
+                # we could skip before saving the gate history, but this helps debugging
+                if Aij[src, tar] == 0:
+                    continue
+
+                # Close gate depending on activity of source
+                if old_gate[src, tar] == GATE_CONNECTED:
+                    prob = probability_to_disconnect(
+                        rsrc[src, t], dt, thres_gate, k_gate, gate_cls
+                    )
+                    if np.random.rand() < prob:
+                        gate[src, tar] = GATE_DISCONNECTED
+
+                # Open gate with a characteristic time
+                else:
+                    prob = 1.0 - np.exp(-dt * gate_rec)
+                    if np.random.rand() < prob:
+                        gate[src, tar] = GATE_CONNECTED
 
     # this is a bit hacky...
     rec_start = int(thermalization_time / dt)
-    x = x[:, rec_start:]
+    rate = rate[:, rec_start:]
     rsrc = rsrc[:, rec_start:]
     gate_history = gate_history[:, :, rec_start:]
 
     time_axis = np.arange(0, nt - rec_start) * dt
-    return time_axis, x, rsrc, gate_history
+    return time_axis, rate, rsrc, gate_history
 
 
 @jit(nopython=True, parallel=False, fastmath=False, cache=True)
-def probability_to_close(resources, dt=0.01, thres_gate=1.0, k_gate=10.0, gate_cls=1.0):
+def probability_to_disconnect(
+    resources, dt=0.01, thres_gate=1.0, k_gate=10.0, gate_cls=1.0
+):
     """
     Returns the probability of the gate to be closed depending on sigmoid response and currently available resources
 
@@ -400,18 +410,21 @@ def simulate_and_save(output_filename, meta_data=None, **kwargs):
     # df[f"mod_gate_{gateind+1}"] = gate_history[gateind, :]
 
     # overwrite data if it already exists
-    if os.path.exists(f"{output_filename}.hdf5"):
-        os.remove(f"{output_filename}.hdf5")
-    df.to_hdf(f"{output_filename}.hdf5", f"/dataframe", complevel=9)
+    if ".hdf5" not in output_filename.lower():
+        output_filename += ".hdf5"
+
+    if os.path.exists(f"{output_filename}"):
+        os.remove(f"{output_filename}")
+    df.to_hdf(f"{output_filename}", f"/dataframe", complevel=9)
 
     # This is quite inconsistent, most data is saved with pandas, only this is
     # native hdf5. fixing requires a rewrite of meso_helper
-    file = h5py.File(f"{output_filename}.hdf5", "r+")
+    file = h5py.File(f"{output_filename}", "r+")
     file.create_dataset(f"/data/gate_history", data=gate_history, compression="gzip")
     file.close()
 
     if meta_data is not None:
-        file = h5py.File(f"{output_filename}.hdf5", "r+")
+        file = h5py.File(f"{output_filename}", "r+")
         for key in meta_data.keys():
             try:
                 file.create_dataset(f"/meta/{key}", data=meta_data[key])
