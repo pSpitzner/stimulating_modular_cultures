@@ -25,6 +25,7 @@ from scipy.ndimage import measurements
 # nullclines
 from scipy.optimize import fsolve
 from scipy.integrate import odeint
+from scipy.signal import find_peaks
 
 from benedict import benedict
 import ana_helper as ah
@@ -725,6 +726,89 @@ def plot_nullcline(ax, ext_str, tolerance=1e-3, **meso_args):
     ax.set_xlim(0, 2.8)
     ax.set_ylim(-1, 12)
 
+
+def plot_h_diagram(ax, tf=1e5, dt=0.01, **meso_args):
+    """
+    Does the actual computation of the nullclines using the indicated control parameter and plots them into the selected axis
+
+    #Parameters
+    - ax : matplotlib axis
+        The axis where this figure will be drawn
+    - meso_args : dict
+        Any argument that can be passed to the mesoscopic model simulation and it is related to single module.
+    """
+
+    # Get arguments used for the model. This is needed because for fsolver we need to pass an ordered set of *args
+    # Using the get method we can also set default values in case they are not specified in kwargs
+    # fmt: off
+    max_rsrc    = meso_args.get("max_rsrc", 2.0)
+    tc          = meso_args.get("tc", 40.0)
+    td          = meso_args.get("td", 5.0)
+    decay_r     = meso_args.get("decay_r", 1.0)
+    basefiring  = meso_args.get("basefiring", 0.01)
+    k           = meso_args.get("k_sigm", 1.6)
+    thres       = meso_args.get("thres_sigm", 0.4)
+    gain        = meso_args.get("gain", 10.0)
+    ode_coords  = meso_args.get("ode_coords")
+    # fmt:on
+
+    # Auxiliary shortcut to pre-compute this constant
+    # which is used in sigmoid transfer function
+    aux_thrsig = np.exp(k * thres)
+
+    # Non linear transfer function of the model
+    def transfer_function(inpt, gain, k_sigm, thres_sigm, aux_thrsig):
+        expinpt = np.exp(-k_sigm * (inpt - thres_sigm))
+        return (
+            gain * (1.0 - expinpt) / (aux_thrsig * expinpt + 1.0)
+            if inpt >= thres_sigm
+            else 0.0
+        )
+
+    # Define single module ODE to be solved, in order to obtain a trajectory
+    def module_ODE(vars, t, *args):
+        x, r = vars
+        max_rsrc = args[0]
+        tc, td = args[1:3]
+        decay_r = args[3]
+        basefiring = args[4]
+        ext_str = args[5]
+        k, thr, gain = args[6:9]
+        aux_thrsig = args[9]
+
+        xdot_1 = decay_r * (x - basefiring)
+        xdot_2 = transfer_function(r * (x + ext_str), gain, k, thr, aux_thrsig)
+        rdot = (max_rsrc - r) / tc - r * x / td
+
+        return np.array([-xdot_1 + xdot_2, rdot])
+
+    # Initial conditions are such that we will have an excitable trajectory: full of resources and small kick
+    x0 = np.array([0.5, max_rsrc])
+
+    #External inputs to check. We will increase resolution near the transition
+    h_space = np.concatenate((np.linspace(0, 0.18, 5), np.linspace(0.18, 0.22, 50), np.linspace(0.22, 0.3, 15))) 
+    frequency = np.zeros(h_space.size) * np.nan
+
+    npoints = int(tf/dt)
+
+    if ode_coords is None:
+        # Being excitable, spike is very fast and the other is slow, so sample differently to ensure continuity
+        ode_coords = np.linspace(0, tf, npoints) 
+    
+    #Simulate the deterministic model for increasing external inputs
+    for j,ext_str in enumerate(h_space):
+        traj = odeint(
+            module_ODE,
+            x0,
+            ode_coords,
+            args=(max_rsrc, tc, td, decay_r, basefiring, ext_str, k, thres, gain, aux_thrsig),
+        )
+        peaks, _ = find_peaks(traj[:, 0], distance=10, height=7) 
+        frequency[j] = peaks.size / tf #Estimation of spiking frequency as number of peaks detected vs time waited 
+
+    ax.plot(h_space, frequency)
+
+    return ax
 
 # ------------------------------------------------------------------------------ #
 # Others
