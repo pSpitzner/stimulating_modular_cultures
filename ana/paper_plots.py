@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-11-08 17:51:24
-# @Last Modified: 2022-04-22 16:58:58
+# @Last Modified: 2022-04-25 19:45:28
 # ------------------------------------------------------------------------------ #
 # collect the functions to create figure panels here
 # ------------------------------------------------------------------------------ #
@@ -2898,16 +2898,20 @@ def fig_5(
             except:
                 dset = mh.process_data_from_folder("./dat/meso_in/")
                 mh.write_xr_dset_to_hdf5("./dat/meso_out/analysed.hdf5")
-            dset = dset.sel(coupling=[0.05, 0.1, 0.8])
+            # dset = dset.sel(coupling=[0.05, 0.1, 0.8])
 
         ax = meso_obs_for_all_couplings(dset, "mean_correlation_coefficient")
-        ax.get_legend().set_visible(False)
+        if not show_legend:
+            ax.get_legend().set_visible(False)
         ax.get_figure().savefig(f"{out_path}_mean_rij.pdf", dpi=300, transparent=True)
-        c = 0.1
-        ax = meso_module_contribution(dset, coupling=c)
-        ax.get_figure().savefig(
-            f"{out_path}_module_contrib_{c}.pdf", dpi=300, transparent=True
-        )
+
+        for c in dset["coupling"].to_numpy():
+            ax = meso_module_contribution(dset, coupling=c)
+            ax.set_title(rep_path + "  " + f"{c}")
+            ax.get_figure().tight_layout()
+            ax.get_figure().savefig(
+                f"{out_path}_module_contrib_{c}.pdf", dpi=300, transparent=True
+            )
 
         ax = meso_sketch_gate_deactivation()
         ax.get_figure().savefig(f"{out_path}_gate_sketch.pdf", dpi=300, transparent=True)
@@ -2931,7 +2935,7 @@ def fig_5(
         zoom_times[f"0.8/0.02"] = 885
 
     r = 0  # repetition
-    for c in [0.05, 0.1, 0.8]:
+    for c in dset["coupling"].to_numpy():
         for n in [1, 15]:
 
             input_file = f"{rep_path}/coup{c:0.2f}-{r:d}/noise{n}.hdf5"
@@ -2990,16 +2994,20 @@ def fig_5(
                 )
 
 
-def sm_meso_no_gates():
+def sm_meso_no_gates(
+    rep_path="./dat/meso_in_no_gates", out_path="./fig/paper/meso_gates_off"
+):
     """
     Simply calls figure 5 with changed input / output paths
     """
-    rep_path = "./dat/meso_in_no_gates"
+
+    dset_path = rep_path.replace("meso_in", "meso_out/analysed")
+    dset_path += ".hdf5"
     try:
-        dset = xr.load_dataset("./dat/meso_out/analysed_no_gates.hdf5")
+        dset = xr.load_dataset(dset_path)
     except:
         dset = mh.process_data_from_folder(rep_path)
-        mh.write_xr_dset_to_hdf5("./dat/meso_out/analysed_no_gates.hdf5")
+        mh.write_xr_dset_to_hdf5(dset, output_path=dset_path)
 
     zoom_times = benedict(keypath_separator="/")
     zoom_times[f"0.1/0.02"] = 915
@@ -3009,7 +3017,7 @@ def sm_meso_no_gates():
     fig_5(
         dset=dset,
         rep_path=rep_path,
-        out_path="./fig/paper/meso_gates_off",
+        out_path=out_path,
         skip_snapshots=False,
         skip_cycles=False,
         skip_observables=False,
@@ -3017,7 +3025,7 @@ def sm_meso_no_gates():
     )
 
 
-def meso_obs_for_all_couplings(dset, obs):
+def meso_obs_for_all_couplings(dset, obs, base_clr="#333"):
     """
     Wrapper tjat reproduces the plots of the microscopic plots ~ fig 4:
     Correlations and event size with error bars across realizations.
@@ -3044,7 +3052,7 @@ def meso_obs_for_all_couplings(dset, obs):
             dset[obs].sel(coupling=coupling),
             ax=ax,
             color=cc.alpha_to_solid_on_bg(
-                "#333", cc.fade(cdx, dset["coupling"].size, invert=True)
+                base_clr, cc.fade(cdx, dset["coupling"].size, invert=True)
             ),
             label=f"w = {coupling}",
             zorder=cdx,
@@ -3053,7 +3061,7 @@ def meso_obs_for_all_couplings(dset, obs):
 
     if "correlation_coefficient" in obs:
         ax.set_ylim(0, 1)
-        ax.set_xlim(0, 0.3125)
+        # ax.set_xlim(0, 0.3125)
         ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
         ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
 
@@ -3066,9 +3074,7 @@ def meso_obs_for_all_couplings(dset, obs):
     if not show_ylabel:
         ax.set_ylabel("")
 
-    # cc.set_size2(ax, w=3.0, h=2.2)
-    cc.set_size2(ax, w=3.0, h=1.41)
-    # cc.set_size2(ax, 1.6, 1.4)
+    # cc.set_size2(ax, w=3.0, h=1.41)
 
     return ax
 
@@ -3213,10 +3219,9 @@ def meso_module_contribution(dset=None, coupling=0.3):
     ax.set_xlabel("noise")
     ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.1))
     ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.025))
-    ax.set_xlim(0, 0.3125)
+    # ax.set_xlim(0, 0.3125)
 
-    # cc.set_size2(ax, w=3.0, h=2.2)
-    cc.set_size2(ax, w=3.0, h=1.41)
+    # cc.set_size2(ax, w=3.0, h=1.41)
 
     if not show_xlabel:
         ax.set_xlabel("")
@@ -3228,7 +3233,8 @@ def meso_module_contribution(dset=None, coupling=0.3):
 
 
 def meso_activity_snapshot(
-    h5f=None, main_width=3.5, zoom_duration=50, zoom_start=100, mark_zoomin_location=True
+    h5f=None, main_width=3.5, zoom_duration=50, zoom_start=100, mark_zoomin_location=True,
+    indicate_bursts=True,
 ):
     """
     Create one of our activity snapshots for the mesoscopic model,
@@ -3275,6 +3281,10 @@ def meso_activity_snapshot(
     ph.plot_module_rates(h5f, axes[3], alpha=1, lw=0.75)
     ph.plot_system_rate(h5f, axes[0], mark_burst_threshold=False, lw=0.5)
     ph.plot_system_rate(h5f, axes[3], mark_burst_threshold=False, lw=0.5)
+
+    if indicate_bursts:
+        ph.plot_bursts_into_timeseries(h5f, axes[0], style="fill_between")
+        ph.plot_bursts_into_timeseries(h5f, axes[3], style="fill_between")
 
     # gates
     ax = ph.plot_gate_history(h5f, axes[1])
@@ -3334,12 +3344,12 @@ def meso_activity_snapshot(
         for ax in [axes[2], axes[5]]:
             ph._plot_bursts_into_timeseries(
                 ax=ax,
-                beg_times=[zoom_start + zoom_duration/2],
-                end_times=[zoom_start + zoom_duration/2],
+                beg_times=[zoom_start + zoom_duration / 2],
+                end_times=[zoom_start + zoom_duration / 2],
                 style="markers",
                 y_offset=-0.05,
                 markersize=1.5,
-                clip_on=False
+                clip_on=False,
             )
 
     h5.close_hot()

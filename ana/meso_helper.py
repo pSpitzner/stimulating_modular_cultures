@@ -327,6 +327,11 @@ def f_correlation_coefficients(raw, return_matrix=False):
     # "only interested in pair-wise interactions, discard diagonal entries rii"
     np.fill_diagonal(rij, np.nan)
 
+    # correlation coefficients of resources are pretty similar to what you get from rates.
+    # rsrcs = raw[["mod_0_res",  "mod_1_res",  "mod_2_res",  "mod_3_res"]].to_numpy()
+    # rsrcs = np.corrcoef(rsrcs.T)
+    # np.fill_diagonal(rsrcs, np.nan)
+
     if return_matrix:
         return rij
     else:
@@ -786,15 +791,15 @@ def plot_h_diagram(ax, tf=1e5, dt=0.01, **meso_args):
     x0 = np.array([0.5, max_rsrc])
 
     #External inputs to check. We will increase resolution near the transition
-    h_space = np.concatenate((np.linspace(0, 0.18, 5), np.linspace(0.18, 0.22, 50), np.linspace(0.22, 0.3, 15))) 
+    h_space = np.concatenate((np.linspace(0, 0.18, 5), np.linspace(0.18, 0.22, 50), np.linspace(0.22, 0.3, 15)))
     frequency = np.zeros(h_space.size) * np.nan
 
     npoints = int(tf/dt)
 
     if ode_coords is None:
         # Being excitable, spike is very fast and the other is slow, so sample differently to ensure continuity
-        ode_coords = np.linspace(0, tf, npoints) 
-    
+        ode_coords = np.linspace(0, tf, npoints)
+
     #Simulate the deterministic model for increasing external inputs
     for j,ext_str in enumerate(h_space):
         traj = odeint(
@@ -803,8 +808,8 @@ def plot_h_diagram(ax, tf=1e5, dt=0.01, **meso_args):
             ode_coords,
             args=(max_rsrc, tc, td, decay_r, basefiring, ext_str, k, thres, gain, aux_thrsig),
         )
-        peaks, _ = find_peaks(traj[:, 0], distance=10, height=7) 
-        frequency[j] = peaks.size / tf #Estimation of spiking frequency as number of peaks detected vs time waited 
+        peaks, _ = find_peaks(traj[:, 0], distance=10, height=7)
+        frequency[j] = peaks.size / tf #Estimation of spiking frequency as number of peaks detected vs time waited
 
     ax.plot(h_space, frequency)
 

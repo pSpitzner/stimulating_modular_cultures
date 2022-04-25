@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2022-04-13 11:21:51
+# @Last Modified: 2022-04-25 14:04:33
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -771,7 +771,7 @@ def _plot_bursts_into_timeseries(
     # Parameters
     style : str
         "markers" to show in and outs via small triangles
-        "fill" to highlight the the background with a `fill_between`
+        "fill_between" to highlight the the background with a `fill_between`
     y_offset: float
         y position if style is "markers"
     """
