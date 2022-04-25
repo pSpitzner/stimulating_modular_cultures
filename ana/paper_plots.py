@@ -1629,7 +1629,7 @@ def exp_sticks_across_layouts(
     if apply_formatting:
         cc.set_size3(ax, 2.2, 2)
 
-    if save_path is "automatic":
+    if save_path == "automatic":
         save_path = f"./fig/paper/exp_layouts_sticks_{observable}.pdf"
     if save_path is not None:
         ax.get_figure().savefig(save_path, dpi=300)
@@ -3129,7 +3129,7 @@ def meso_xr_with_errors(da, ax=None, apply_formatting=True, **kwargs):
     return ax
 
 
-def meso_resource_cycle(input_file, **kwargs):
+def meso_resource_cycle(input_file, show_nullclines=True, **kwargs):
     """
     Wrapper to plot a resource cycle for a single file created from the mesoscopic model
 
@@ -3164,8 +3164,9 @@ def meso_resource_cycle(input_file, **kwargs):
     # cc.set_size3(ax, 3.5, 3)
 
     # sns.despine(ax=ax, trim=True, offset=5)
-    coupling, noise, rep = mh._coords_from_file(input_file)
-    mh.plot_nullcline(ax=ax, ext_str=noise, **kwargs.copy())
+    if show_nullclines:
+        coupling, noise, rep = mh._coords_from_file(input_file)
+        mh.plot_nullcline(ax=ax, ext_str=noise, **kwargs.copy())
 
     if not show_xlabel:
         ax.set_xlabel("")
@@ -3176,14 +3177,14 @@ def meso_resource_cycle(input_file, **kwargs):
     return ax
 
 
-def meso_sketch_gate_deactivation():
+def meso_sketch_gate_deactivation(**kwargs):
     sys.path.append("./src")
     from mesoscopic_model import probability_to_disconnect
 
     # currently using probabilities for y. better as rates?
     src_resources = np.arange(0.0, 2.0, 0.01)
     fig, ax = plt.subplots()
-    ax.plot(src_resources, probability_to_disconnect(src_resources))
+    ax.plot(src_resources, probability_to_disconnect(src_resources, **kwargs))
     ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.01))
     ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.002))
     ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1))
@@ -3347,6 +3348,23 @@ def meso_activity_snapshot(
 
 
 def meso_explore_single(**kwargs):
+    """
+    Example
+    ```
+    pp.meso_explore_single(
+        simulation_time=5000,
+        basefiring=0,
+        ext_str=0.01,
+        w0=0.01,
+        gating_mechanism=False,
+        gate_rec=0.025,
+        max_rsrc=1,
+        thres_gate=0.5,
+        thres_sigm=0.2,
+        td=5,
+    )
+    ```
+    """
     sys.path.append("./src")
     import mesoscopic_model as mm
     import tempfile
@@ -3354,7 +3372,12 @@ def meso_explore_single(**kwargs):
     path = tempfile.gettempdir() + "/meso_test.hdf5"
     mm.simulate_and_save(output_filename=path, **kwargs)
 
-    meso_activity_snapshot(path)
+    fig = meso_activity_snapshot(path)
+    if (t := kwargs.get("simulation_time")) is not None:
+        fig.axes[0].set_xlim(0, t)
+
+    meso_resource_cycle(path, show_nullclines=False)
+
 
 # ------------------------------------------------------------------------------ #
 # helper

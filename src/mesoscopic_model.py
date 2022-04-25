@@ -209,20 +209,20 @@ def simulate_model(
     # Main computation loop: Milstein algorithm, assuming Ito interpretation
     for t in range(nt - 1):
 
-        # Update each module
+        # Update each module, `src` -> source module, `tar` -> target module
         for tar in range(4):
             # Collect the part of input that arrives from other modules
             module_input = 0.0
             for src in range(4):
-                # connection matrix. [from, to]
+                # connection matrix. [from, to]. ajj is 0.
                 if Aij[src, tar] == 1:
                     # Sum input to module tar, only through open gates
                     if gate[src, tar] == GATE_CONNECTED:
-                        module_input += w0 * rate[src, t]
-                        # module_input += w0 * rate[src, t] * rsrc[src, t]
+                        # module_input += w0 * rate[src, t]
+                        module_input += w0 * rate[src, t] * rsrc[src, t]
 
-            # this should not happen?
-            module_input *= 0.5
+            # this should not happen.
+            # module_input *= 0.5
 
 
             # Collect pieces to update our firing rate, Milstein algorithm
@@ -230,7 +230,9 @@ def simulate_model(
             term1 = dt*( - decay_r * (rate[tar, t] - basefiring))
 
             # Input from all sources
-            total_input = rsrc[tar, t] * (rate[tar, t] + module_input + ext_input[tar])
+            # total_input = rsrc[tar, t] * (rate[tar, t] + module_input + ext_input[tar])
+            total_input = rsrc[tar, t] * rate[tar, t] + module_input + ext_input[tar]
+
             term2 = dt*transfer_function(
                 total_input,
                 gain,
@@ -240,7 +242,8 @@ def simulate_model(
             )
 
             # Noise (multiplicative under conditions! and additive)
-            noise = np.random.standard_normal() * sigma
+            noise = 0
+            noise += np.random.standard_normal() * sigma
             if rate[tar, t] > basefiring:
                 noise += np.sqrt(rate[tar, t]) * np.random.standard_normal() * sigma
             # noise only sqrt dt?
