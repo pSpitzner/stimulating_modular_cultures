@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-11-08 17:51:24
-# @Last Modified: 2022-04-13 15:07:56
+# @Last Modified: 2022-04-22 16:58:58
 # ------------------------------------------------------------------------------ #
 # collect the functions to create figure panels here
 # ------------------------------------------------------------------------------ #
@@ -43,8 +43,8 @@ warnings.filterwarnings("ignore")  # suppress numpy warnings
 
 # select things to draw for every panel
 show_title = True
-show_xlabel = True
-show_ylabel = True
+show_xlabel = False
+show_ylabel = False
 show_legend = False
 show_legend_in_extra_panel = False
 use_compact_size = True  # this recreates the small panel size of the manuscript
@@ -69,7 +69,7 @@ matplotlib.rcParams["legend.frameon"] = True
 matplotlib.rcParams["axes.spines.right"] = False
 matplotlib.rcParams["axes.spines.top"] = False
 matplotlib.rcParams["figure.figsize"] = [3.4, 2.7]  # APS single column
-matplotlib.rcParams["figure.dpi"] = 150
+matplotlib.rcParams["figure.dpi"] = 300
 matplotlib.rcParams["savefig.facecolor"] = (
     0.0,
     0.0,
