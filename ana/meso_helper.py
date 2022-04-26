@@ -527,7 +527,7 @@ def find_system_bursts_and_module_contributions2(h5f, threshold_factor=0.1):
 # ------------------------------------------------------------------------------ #
 
 
-def _plot_nullclines_for_input_array(ext_inpt_array=None, tolerance=1e-3, **meso_args):
+def _plot_nullclines_for_input_array(ext_inpt_array=None, tolerance=1e-3, **kwargs):
     """
     Plots nullclines of the mesoscopic model for the selected set of parameters.
 
@@ -536,7 +536,7 @@ def _plot_nullclines_for_input_array(ext_inpt_array=None, tolerance=1e-3, **meso
         If not None (default) generates a figure with several subplots following the same shape as ext_inpt_array.
     - tolerance : float, optional
         Tolerance to detect when the two branches of the saddle node merge. Default is 1e-3
-    - meso_args : dict
+    - kwargs : dict
         Any argument that can be passed to the mesoscopic model simulation
 
     #Returns
@@ -545,9 +545,9 @@ def _plot_nullclines_for_input_array(ext_inpt_array=None, tolerance=1e-3, **meso
     """
 
     if ext_inpt_array == None:
-        ext_str = meso_args.get("ext_str", 0.0)
+        ext_str = kwargs.get("ext_str", 0.0)
         fig = plt.figure()
-        plot_nullcline(fig.gca(), ext_str, **meso_args)
+        plot_nullcline(fig.gca(), ext_str, **kwargs)
         return fig
     else:
 
@@ -559,14 +559,14 @@ def _plot_nullclines_for_input_array(ext_inpt_array=None, tolerance=1e-3, **meso
         if len(ext_inpt_array.shape) == 1:
             fig, axes = plt.subplots(ncols=ext_inpt_array.size)
             for ext_str, ax in zip(ext_inpt_array, axes):
-                plot_nullcline(ax, ext_str, **meso_args)
+                plot_nullcline(ax, ext_str, **kwargs)
         else:
             raise ValueError("ext_input_array must be N-dim.")
 
         return fig
 
 
-def plot_nullcline(ax, ext_str, tolerance=1e-3, **meso_args):
+def plot_nullcline(ax, ext_str, tolerance=1e-3, ode_coords=None, **kwargs):
     """
     Does the actual computation of the nullclines using the indicated control parameter and plots them into the selected axis
 
@@ -577,64 +577,59 @@ def plot_nullcline(ax, ext_str, tolerance=1e-3, **meso_args):
         External input, as the control parameter
     - tolerance : float, optional
         Tolerance to detect when the two branches of the saddle node merge. Default is 1e-3
-    - meso_args : dict
+    - ode_coords : array, optional
+        times for which to evaluate.
+    - kwargs : dict
         Any argument that can be passed to the mesoscopic model simulation and it is related to single module.
     """
 
-    # Get arguments used for the model. This is needed because for fsolver we need to pass an ordered set of *args
-    # Using the get method we can also set default values in case they are not specified in kwargs
-    # fmt: off
-    max_rsrc    = meso_args.get("max_rsrc", 2.0)
-    tc          = meso_args.get("tc", 40.0)
-    td          = meso_args.get("td", 5.0)
-    decay_r     = meso_args.get("decay_r", 1.0)
-    basefiring  = meso_args.get("basefiring", 0.01)
-    k           = meso_args.get("k_sigm", 1.6)
-    thres       = meso_args.get("thres_sigm", 0.4)
-    gain        = meso_args.get("gain", 10.0)
-    ode_coords  = meso_args.get("ode_coords")
-    # fmt:on
+    # Lets not hard-code the model, rather import what we can.
+    # remember that all this assumes we are calling from the base directory of the repo.
+    sys.path.append("./src")
+    from mesoscopic_model import default_pars, transfer_function
+
+    # pars will be set to defaults, but everything provided here via kwargs is overwritten
+    pars = default_pars.copy()
+    for key, value in kwargs.items():
+        assert key in default_pars.keys(), f"unknown kwarg for mesoscopic model: '{key}'"
+        pars[key] = value
 
     # Get the nullcline for resources, which is quite easy
-    r_values = np.linspace(0.01, max_rsrc + 1, 1000)
-    r_nullc = (max_rsrc / r_values - 1.0) * td / tc
+    r_values = np.linspace(0.01, pars["max_rsrc"] + 1, 1000)
+    r_nullc = (
+        (pars["max_rsrc"] / r_values - 1.0) * pars["tau_discharge"] / pars["tau_charge"]
+    )
 
     # --- Now let's go for the real deal: activity nullcline
 
     # Auxiliary shortcut to pre-compute this constant
     # which is used in sigmoid transfer function
-    aux_thrsig = np.exp(k * thres)
+    aux_thrsig = np.exp(pars["k_inpt"] * pars["thrs_inpt"])
 
-    # Non linear transfer function of the model
-    def transfer_function(inpt, gain, k_sigm, thres_sigm, aux_thrsig):
-        expinpt = np.exp(-k_sigm * (inpt - thres_sigm))
-        return (
-            gain * (1.0 - expinpt) / (aux_thrsig * expinpt + 1.0)
-            if inpt >= thres_sigm
-            else 0.0
-        )
+    # @victor: maybe we also move this definition to `mesoscopic_model.py`, see below.
+    # Function defined by dx/dt = 0 that we want to solve,
+    # it is transcendental so we will have to go for numerical
+    def x_eq(x, r, aux_thrsig, **pars):
 
-    # Function defined by dx/dt = 0 that we want to solve, it is transcendental so we will have to go for numerical
-    def x_eq(x, *args):
-        r = args[0]
-        decay_r = args[1]
-        basefiring = args[2]
-        ext_str = args[3]
-        k, thr, gain = args[4:7]
-        aux_thrsig = args[7]
-
-        xdot_1 = decay_r * (x - basefiring)  # Spontaneous decay to small firing
+        xdot_1 = pars["tau_rate"] * x  # Spontaneous decay to small firing
         xdot_2 = transfer_function(
-            r * (x + ext_str), gain, k, thr, aux_thrsig
-        )  # Input to the cluster
-
+            r * (x + pars["ext_str"]),
+            pars["gain_inpt"],
+            pars["k_inpt"],
+            pars["thrs_inpt"],
+            aux_thrsig,
+        )
         return -xdot_1 + xdot_2
+
+    # the line below sets every key in pars as default kwargs,
+    # so we avoid having to pass them all as order arguments to fsolve.
+    x_eq_with_kwargs = functools.partial(x_eq, aux_thrsig=aux_thrsig, **pars)
 
     # Method of root finding: we know that for large enough resources system presents an oscillatory bifurcation type-I excitable, so we'll have a saddle node
     # Thus, use two different initial conditions to get all the branch
     # Strategy: we know that for very large resources we have stable up-state near x=gain and unstable in down. So start here and then go
     # backwards, using the latest found solution as initial seed for the next one, to make sure we stay in the stable manifold of the next solution (continuation algorithm)
-    x0_1 = gain
+    x0_1 = pars["gain_inpt"]
     x0_2 = 1.0
 
     x_nullc_up, x_nullc_dw = [], []  # Empty list that will have our saddle
@@ -646,9 +641,9 @@ def plot_nullcline(ax, ext_str, tolerance=1e-3, **meso_args):
     while not is_saddle_found:
         # Get parameters and solutions with different IV
         r = r_values[index]
-        arglist = (r, decay_r, basefiring, ext_str, k, thres, gain, aux_thrsig)
-        x_nullc_up.append(fsolve(x_eq, x0_1, args=arglist))
-        x_nullc_dw.append(fsolve(x_eq, x0_2, args=arglist))
+        arglist = (r,)
+        x_nullc_up.append(fsolve(x_eq_with_kwargs, x0_1, args=arglist))
+        x_nullc_dw.append(fsolve(x_eq_with_kwargs, x0_2, args=arglist))
 
         # Use latest found for next. In case of second solution, it can decay to 0 (always stable)
         # so perturb it a little
@@ -665,8 +660,8 @@ def plot_nullcline(ax, ext_str, tolerance=1e-3, **meso_args):
     # Then finish the reamining branch after the saddle, till we find the absorbing state
     while index >= -r_values.size:
         r = r_values[index]
-        arglist = (r, decay_r, basefiring, ext_str, k, thres, gain, aux_thrsig)
-        x_nullc_up.append(fsolve(x_eq, x0_1, args=arglist))
+        arglist = (r,)
+        x_nullc_up.append(fsolve(x_eq_with_kwargs, x0_1, args=arglist))
         x0_1 = x_nullc_up[-1]
         index -= 1
 
@@ -676,35 +671,39 @@ def plot_nullcline(ax, ext_str, tolerance=1e-3, **meso_args):
 
     # --- Now let us get a trajectory to illustrate what the deterministic single module does
 
-    # Define single module ODE to be solved, in order to obtain a trajectory
-    def module_ODE(vars, t, *args):
+    # @victor: this is the same ode as for the h-frequency plot, right?
+    # can we place them in `mesoscopic_model.py`?
+    # with the pars hack, this should be neat.
+    def module_ODE(vars, t, aux_thrsig, **pars):
         x, r = vars
-        max_rsrc = args[0]
-        tc, td = args[1:3]
-        decay_r = args[3]
-        basefiring = args[4]
-        ext_str = args[5]
-        k, thr, gain = args[6:9]
-        aux_thrsig = args[9]
 
-        xdot_1 = decay_r * (x - basefiring)
-        xdot_2 = transfer_function(r * (x + ext_str), gain, k, thr, aux_thrsig)
-        rdot = (max_rsrc - r) / tc - r * x / td
+        xdot_1 = (1 / pars["tau_rate"]) * x
+        xdot_2 = transfer_function(
+            r * (x + pars["ext_str"]),
+            pars["gain_inpt"],
+            pars["k_inpt"],
+            pars["thrs_inpt"],
+            aux_thrsig,
+        )
+        rdot = (pars["max_rsrc"] - r) / pars["tau_charge"] - r * x / pars["tau_discharge"]
 
         return np.array([-xdot_1 + xdot_2, rdot])
 
+    # the line below sets every key in pars as default kwargs
+    ode_with_kwargs = functools.partial(module_ODE, aux_thrsig=aux_thrsig, **pars)
+
     # Initial conditions are such that we will have an excitable trajectory: full of resources and small kick
-    x0 = np.array([0.5, max_rsrc])
+    x0 = np.array([0.25, pars["max_rsrc"]])
     if ode_coords is None:
-        # Being excitable, spike is very fast and the other is slow, so sample differently to ensure continuity
+        # Being excitable, spike is very fast and the other is slow,
+        # so sample differently to ensure continuity
         ode_coords = np.concatenate(
             (np.linspace(0, 20, 1000), np.linspace(20.01, 100, 700))
         )
     traj = odeint(
-        module_ODE,
+        ode_with_kwargs,
         x0,
         ode_coords,
-        args=(max_rsrc, tc, td, decay_r, basefiring, ext_str, k, thres, gain, aux_thrsig),
     )
 
     # --- Plot the graph
@@ -728,7 +727,7 @@ def plot_nullcline(ax, ext_str, tolerance=1e-3, **meso_args):
     # Trajectory
     ax.plot(traj[:, 1], traj[:, 0], color="black", clip_on=False, zorder=4)
 
-    ax.set_xlim(0, 2.8)
+    ax.set_xlim(0, 1.4)
     ax.set_ylim(-1, 12)
 
 
