@@ -71,20 +71,19 @@ def simulate_model(
     # fmt:off
     simulation_time,
     gating_mechanism  = True,
-    max_rsrc          = 1.0,
-    tc                = 40.0,
-    td                = 5.0,
-    decay_r           = 1.0,
+    max_rsrc          = 1.0,  # @victor used to be 2
+    tau_charge        = 40.0,
+    tau_discharge     = 5.0,
+    tau_rate          = 1.0,
     sigma             = 0.1,
-    basefiring        = 0.0,
     w0                = 0.01,
-    gate_cls          = 1.0,
-    gate_rec          = 0.025, # 1/50, here still specified as rate
+    tau_disconnect    = 1.0,
+    tau_connect       = 40.0, # @victor used to be 1/50
     ext_str           = 0.0,
-    k_sigm            = 1.6,
-    thres_sigm        = 0.2,
-    gain              = 10.0,
-    thres_gate        = 0.5,
+    k_inpt            = 1.6,
+    thrs_inpt        = 0.2, # @victor used to be 0.4
+    gain_inpt              = 10.0,
+    thrs_gate        = 0.5,
     k_gate            = 10.0,
     dt                = 0.01,
     rseed             = None,
@@ -95,56 +94,55 @@ def simulate_model(
 
     #Parameters:
     simulation_time: float
-        When does the simulation end.
-    output_filename : str
-        Name of the file that will be stored in disk, as output_filename.csv.
+        Duration of the simulation in arbitrary units. use 1000 as a starting point
 
     gating_mechanism  : bool, optional
-        Control whether the gating mechanism is used (default: yes).
+        Control whether the gating mechanism is used (default: True).
         If False, gates are not updated and activity can pass at all times.
 
     max_rsrc : float, optional
         Maximum amount of synaptic resources.
 
-    tc : float, optional
+    tau_charge : float, optional
         Timescale of synaptical resource charging
-    td : float, optional
+    tau_discharge : float, optional
         Timescale of synaptical resource discharge
 
-    decay_r : float, optional
-        Timescale of activity exponential decay
+    tau_rate : float, optional
+        Timescale of firing rate (activity) going to zero (exponential decay)
 
     sigma : float, optional
         Strenght of background noise fluctuations
 
-    basefiring : float, optional
-        Firing rate in absence of stimulation.
-
     w0 : float, optional
         Coupling strenght between different nodes
 
-    gate_cls : float, optional
-        Rate of gate becoming inactive, thus not letting activity go through
-    gate_rec : float, optional
-        Rate of gate recovery
+    tau_disconnect : float, optional
+        Timescale of gate becoming inactive, thus not letting activity go through
+    tau_connect : float, optional
+        Timescale of gate recovery
 
     ext_str : float, optional
         Stimulation strength
 
-    thres_sigm: float, optional
-        Threshold for the non-linear sigmoidal function. Any activity which falls below this value will not affect the module
-    gain : float, optional
-        Gain that multiplies the result of the sigmoidal function, thus increasing the effect of the input
+    k_inpt : float, optional
+        Knee of the input sigmoid
+    thrs_inpt: float, optional
+        Threshold for the non-linear sigmoidal function mapping input to rate change
+        Any activity which falls below this value will not affect the module
+    gain_inpt : float, optional
+        Gain that multiplies the result of the sigmoidal function,
+        thus increasing the effect of the input
 
-    thres_gate : float, optional
+    thrs_gate : float, optional
         Threshold of activity needed in order to be able to affect the gate. Levels of activity below cannot inactivate a gate.
     k_gate : float, optional
-        Slope of the gate's response sigmoid
+        Knee of the gate's response sigmoid
 
-    dt_ : float, optional
+    dt : float, optional
         Timestep of the Euler integrator (default=0.01)
 
-    rseed : float, optional
+    rseed : int, optional
         Use a custom random seed to ensure reproducitibility. If None (default), will use whatever Numpy selects
 
     # Returns
@@ -160,7 +158,6 @@ def simulate_model(
         np.random.seed(rseed)
 
     thermalization_time = simulation_time * 0.1
-    recording_time = simulation_time
     simulation_time = simulation_time + thermalization_time
 
     # Binnings associated to such a time
@@ -173,7 +170,7 @@ def simulate_model(
     # activity (firing rate), init to random
     rate = np.ones(shape=(4, nt), dtype="float") * np.nan
     rate[:, 0] = np.random.rand(4)
-    # reources
+    # resources
     rsrc = np.ones(shape=(4, nt), dtype="float") * np.nan
     rsrc[:, 0] = np.random.rand(4) * max_rsrc
 
@@ -182,7 +179,6 @@ def simulate_model(
 
     # keep track of geates. lets keep the shape simple and set all non-existing gates to zero.
     gate_history = np.zeros(shape=(4, 4, nt), dtype="int")
-
 
     # Coupling matrix
     Aij = np.zeros(shape=(4, 4), dtype="int")  # Adjacency matrix
@@ -195,12 +191,9 @@ def simulate_model(
     Aij[2, 3] = 1
     Aij[3, 2] = 1
 
-    # External input
-    ext_input = np.ones(4) * ext_str
-
     # Auxiliary shortcut to pre-compute this constant
     # which is used in sigmoid transfer function
-    aux_thrsig = np.exp(k_sigm * thres_sigm)
+    aux_thrsig = np.exp(k_inpt * thrs_inpt)
 
     # -------------
     # Simulation
@@ -218,42 +211,37 @@ def simulate_model(
                 if Aij[src, tar] == 1:
                     # Sum input to module tar, only through open gates
                     if gate[src, tar] == GATE_CONNECTED:
-                        # module_input += w0 * rate[src, t]
                         module_input += w0 * rate[src, t] * rsrc[src, t]
 
             # this should not happen.
+            # @victor, can you confirm, that we do not need this?
             # module_input *= 0.5
 
-
             # Collect pieces to update our firing rate, Milstein algorithm
-            # Spontaneous decay to small firing
-            term1 = dt*( - decay_r * (rate[tar, t] - basefiring))
+            # Spontaneous decay, firing rate to zero
+            term1 = dt * (-rate[tar, t] / tau_rate)
 
-            # Input from all sources
-            # total_input = rsrc[tar, t] * (rate[tar, t] + module_input + ext_input[tar])
-            total_input = rsrc[tar, t] * rate[tar, t] + module_input + ext_input[tar]
+            # Input from all sources, recurrent, neighbours, external
+            total_input = rsrc[tar, t] * rate[tar, t] + module_input + ext_str
 
-            term2 = dt*transfer_function(
+            term2 = dt * transfer_function(
                 total_input,
-                gain,
-                k_sigm,
-                thres_sigm,
+                gain_inpt,
+                k_inpt,
+                thrs_inpt,
                 aux_thrsig,
             )
 
-            # Noise (multiplicative under conditions! and additive)
-            noise = 0
-            noise += np.random.standard_normal() * sigma
-            if rate[tar, t] > basefiring:
-                noise += np.sqrt(rate[tar, t]) * np.random.standard_normal() * sigma
-            # noise only sqrt dt?
-            term3 = np.sqrt(dt) * noise
+            # additive noise
+            # @victor: noise only gets added with sqrt dt?
+            term3 = np.sqrt(dt) * np.random.standard_normal() * sigma
 
             rate[tar, t + 1] = rate[tar, t] + term1 + term2 + term3
 
             # resources are easier
             rsrc[tar, t + 1] = rsrc[tar, t] + dt * (
-                (max_rsrc - rsrc[tar, t]) / tc - rate[tar, t] * rsrc[tar, t]  / td
+                -(rate[tar, t] * rsrc[tar, t]) / tau_discharge
+                + (max_rsrc - rsrc[tar, t]) / tau_charge
             )
 
         # update gates for next time step
@@ -273,21 +261,22 @@ def simulate_model(
                 if Aij[src, tar] == 0:
                     continue
 
-                # Close gate depending on activity of source
+                # Disconnect gate depending on activity of source
                 if old_gate[src, tar] == GATE_CONNECTED:
                     prob = probability_to_disconnect(
-                        rsrc[src, t], dt, thres_gate, k_gate, gate_cls
+                        rsrc[src, t], dt, thrs_gate, k_gate, tau_disconnect
                     )
                     if np.random.rand() < prob:
                         gate[src, tar] = GATE_DISCONNECTED
 
-                # Open gate with a characteristic time
+                # Connect gate with a characteristic time
                 else:
-                    prob = 1.0 - np.exp(-dt * gate_rec)
+                    prob = 1.0 - np.exp(-dt / tau_connect)
                     if np.random.rand() < prob:
                         gate[src, tar] = GATE_CONNECTED
 
     # this is a bit hacky...
+    # to thermalize, simply chop off the indices that correspond to thermalization time
     rec_start = int(thermalization_time / dt)
     rate = rate[:, rec_start:]
     rsrc = rsrc[:, rec_start:]
@@ -299,7 +288,7 @@ def simulate_model(
 
 @jit(nopython=True, parallel=False, fastmath=False, cache=True)
 def probability_to_disconnect(
-    resources, dt=0.01, thres_gate=1.0, k_gate=10.0, gate_cls=1.0
+    resources, dt=0.01, thrs_gate=1.0, k_gate=10.0, tau_disconnect=1.0
 ):
     """
     Returns the probability of the gate to be closed depending on sigmoid response and currently available resources
@@ -313,8 +302,8 @@ def probability_to_disconnect(
         Threshold for sigmoidal. Below this value output is low, but not cut to zero
     k_gate : float
         Knee of the sigmoidal
-    gate_cls : float
-        Typical rate at which the gate closes when all resources are available
+    tau_disconnect : float
+        Time scale at which the gate disconnects when no resources are available
 
     # Returns
     prob_close: float
@@ -322,60 +311,60 @@ def probability_to_disconnect(
 
     """
     return 1.0 - np.exp(
-        -dt * (gate_cls - gate_sigm(resources, thres_gate, k_gate, gate_cls))
+        -dt * ((1 / tau_disconnect) - gate_sigm(resources, thrs_gate, k_gate, tau_disconnect))
     )
 
 
 # Sigmoid for gate response
 @jit(nopython=True, parallel=False, fastmath=False, cache=True)
-def gate_sigm(inpt, thrs, k_gate, gate_cls):
+def gate_sigm(inpt, thrs_gate, k_gate, tau_disconnect):
     """
     Sigmoid that gives the response of the gate to the current level of resources
 
     #Parameters:
     inpt : float
         Level of resources
-    thrs : float
+    thrs_gate : float
         Threshold. Below this value output is low, but not cut to zero
     k_gate : float
         Knee of the sigmoidal
-    gate_cls : float
-        Typical rate at which the gate closes when all resources are available
+    tau_disconnect : float
+        Time scale at which the gate disconnects when no resources are available
 
     # Returns
-    gate_cls_effective : float
+    tau_disconnect_effective : float
         Rate of gate closing for the currently available number of resources.
 
     """
-    return gate_cls / (1.0 + np.exp(-k_gate * (inpt - thrs)))
+    return (1 / tau_disconnect) / (1.0 + np.exp(-k_gate * (inpt - thrs_gate)))
 
 
 #
 @jit(nopython=True, parallel=False, fastmath=False, cache=True)
-def transfer_function(inpt, gain, k_sigm, thres_sigm, aux_thrsig):
+def transfer_function(inpt, gain_inpt, k_inpt, thrs_inpt, aux_thrsig):
     """
     Gets the input to a module, given its input
 
     #Parameters
     inpt : float
         Neuronal activity input to the transfer function
-    gain : float
+    gain_inpt : float
         Maximum value returned by sigmoid for large inputs
-    k_sigm : float
+    k_inpt : float
         Knee of the sigmoid
-    thres_sigm : float
+    thrs_inpt : float
         Threshold. Below this value, function returns 0
     aux_thrsig : float
-        Auxiliary variable defined as exp(k_sigm * thres_sigm), precomputed for speed
+        Auxiliary variable defined as exp(k_inpt * thrs_inpt), precomputed for speed
 
     #Returns
     feedback : float
         The result of applying the transfer function
     """
-    expinpt = np.exp(-k_sigm * (inpt - thres_sigm))
+    expinpt = np.exp(-k_inpt * (inpt - thrs_inpt))
     return (
-        gain * (1.0 - expinpt) / (aux_thrsig * expinpt + 1.0)
-        if inpt >= thres_sigm
+        gain_inpt * (1.0 - expinpt) / (aux_thrsig * expinpt + 1.0)
+        if inpt >= thrs_inpt
         else 0.0
     )
 
