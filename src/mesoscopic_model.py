@@ -66,10 +66,9 @@ except ImportError:
         return list(*args)
 
 
-@jit(nopython=True, parallel=False, fastmath=False, cache=True)
-def simulate_model(
-    # fmt:off
-    simulation_time,
+# fmt:off
+# see `simulate_model` parameter description
+default_pars = dict(
     gating_mechanism  = True,
     max_rsrc          = 1.0,  # @victor used to be 2
     tau_charge        = 40.0,
@@ -78,17 +77,20 @@ def simulate_model(
     sigma             = 0.1,
     w0                = 0.01,
     tau_disconnect    = 1.0,
-    tau_connect       = 40.0, # @victor used to be 1/50
+    tau_connect       = 20.0, # @victor used to be 1/50
     ext_str           = 0.0,
     k_inpt            = 1.6,
-    thrs_inpt        = 0.2, # @victor used to be 0.4
-    gain_inpt              = 10.0,
-    thrs_gate        = 0.5,
+    thrs_inpt         = 0.2, # @victor used to be 0.4
+    gain_inpt         = 20.0, # @victor used to be 10
+    thrs_gate         = 0.5,
     k_gate            = 10.0,
     dt                = 0.01,
     rseed             = None,
-    # fmt:on
-):
+)
+# fmt:on
+
+
+def simulate_model(simulation_time, **kwargs):
     """
     Simulate the mesoscopic model up to time tf, with the given parameters.
 
@@ -150,7 +152,38 @@ def simulate_model(
     time_axis : 1d array, time stemps for all other timeseries
     activity : 2d array, timeseries of module rate. Shape: (n_module, n_timepoints)
     resources : 2d array, timeseries of module resources. Shape: (n_module, n_timepoints)
+    """
+    pars = default_pars.copy()
+    for key, value in kwargs.items():
+        assert key in default_pars.keys(), f"unknown kwarg for mesoscopic model: '{key}'"
+        pars[key] = value
+    return _simulate_model(simulation_time, **pars)
 
+
+@jit(nopython=True, parallel=False, fastmath=False, cache=True)
+def _simulate_model(
+    simulation_time,
+    gating_mechanism,
+    max_rsrc,
+    tau_charge,
+    tau_discharge,
+    tau_rate,
+    sigma,
+    w0,
+    tau_disconnect,
+    tau_connect,
+    ext_str,
+    k_inpt,
+    thrs_inpt,
+    gain_inpt,
+    thrs_gate,
+    k_gate,
+    dt,
+    rseed,
+):
+    """
+    This guy is wrapped, so we can set default arguments via the dictionary.
+    Numba does not like this.
     """
 
     # Set random seed
@@ -311,7 +344,8 @@ def probability_to_disconnect(
 
     """
     return 1.0 - np.exp(
-        -dt * ((1 / tau_disconnect) - gate_sigm(resources, thrs_gate, k_gate, tau_disconnect))
+        -dt
+        * ((1 / tau_disconnect) - gate_sigm(resources, thrs_gate, k_gate, tau_disconnect))
     )
 
 
@@ -341,12 +375,14 @@ def gate_sigm(inpt, thrs_gate, k_gate, tau_disconnect):
 
 #
 @jit(nopython=True, parallel=False, fastmath=False, cache=True)
-def transfer_function(inpt, gain_inpt, k_inpt, thrs_inpt, aux_thrsig):
+def transfer_function(total_input, gain_inpt, k_inpt, thrs_inpt, aux_thrsig=None):
     """
     Gets the input to a module, given its input
 
+    x/b = (1-exp( -k(rx+h-t) ) )/(1+exp(kt)*exp(-k(xr+h-t)))
+
     #Parameters
-    inpt : float
+    inpt : float, or array of floats
         Neuronal activity input to the transfer function
     gain_inpt : float
         Maximum value returned by sigmoid for large inputs
@@ -354,19 +390,48 @@ def transfer_function(inpt, gain_inpt, k_inpt, thrs_inpt, aux_thrsig):
         Knee of the sigmoid
     thrs_inpt : float
         Threshold. Below this value, function returns 0
-    aux_thrsig : float
-        Auxiliary variable defined as exp(k_inpt * thrs_inpt), precomputed for speed
+    aux_thrsig : float, optional
+        Auxiliary variable defined as exp(k_inpt * thrs_inpt), can be precomputed
 
     #Returns
     feedback : float
         The result of applying the transfer function
     """
-    expinpt = np.exp(-k_inpt * (inpt - thrs_inpt))
-    return (
-        gain_inpt * (1.0 - expinpt) / (aux_thrsig * expinpt + 1.0)
-        if inpt >= thrs_inpt
-        else 0.0
-    )
+
+    if aux_thrsig is None:
+        aux_thrsig = np.exp(k_inpt * thrs_inpt)
+
+    expinpt = np.exp(-k_inpt * (total_input - thrs_inpt))
+
+    if total_input >= thrs_inpt:
+        return gain_inpt * (1.0 - expinpt) / (aux_thrsig * expinpt + 1.0)
+    else:
+        # we need to get consistent shapes.
+        return total_input * 0.0
+
+
+def single_module_odes(y, t, **pars):
+    """
+    Defines the coupled ODEs of the mesoscopic model.
+    Use with numeric solver to plot nullclines.
+    """
+
+    rate, rsrc = y
+    # fmt:off
+    rate_ode = \
+        - rate / pars["tau_rate"] + 0.0 \
+        + transfer_function(
+            total_input = rate * rsrc + rsrc * pars["ext_str"],
+            gain_inpt   = pars["gain_inpt"],
+            k_inpt      = pars["k_inpt"],
+            thrs_inpt   = pars["thrs_inpt"],
+        )
+    rsrc_ode = \
+        - rsrc * rate / pars["tau_discharge"] \
+        + (pars["max_rsrc"] - rsrc) / pars["tau_charge"]
+    # fmt:on
+
+    return np.array([rate_ode, rsrc_ode])
 
 
 def simulate_and_save(output_filename, meta_data=None, **kwargs):

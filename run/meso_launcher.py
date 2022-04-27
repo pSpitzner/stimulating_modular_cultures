@@ -14,22 +14,25 @@ from tqdm import tqdm
 
 # Set RNG seed and configure output folders
 rng_start_seed = 55436434
-n_trajectories = 1
-output_folder = "./dat/meso_in/"
+n_trajectories = 3
+output_folder = "./dat/meso_in_new_p_yes_gates/"
 
 gating_mechanism = True
 
 # Parameters we will use for the simulations. For each coupling span, all external inputs will be evaluated.
 # Each simulation can have a different length if needed.
-coupling_span = np.array([0.05, 0.1, 0.8])
-external_inputs = np.linspace(0.0, 0.3, 16)
-simulation_time = 10000
+# coupling_span = np.array([0.0, 0.01, 0.02, 0.05, 0.1, 1.0, 5.0])
+coupling_span = np.array([0.0, 0.05, 0.1, 5.0])
+external_inputs = np.arange(0, 0.3, 0.025)
+simulation_time = 1000
 
 
 def main():
     """
     Used to execute the launcher and start the simulations.
     """
+    print(f"Gating mechanism is {'on' if gating_mechanism else 'off'}")
+    print(f"Saving to {output_folder}")
     # iterate over repetitions last so we can explore all phase space while waiting
     for rep in tqdm(range(n_trajectories), desc="repetitions", leave=True):
         for c in tqdm(coupling_span, desc="coupling", leave=False):

@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-11-08 17:51:24
-# @Last Modified: 2022-04-25 19:45:28
+# @Last Modified: 2022-04-27 15:49:19
 # ------------------------------------------------------------------------------ #
 # collect the functions to create figure panels here
 # ------------------------------------------------------------------------------ #
@@ -45,7 +45,7 @@ warnings.filterwarnings("ignore")  # suppress numpy warnings
 show_title = True
 show_xlabel = False
 show_ylabel = False
-show_legend = False
+show_legend = True
 show_legend_in_extra_panel = False
 use_compact_size = True  # this recreates the small panel size of the manuscript
 
@@ -2906,12 +2906,15 @@ def fig_5(
         ax.get_figure().savefig(f"{out_path}_mean_rij.pdf", dpi=300, transparent=True)
 
         for c in dset["coupling"].to_numpy():
-            ax = meso_module_contribution(dset, coupling=c)
-            ax.set_title(rep_path + "  " + f"{c}")
-            ax.get_figure().tight_layout()
-            ax.get_figure().savefig(
-                f"{out_path}_module_contrib_{c}.pdf", dpi=300, transparent=True
-            )
+            try:
+                ax = meso_module_contribution(dset, coupling=c)
+                ax.set_title(rep_path + "  " + f"{c}")
+                ax.get_figure().tight_layout()
+                ax.get_figure().savefig(
+                    f"{out_path}_module_contrib_{c}.pdf", dpi=300, transparent=True
+                )
+            except:
+                log.error(f"failed for {c}")
 
         ax = meso_sketch_gate_deactivation()
         ax.get_figure().savefig(f"{out_path}_gate_sketch.pdf", dpi=300, transparent=True)
@@ -2935,8 +2938,10 @@ def fig_5(
         zoom_times[f"0.8/0.02"] = 885
 
     r = 0  # repetition
-    for c in dset["coupling"].to_numpy():
-        for n in [1, 15]:
+    # for c in dset["coupling"].to_numpy():
+    for c in [0.1]:
+        print(dset["noise"])
+        for n in [1, 4, 7]:
 
             input_file = f"{rep_path}/coup{c:0.2f}-{r:d}/noise{n}.hdf5"
             if not os.path.exists(input_file):
@@ -2955,24 +2960,24 @@ def fig_5(
 
             if not skip_cycles:
                 ode_coords = None
-                max_rsrc = 2.0
+                max_rsrc = 1.0
                 # defaults work well for low noise
-                if noise >= 0.125:
-                    ode_coords = np.concatenate(
-                        (np.linspace(0, 20, 1000), np.linspace(20.01, 60, 500))
-                    )
-                    max_rsrc = 1.3
+                # if noise >= 0.125:
+                #     ode_coords = np.concatenate(
+                #         (np.linspace(0, 20, 1000), np.linspace(20.01, 60, 500))
+                #     )
+                #     max_rsrc = 1.3
 
                 ax = meso_resource_cycle(h5f, ode_coords=ode_coords, max_rsrc=max_rsrc)
                 if show_title:
                     ax.set_title(f"coupling={c:.2f}\nnoise={noise:.2f}")
                 # print(f"coupling={c}, noise={noise}")
                 # cc.set_size2(ax, 1.6, 1.4) # this is the size of microscopic
-                ax.set_xlim(0, 2.0)
+                ax.set_xlim(0, 1.2)
                 ax.set_ylim(-1, 12)
                 cc.set_size3(ax, 1.6, 1.4)
-                ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(2))
-                ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(1))
+                ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1))
+                ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.5))
                 ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(10.0))
                 ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(2.5))
                 sns.despine(ax=ax, trim=True, offset=1)
@@ -2994,7 +2999,7 @@ def fig_5(
                 )
 
 
-def sm_meso_no_gates(
+def meso_explore_multiple(
     rep_path="./dat/meso_in_no_gates", out_path="./fig/paper/meso_gates_off"
 ):
     """
@@ -3172,7 +3177,14 @@ def meso_resource_cycle(input_file, show_nullclines=True, **kwargs):
     # sns.despine(ax=ax, trim=True, offset=5)
     if show_nullclines:
         coupling, noise, rep = mh._coords_from_file(input_file)
-        mh.plot_nullcline(ax=ax, ext_str=noise, **kwargs.copy())
+        kwargs = kwargs.copy()
+        # we have to overwrite this, cos
+        kwargs["ext_str"] = noise
+        try:
+            kwargs.pop("simulation_time")
+        except:
+            pass
+        mh.plot_nullcline(ax=ax, **kwargs.copy())
 
     if not show_xlabel:
         ax.set_xlabel("")
@@ -3233,7 +3245,11 @@ def meso_module_contribution(dset=None, coupling=0.3):
 
 
 def meso_activity_snapshot(
-    h5f=None, main_width=3.5, zoom_duration=50, zoom_start=100, mark_zoomin_location=True,
+    h5f=None,
+    main_width=3.5,
+    zoom_duration=50,
+    zoom_start=100,
+    mark_zoomin_location=True,
     indicate_bursts=True,
 ):
     """
@@ -3363,15 +3379,9 @@ def meso_explore_single(**kwargs):
     ```
     pp.meso_explore_single(
         simulation_time=5000,
-        basefiring=0,
         ext_str=0.01,
         w0=0.01,
         gating_mechanism=False,
-        gate_rec=0.025,
-        max_rsrc=1,
-        thres_gate=0.5,
-        thres_sigm=0.2,
-        td=5,
     )
     ```
     """
@@ -3380,13 +3390,35 @@ def meso_explore_single(**kwargs):
     import tempfile
 
     path = tempfile.gettempdir() + "/meso_test.hdf5"
-    mm.simulate_and_save(output_filename=path, **kwargs)
+    pars = mm.default_pars.copy()
+    for key, val in kwargs.items():
+        pars[key] = val
+
+    mm.simulate_and_save(
+        output_filename=path,
+        meta_data=dict(
+            coupling=pars["w0"],
+            noise=pars["ext_str"],
+            rep=0,
+            gating_mechanism=pars["gating_mechanism"],
+        ),
+        **pars,
+    )
 
     fig = meso_activity_snapshot(path)
     if (t := kwargs.get("simulation_time")) is not None:
         fig.axes[0].set_xlim(0, t)
 
-    meso_resource_cycle(path, show_nullclines=False)
+    ax = meso_resource_cycle(path, show_nullclines=False, **pars)
+    try:
+        ax.set_title(f"input: {pars['ext_str']} | {pars['thrs_inpt']}")
+    except:
+        pass
+    pars.pop("simulation_time")
+    mh.plot_flow_field(ax=ax, **pars)
+
+    ax.set_xlim(0, 2.4)
+    ax.set_ylim(-1, 12)
 
 
 # ------------------------------------------------------------------------------ #

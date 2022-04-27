@@ -11,6 +11,7 @@ import sys
 import glob
 import re
 import functools
+import itertools
 import matplotlib
 import numpy as np
 import pandas as pd
@@ -352,7 +353,7 @@ def f_functional_complexity(raw):
 def f_event_size_and_friends(raw):
     # lets reuse some of victors tricks
     h5f = prepare_file(raw)
-    find_system_bursts_and_module_contributions2(h5f, threshold_factor=0.1)
+    find_system_bursts_and_module_contributions2(h5f)
 
     res = dict()
     res["event_size"] = np.nanmean(h5f["ana.bursts.event_sizes"])
@@ -516,7 +517,7 @@ def find_system_bursts_and_module_contributions2(h5f, threshold_factor=0.1):
         h5f,
         skip_sequences=True,
         rate_threshold=threshold,
-        merge_threshold=0.1,
+        merge_threshold=0.5,
     )
 
     ah.sequences_from_area(h5f)
@@ -566,7 +567,7 @@ def _plot_nullclines_for_input_array(ext_inpt_array=None, tolerance=1e-3, **kwar
         return fig
 
 
-def plot_nullcline(ax, ext_str, tolerance=1e-3, ode_coords=None, **kwargs):
+def plot_nullcline(ax, tolerance=1e-3, ode_coords=None, **kwargs):
     """
     Does the actual computation of the nullclines using the indicated control parameter and plots them into the selected axis
 
@@ -586,7 +587,7 @@ def plot_nullcline(ax, ext_str, tolerance=1e-3, ode_coords=None, **kwargs):
     # Lets not hard-code the model, rather import what we can.
     # remember that all this assumes we are calling from the base directory of the repo.
     sys.path.append("./src")
-    from mesoscopic_model import default_pars, transfer_function
+    from mesoscopic_model import default_pars, transfer_function, single_module_odes
 
     # pars will be set to defaults, but everything provided here via kwargs is overwritten
     pars = default_pars.copy()
@@ -671,40 +672,21 @@ def plot_nullcline(ax, ext_str, tolerance=1e-3, ode_coords=None, **kwargs):
 
     # --- Now let us get a trajectory to illustrate what the deterministic single module does
 
-    # @victor: this is the same ode as for the h-frequency plot, right?
-    # can we place them in `mesoscopic_model.py`?
-    # with the pars hack, this should be neat.
-    def module_ODE(vars, t, aux_thrsig, **pars):
-        x, r = vars
-
-        xdot_1 = (1 / pars["tau_rate"]) * x
-        xdot_2 = transfer_function(
-            r * (x + pars["ext_str"]),
-            pars["gain_inpt"],
-            pars["k_inpt"],
-            pars["thrs_inpt"],
-            aux_thrsig,
-        )
-        rdot = (pars["max_rsrc"] - r) / pars["tau_charge"] - r * x / pars["tau_discharge"]
-
-        return np.array([-xdot_1 + xdot_2, rdot])
-
     # the line below sets every key in pars as default kwargs
-    ode_with_kwargs = functools.partial(module_ODE, aux_thrsig=aux_thrsig, **pars)
+    ode_with_kwargs = functools.partial(single_module_odes, **pars)
 
-    # Initial conditions are such that we will have an excitable trajectory: full of resources and small kick
-    x0 = np.array([0.25, pars["max_rsrc"]])
     if ode_coords is None:
         # Being excitable, spike is very fast and the other is slow,
         # so sample differently to ensure continuity
         ode_coords = np.concatenate(
-            (np.linspace(0, 20, 1000), np.linspace(20.01, 100, 700))
+            (np.linspace(0, 20, 1000), np.linspace(20.01, 10000, 10000))
         )
-    traj = odeint(
-        ode_with_kwargs,
-        x0,
-        ode_coords,
-    )
+
+    # Initial conditions [rate, rsrc] so that we will have an excitable trajectory:
+    # full of resources and small kick
+    y0 = np.array([0.5, pars["max_rsrc"]])
+
+    traj = odeint(ode_with_kwargs, y0, ode_coords)
 
     # --- Plot the graph
 
@@ -727,92 +709,174 @@ def plot_nullcline(ax, ext_str, tolerance=1e-3, ode_coords=None, **kwargs):
     # Trajectory
     ax.plot(traj[:, 1], traj[:, 0], color="black", clip_on=False, zorder=4)
 
-    ax.set_xlim(0, 1.4)
-    ax.set_ylim(-1, 12)
+    return ax
 
 
-def plot_h_diagram(ax, tf=1e5, dt=0.01, **meso_args):
+def plot_flow_field(ax=None, time_points=None, rsrc_0=None, rate_0=None, **kwargs):
+
+    sys.path.append("./src")
+    from mesoscopic_model import default_pars, single_module_odes
+
+    # pars will be set to defaults, but everything provided here via kwargs is overwritten
+    pars = default_pars.copy()
+    for key, value in kwargs.items():
+        assert key in default_pars.keys(), f"unknown kwarg for mesoscopic model: '{key}'"
+        pars[key] = value
+
+    # the line below sets every key in pars as default kwargs
+    ode_with_kwargs = functools.partial(single_module_odes, **pars)
+
+    if time_points is None:
+        time_points = np.linspace(0, 0.1, 1000)
+
+    # if rsrc_0 is None:
+    #     rsrc_0 = np.arange(0, 2, 0.25)
+    # if rate_0 is None:
+    #     rate_0 = np.arange(0, 10, 0.5)
+
+    # initial_conditions = itertools.product(rate_0, rsrc_0)
+
+    num_trajectories = 5000
+    rsrc_max = pars["max_rsrc"] * 1.1
+    rsrc_min = 0
+    rate_max = 12
+    rate_min = 0
+    rate_0 = np.random.uniform(low=rate_min, high=rate_max, size=num_trajectories)
+    rsrc_0 = np.random.uniform(low=rsrc_min, high=rsrc_max, size=num_trajectories)
+    d_rate = rate_max - rate_min
+    d_rsrc = rsrc_max - rsrc_min
+
+    initial_conditions = zip(rate_0, rsrc_0)
+
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.get_figure()
+
+    trajects = []
+    traject_lens = []
+    # y0 is a 2d tuple passed to single_module_ode
+    for y0 in tqdm(initial_conditions, desc="Flow field"):
+        traj = odeint(ode_with_kwargs, y0, time_points)
+        trajects.append(traj)
+
+        traject_lens.append(
+            np.sum(
+                (np.diff(traj[:, 1]) / d_rsrc) ** 2 + (np.diff(traj[:, 0]) / d_rate) ** 2
+            )
+        )
+
+    # maybe we want to color code this later
+    traject_lens = np.array(traject_lens)
+    traject_lens = np.log10(traject_lens)
+    traject_lens -= np.nanmin(traject_lens)*1.5
+    traject_lens /= np.nanmax(traject_lens)
+    traject_lens = np.clip(traject_lens, 0, 1)
+
+    for tdx, traj in enumerate(trajects):
+        ax.plot(
+            traj[:, 1],
+            traj[:, 0],
+            color="black",
+            alpha=0.3,
+            # color=plt.cm.Spectral(traject_lens[tdx]),
+            # alpha=1.0,
+            lw=0.2,
+            clip_on=False,
+            zorder=4,
+        )
+
+    return ax
+
+
+def plot_h_diagram(ax, tf=1e5, dt=0.01, ode_coords=None, **kwargs):
     """
     Does the actual computation of the nullclines using the indicated control parameter and plots them into the selected axis
 
     #Parameters
     - ax : matplotlib axis
         The axis where this figure will be drawn
-    - meso_args : dict
+    - kwargs : dict
         Any argument that can be passed to the mesoscopic model simulation and it is related to single module.
     """
 
-    # Get arguments used for the model. This is needed because for fsolver we need to pass an ordered set of *args
-    # Using the get method we can also set default values in case they are not specified in kwargs
-    # fmt: off
-    max_rsrc    = meso_args.get("max_rsrc", 2.0)
-    tc          = meso_args.get("tc", 40.0)
-    td          = meso_args.get("td", 5.0)
-    decay_r     = meso_args.get("decay_r", 1.0)
-    basefiring  = meso_args.get("basefiring", 0.01)
-    k           = meso_args.get("k_sigm", 1.6)
-    thres       = meso_args.get("thres_sigm", 0.4)
-    gain        = meso_args.get("gain", 10.0)
-    ode_coords  = meso_args.get("ode_coords")
-    # fmt:on
+    # Lets not hard-code the model, rather import what we can.
+    # remember that all this assumes we are calling from the base directory of the repo.
+    sys.path.append("./src")
+    from mesoscopic_model import default_pars, transfer_function
+
+    # pars will be set to defaults, but everything provided here via kwargs is overwritten
+    pars = default_pars.copy()
+    for key, value in kwargs.items():
+        assert key in default_pars.keys(), f"unknown kwarg for mesoscopic model: '{key}'"
+        pars[key] = value
 
     # Auxiliary shortcut to pre-compute this constant
     # which is used in sigmoid transfer function
-    aux_thrsig = np.exp(k * thres)
+    aux_thrsig = np.exp(pars["k_inpt"] * pars["thrs_inpt"])
 
-    # Non linear transfer function of the model
-    def transfer_function(inpt, gain, k_sigm, thres_sigm, aux_thrsig):
-        expinpt = np.exp(-k_sigm * (inpt - thres_sigm))
-        return (
-            gain * (1.0 - expinpt) / (aux_thrsig * expinpt + 1.0)
-            if inpt >= thres_sigm
-            else 0.0
-        )
-
-    # Define single module ODE to be solved, in order to obtain a trajectory
+    # @victor: this is the same ode as above, right?
+    # can we place them in `mesoscopic_model.py`?
+    # with the pars hack above, this should be neat.
     def module_ODE(vars, t, *args):
         x, r = vars
         max_rsrc = args[0]
         tc, td = args[1:3]
-        decay_r = args[3]
+        tau_rate = args[3]
         basefiring = args[4]
         ext_str = args[5]
         k, thr, gain = args[6:9]
         aux_thrsig = args[9]
 
-        xdot_1 = decay_r * (x - basefiring)
+        xdot_1 = (1 / tau_rate) * (x - basefiring)
         xdot_2 = transfer_function(r * (x + ext_str), gain, k, thr, aux_thrsig)
         rdot = (max_rsrc - r) / tc - r * x / td
 
         return np.array([-xdot_1 + xdot_2, rdot])
 
     # Initial conditions are such that we will have an excitable trajectory: full of resources and small kick
-    x0 = np.array([0.5, max_rsrc])
+    x0 = np.array([0.25, max_rsrc])
 
-    #External inputs to check. We will increase resolution near the transition
-    h_space = np.concatenate((np.linspace(0, 0.18, 5), np.linspace(0.18, 0.22, 50), np.linspace(0.22, 0.3, 15)))
+    # External inputs to check. We will increase resolution near the transition
+    h_space = np.concatenate(
+        (np.linspace(0, 0.18, 5), np.linspace(0.18, 0.22, 50), np.linspace(0.22, 0.3, 15))
+    )
     frequency = np.zeros(h_space.size) * np.nan
 
-    npoints = int(tf/dt)
+    npoints = int(tf / dt)
 
     if ode_coords is None:
         # Being excitable, spike is very fast and the other is slow, so sample differently to ensure continuity
         ode_coords = np.linspace(0, tf, npoints)
 
-    #Simulate the deterministic model for increasing external inputs
-    for j,ext_str in enumerate(h_space):
+    # Simulate the deterministic model for increasing external inputs
+    for j, ext_str in enumerate(h_space):
         traj = odeint(
             module_ODE,
             x0,
             ode_coords,
-            args=(max_rsrc, tc, td, decay_r, basefiring, ext_str, k, thres, gain, aux_thrsig),
+            args=(
+                max_rsrc,
+                tc,
+                td,
+                tau_rate,
+                basefiring,
+                ext_str,
+                k,
+                thres,
+                gain,
+                aux_thrsig,
+            ),
         )
         peaks, _ = find_peaks(traj[:, 0], distance=10, height=7)
-        frequency[j] = peaks.size / tf #Estimation of spiking frequency as number of peaks detected vs time waited
+        frequency[j] = (
+            peaks.size / tf
+        )  # Estimation of spiking frequency as number of peaks detected vs time waited
 
     ax.plot(h_space, frequency)
 
     return ax
+
 
 # ------------------------------------------------------------------------------ #
 # Others
