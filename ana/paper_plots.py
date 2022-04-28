@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-11-08 17:51:24
-# @Last Modified: 2022-04-27 15:49:19
+# @Last Modified: 2022-04-27 19:12:56
 # ------------------------------------------------------------------------------ #
 # collect the functions to create figure panels here
 # ------------------------------------------------------------------------------ #
@@ -2941,7 +2941,7 @@ def fig_5(
     # for c in dset["coupling"].to_numpy():
     for c in [0.1]:
         print(dset["noise"])
-        for n in [1, 4, 7]:
+        for n in [1, 2, 4, 7]:
 
             input_file = f"{rep_path}/coup{c:0.2f}-{r:d}/noise{n}.hdf5"
             if not os.path.exists(input_file):

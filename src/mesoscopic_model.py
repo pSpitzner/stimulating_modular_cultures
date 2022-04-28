@@ -413,7 +413,40 @@ def transfer_function(total_input, gain_inpt, k_inpt, thrs_inpt, aux_thrsig=None
 def single_module_odes(y, t, **pars):
     """
     Defines the coupled ODEs of the mesoscopic model.
-    Use with numeric solver to plot nullclines.
+    Use with numeric solver to explore nullclines and plot trajectories.
+
+    Note that the `simulate_meso` function does not use this, and the ODEs are
+    hard-coded in both places.
+
+    # Parameters
+    y : array-like
+        (rate, resource)
+    t : float
+        time at which to evaluate the ODE, only needed for the solver, not used in def
+    **pars : dict
+        Parameters of the model, as a dict.
+        at least needs to contain those keys:
+            - "ext_str"
+            - "thrs_inpt"
+            - "gain_inpt"
+            - "k_inpt"
+            - "tau_discharge"
+            - "tau_charge"
+            - "tau_rate"
+            - "max_rsrc"
+
+
+
+    # Example
+    ```
+    pars = mm.default_pars.copy()
+    ode_with_kwargs = functools.partial(single_module_odes, **pars)
+    trajectory = scipy.integrate.odeint(
+        func=ode_with_kwargs,
+        y0=np.array([0.5, 1.0]),
+        t=np.linspace(0, 1000, 5000),
+    )
+    ```
     """
 
     rate, rsrc = y

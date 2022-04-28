@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 # Set RNG seed and configure output folders
 rng_start_seed = 55436434
-n_trajectories = 3
+n_trajectories = 15
 output_folder = "./dat/meso_in_new_p_yes_gates/"
 
 gating_mechanism = True
@@ -22,8 +22,8 @@ gating_mechanism = True
 # Parameters we will use for the simulations. For each coupling span, all external inputs will be evaluated.
 # Each simulation can have a different length if needed.
 # coupling_span = np.array([0.0, 0.01, 0.02, 0.05, 0.1, 1.0, 5.0])
-coupling_span = np.array([0.0, 0.05, 0.1, 5.0])
-external_inputs = np.arange(0, 0.3, 0.025)
+coupling_span = np.array([0.0, 0.025, 0.04, 0.1, 5.0])
+external_inputs = np.arange(0, 0.31, 0.025)
 simulation_time = 1000
 
 
