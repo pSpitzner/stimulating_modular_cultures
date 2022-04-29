@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-11-08 17:51:24
-# @Last Modified: 2022-04-27 19:12:56
+# @Last Modified: 2022-04-29 12:21:30
 # ------------------------------------------------------------------------------ #
 # collect the functions to create figure panels here
 # ------------------------------------------------------------------------------ #
@@ -45,7 +45,7 @@ warnings.filterwarnings("ignore")  # suppress numpy warnings
 show_title = True
 show_xlabel = False
 show_ylabel = False
-show_legend = True
+show_legend = False
 show_legend_in_extra_panel = False
 use_compact_size = True  # this recreates the small panel size of the manuscript
 
@@ -2897,24 +2897,29 @@ def fig_5(
                 dset = xr.load_dataset("./dat/meso_out/analysed.hdf5")
             except:
                 dset = mh.process_data_from_folder("./dat/meso_in/")
-                mh.write_xr_dset_to_hdf5("./dat/meso_out/analysed.hdf5")
-            # dset = dset.sel(coupling=[0.05, 0.1, 0.8])
+                mh.write_xr_dset_to_hdf5(dset, output_path="./dat/meso_out/analysed.hdf5")
+
+            # dset = dset.sel(coupling=[0.025, 0.04, 0.1])
 
         ax = meso_obs_for_all_couplings(dset, "mean_correlation_coefficient")
-        if not show_legend:
-            ax.get_legend().set_visible(False)
+        ax.set_xlim(0, 0.3125)
+        sns.despine(ax=ax, offset=2)
+        cc.set_size3(ax, w=3.0, h=1.41)
         ax.get_figure().savefig(f"{out_path}_mean_rij.pdf", dpi=300, transparent=True)
 
         for c in dset["coupling"].to_numpy():
             try:
                 ax = meso_module_contribution(dset, coupling=c)
-                ax.set_title(rep_path + "  " + f"{c}")
-                ax.get_figure().tight_layout()
+                if show_title:
+                    ax.set_title(f"coupling {c:.3f}")
+                    ax.get_figure().tight_layout()
+                ax.set_xlim(0, 0.3125)
+                cc.set_size3(ax, w=3.0, h=1.41)
                 ax.get_figure().savefig(
-                    f"{out_path}_module_contrib_{c}.pdf", dpi=300, transparent=True
+                    f"{out_path}_module_contrib_{c:.3f}.pdf", dpi=300, transparent=True
                 )
             except:
-                log.error(f"failed for {c}")
+                log.error(f"failed for {c:3.f}")
 
         ax = meso_sketch_gate_deactivation()
         ax.get_figure().savefig(f"{out_path}_gate_sketch.pdf", dpi=300, transparent=True)
@@ -2933,15 +2938,15 @@ def fig_5(
     # zoom_times[coupling_float][noise_float] = start_time of zoom
     if zoom_times is None:
         zoom_times = benedict(keypath_separator="/")
-        zoom_times[f"0.1/0.02"] = 673
-        zoom_times[f"0.05/0.02"] = 890
-        zoom_times[f"0.8/0.02"] = 885
+        zoom_times[f"0.1/0.025"] = 753
+        zoom_times[f"0.1/0.05"] = 756
+        zoom_times[f"0.025/0.025"] = 930
 
     r = 0  # repetition
     # for c in dset["coupling"].to_numpy():
-    for c in [0.1]:
+    for c in [0.1, 0.025]:
         print(dset["noise"])
-        for n in [1, 2, 4, 7]:
+        for n in [1, 2, 4, 6, 7]:
 
             input_file = f"{rep_path}/coup{c:0.2f}-{r:d}/noise{n}.hdf5"
             if not os.path.exists(input_file):
@@ -2970,20 +2975,22 @@ def fig_5(
 
                 ax = meso_resource_cycle(h5f, ode_coords=ode_coords, max_rsrc=max_rsrc)
                 if show_title:
-                    ax.set_title(f"coupling={c:.2f}\nnoise={noise:.2f}")
+                    ax.set_title(f"coupling={c:.3f}\ninput={noise:.3f}")
                 # print(f"coupling={c}, noise={noise}")
                 # cc.set_size2(ax, 1.6, 1.4) # this is the size of microscopic
                 ax.set_xlim(0, 1.2)
-                ax.set_ylim(-1, 12)
-                cc.set_size3(ax, 1.6, 1.4)
+                ax.set_ylim(0, 15)
+                cc.set_size3(ax, 1.8, 1.1)
                 ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1))
                 ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.5))
-                ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(10.0))
-                ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(2.5))
-                sns.despine(ax=ax, trim=True, offset=1)
+                ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(15.0))
+                ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(5.0))
+                sns.despine(ax=ax, trim=False, offset=2)
 
                 ax.get_figure().savefig(
-                    f"{out_path}_cycles_{c}_{noise}.pdf", dpi=300, transparent=True
+                    f"{out_path}_cycles_{c:.3f}_{noise:.3f}.pdf",
+                    dpi=300,
+                    transparent=True,
                 )
 
             if not skip_snapshots:
@@ -2993,9 +3000,11 @@ def fig_5(
                     z = 950
                 fig = meso_activity_snapshot(h5f, zoom_start=z)
                 if show_title:
-                    fig.suptitle(f"coupling={c:.2f}, noise={noise:.2f}")
+                    fig.suptitle(f"coupling={c:.3f}, input={noise:.3f}", va="center")
                 fig.savefig(
-                    f"{out_path}_snapshot_{c}_{noise}.pdf", dpi=300, transparent=True
+                    f"{out_path}_snapshot_{c:.3f}_{noise:.3f}.pdf",
+                    dpi=300,
+                    transparent=True,
                 )
 
 
@@ -3003,7 +3012,17 @@ def meso_explore_multiple(
     rep_path="./dat/meso_in_no_gates", out_path="./fig/paper/meso_gates_off"
 ):
     """
+    Run meso_launcher before and save to a custom folder.
     Simply calls figure 5 with changed input / output paths
+
+    Example
+    ```
+    # to produce no gates sm figure:
+    pp.meso_explore_multiple(
+        rep_path="./dat/meso_in_no_gates", out_path="./fig/paper/meso_gates_off"
+    )
+    ```
+
     """
 
     dset_path = rep_path.replace("meso_in", "meso_out/analysed")
@@ -3015,9 +3034,8 @@ def meso_explore_multiple(
         mh.write_xr_dset_to_hdf5(dset, output_path=dset_path)
 
     zoom_times = benedict(keypath_separator="/")
-    zoom_times[f"0.1/0.02"] = 915
-    zoom_times[f"0.05/0.02"] = 920
-    zoom_times[f"0.8/0.02"] = 900
+    zoom_times[f"0.1/0.025"] = 938
+    zoom_times[f"0.025/0.025"] = 865
 
     fig_5(
         dset=dset,
@@ -3030,7 +3048,7 @@ def meso_explore_multiple(
     )
 
 
-def meso_obs_for_all_couplings(dset, obs, base_clr="#333"):
+def meso_obs_for_all_couplings(dset, obs, base_clr="#333", **kwargs):
     """
     Wrapper tjat reproduces the plots of the microscopic plots ~ fig 4:
     Correlations and event size with error bars across realizations.
@@ -3061,12 +3079,14 @@ def meso_obs_for_all_couplings(dset, obs, base_clr="#333"):
             ),
             label=f"w = {coupling}",
             zorder=cdx,
+            **kwargs,
         )
-    ax.legend()
+    if show_legend:
+        ax.legend()
 
     if "correlation_coefficient" in obs:
         ax.set_ylim(0, 1)
-        # ax.set_xlim(0, 0.3125)
+
         ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
         ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
 
@@ -3078,8 +3098,6 @@ def meso_obs_for_all_couplings(dset, obs, base_clr="#333"):
 
     if not show_ylabel:
         ax.set_ylabel("")
-
-    # cc.set_size2(ax, w=3.0, h=1.41)
 
     return ax
 
@@ -3140,11 +3158,12 @@ def meso_xr_with_errors(da, ax=None, apply_formatting=True, **kwargs):
     return ax
 
 
-def meso_resource_cycle(input_file, show_nullclines=True, **kwargs):
+def meso_resource_cycle(input_file, show_nullclines=False, plot_kwargs=dict(), **kwargs):
     """
     Wrapper to plot a resource cycle for a single file created from the mesoscopic model
 
     kwargs are passed to mh.plot_ax_nullcline
+    plot_kwargs are passed to ph.plot_resources_vs_activity
     """
     if isinstance(input_file, str):
         h5f = mh.prepare_file(input_file)
@@ -3156,15 +3175,19 @@ def meso_resource_cycle(input_file, show_nullclines=True, **kwargs):
 
     _, ax = plt.subplots()
     ax.set_rasterization_zorder(0)
+
+    plot_kwargs = plot_kwargs.copy()
+    plot_kwargs.setdefault("clip_on", False)
+    plot_kwargs.setdefault("alpha", 0.1)
+    plot_kwargs.setdefault("lw", 0.25)
+    plot_kwargs.setdefault("zorder", -1)
+    plot_kwargs.setdefault("max_traces_per_mod", 100)
+
     ax = ph.plot_resources_vs_activity(
         h5f,
         ax=ax,
         apply_formatting=False,
-        max_traces_per_mod=100,
-        clip_on=False,
-        alpha=0.1,
-        lw=0.25,
-        zorder=-1,
+        **plot_kwargs,
     )
     ax.set_xlabel("Synaptic resources")
     ax.set_ylabel("Module rate")
@@ -3199,8 +3222,7 @@ def meso_sketch_gate_deactivation(**kwargs):
     sys.path.append("./src")
     from mesoscopic_model import probability_to_disconnect
 
-    # currently using probabilities for y. better as rates?
-    src_resources = np.arange(0.0, 2.0, 0.01)
+    src_resources = np.arange(0.0, 1.3, 0.01)
     fig, ax = plt.subplots()
     ax.plot(src_resources, probability_to_disconnect(src_resources, **kwargs))
     ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.01))
@@ -3231,9 +3253,6 @@ def meso_module_contribution(dset=None, coupling=0.3):
     ax.set_xlabel("noise")
     ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.1))
     ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.025))
-    # ax.set_xlim(0, 0.3125)
-
-    # cc.set_size2(ax, w=3.0, h=1.41)
 
     if not show_xlabel:
         ax.set_xlabel("")
@@ -3250,7 +3269,7 @@ def meso_activity_snapshot(
     zoom_duration=50,
     zoom_start=100,
     mark_zoomin_location=True,
-    indicate_bursts=True,
+    indicate_bursts=False,
 ):
     """
     Create one of our activity snapshots for the mesoscopic model,
@@ -3279,7 +3298,7 @@ def meso_activity_snapshot(
             1,
         ],
         wspace=0.05,
-        hspace=0.1,
+        hspace=0.15,
         left=0.7 / total_width,
         right=0.99,
         top=0.95,
@@ -3315,18 +3334,23 @@ def meso_activity_snapshot(
     axes[0].set_xlim(0, 1000)
 
     # we did not share_y, do it manually
+    # rates
     for a_id in [0, 3]:
-        axes[a_id].set_ylim(-1, 10)
-        axes[a_id].yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(10))
-        axes[a_id].yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(2.5))
+        axes[a_id].set_ylim(-1, 15)
+        axes[a_id].yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(15))
+        axes[a_id].yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(5))
+        # workaround to show negative rate
+        sns.despine(ax=axes[a_id], trim=True)
 
+    # gates
     for a_id in [1, 4]:
         axes[a_id].set_ylim(0, 1)
 
+    # resources
     for a_id in [2, 5]:
-        axes[a_id].set_ylim(0, 2.5)
-        axes[a_id].yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(2))
-        axes[a_id].yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(1))
+        axes[a_id].set_ylim(0, 1.2)
+        axes[a_id].yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1))
+        axes[a_id].yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.5))
 
     for a_id in range(6):
         axes[a_id].set_xlabel("")
@@ -3335,7 +3359,7 @@ def meso_activity_snapshot(
             axes[a_id].get_legend().remove()
         except:
             pass
-        sns.despine(ax=axes[a_id], bottom=True, offset=3, trim=True)
+        sns.despine(ax=axes[a_id], bottom=True, offset=3, trim=False)
 
         # keep ticks for bottom left, we might need them
         if a_id != 2:
@@ -3348,7 +3372,7 @@ def meso_activity_snapshot(
 
     cc.detick(axis=axes[1].yaxis)
     sns.despine(ax=axes[1], left=True, bottom=True)
-    sns.despine(ax=axes[0], left=False, bottom=True, trim=True)
+    sns.despine(ax=axes[0], left=False, bottom=True, trim=False)
 
     # reenable one time axis label
     ax = axes[2]
@@ -3373,7 +3397,7 @@ def meso_activity_snapshot(
     return fig
 
 
-def meso_explore_single(**kwargs):
+def meso_explore_single(activity_snapshot=True, resource_cycle=True, **kwargs):
     """
     Example
     ```
@@ -3405,20 +3429,98 @@ def meso_explore_single(**kwargs):
         **pars,
     )
 
-    fig = meso_activity_snapshot(path)
-    if (t := kwargs.get("simulation_time")) is not None:
-        fig.axes[0].set_xlim(0, t)
+    ret = []
 
-    ax = meso_resource_cycle(path, show_nullclines=False, **pars)
-    try:
-        ax.set_title(f"input: {pars['ext_str']} | {pars['thrs_inpt']}")
-    except:
-        pass
-    pars.pop("simulation_time")
-    mh.plot_flow_field(ax=ax, **pars)
+    if activity_snapshot:
+        fig = meso_activity_snapshot(path)
+        if (t := kwargs.get("simulation_time")) is not None:
+            fig.axes[0].set_xlim(0, t)
+        ret.append(fig)
 
-    ax.set_xlim(0, 2.4)
-    ax.set_ylim(-1, 12)
+    if resource_cycle:
+        ax = meso_resource_cycle(
+            path,
+            show_nullclines=False,
+            plot_kwargs=dict(alpha=0.4, zorder=1, clip_on=True),
+            **pars,
+        )
+        try:
+            # ax.set_title(f"input: {pars['ext_str']} | {pars['thrs_inpt']}")
+            ax.set_title(f"input: {pars['ext_str']}, noise: {pars['sigma']}")
+        except:
+            pass
+
+        pars.pop("simulation_time")
+        mh.plot_flow_field(ax=ax, plot_kwargs=dict(alpha=0.3, clip_on=True), **pars)
+        ret.append(ax)
+
+    # ax.set_xlim(0, 1.5)
+    # ax.set_ylim(-1, 17)
+
+    return ret
+
+
+def sm_meso_noise_and_input_flowfields():
+
+    for sdx, sigma in enumerate([0.05, 0.1, 0.2]):
+        for hdx, h in enumerate([0.0, 0.1, 0.2, 0.3]):
+            pars = {
+                "simulation_time": 5000,
+                "ext_str": h,
+                "w0": 0.0,
+                "sigma": sigma,
+                "gating_mechanism": False,
+            }
+            ax = meso_explore_single(activity_snapshot=False, **pars)
+            ax = ax[0]
+
+            ax.set_xlim(-0.2, 1.5)
+            ax.set_ylim(-2, 15)
+            ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.25))
+            ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.25))
+            ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(15))
+            ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(5))
+            sns.despine(ax=ax, offset=0, trim=True)
+            ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1))
+            ax.get_figure().tight_layout()
+
+            cc.set_size3(ax, 2.0, 1.6)
+
+            ax.get_figure().savefig(
+                f"./fig/paper/meso_noise_and_input_flowfields_{h:.3f}_{sigma:.3f}.pdf",
+                dpi=300,
+                bbox_inches="tight",
+            )
+
+
+def meso_stationary_points(input_range=None):
+
+    if input_range is None:
+        input_range = np.arange(0.0, 0.8, 0.005)
+        # input_range = np.concatenate(
+        #     [
+        #         np.arange(0, 0.1, 0.005),
+        #         np.arange(0.1, 0.2, 0.005),
+        #         np.arange(0.2, 1.0, 0.01),
+        #     ]
+        # )
+
+    rates, rsrcs = mh.get_stationary_solutions(input_range=input_range)
+
+    fig, ax = plt.subplots()
+    ax.plot(rsrcs, rates, ".")
+    ax.set_xlabel("Resources")
+    ax.set_ylabel("Rate")
+
+    fig, ax = plt.subplots()
+    ax.plot(input_range, rates, ".")
+    ax.set_xlabel("Input")
+    ax.set_ylabel("Rate")
+
+    fig, ax = plt.subplots()
+    ax.plot(input_range, rsrcs, ".")
+    ax.set_xlabel("Input")
+    ax.set_ylabel("Resources")
 
 
 # ------------------------------------------------------------------------------ #

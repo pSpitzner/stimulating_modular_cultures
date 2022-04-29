@@ -296,7 +296,7 @@ def _simulate_model(
 
                 # Disconnect gate depending on activity of source
                 if old_gate[src, tar] == GATE_CONNECTED:
-                    prob = probability_to_disconnect(
+                    prob = _probability_to_disconnect(
                         rsrc[src, t], dt, thrs_gate, k_gate, tau_disconnect
                     )
                     if np.random.rand() < prob:
@@ -319,10 +319,7 @@ def _simulate_model(
     return time_axis, rate, rsrc, gate_history
 
 
-@jit(nopython=True, parallel=False, fastmath=False, cache=True)
-def probability_to_disconnect(
-    resources, dt=0.01, thrs_gate=1.0, k_gate=10.0, tau_disconnect=1.0
-):
+def probability_to_disconnect(resources, **kwargs):
     """
     Returns the probability of the gate to be closed depending on sigmoid response and currently available resources
 
@@ -341,8 +338,19 @@ def probability_to_disconnect(
     # Returns
     prob_close: float
         Probability of gate closing for the currently available number of resources.
-
     """
+    pars = default_pars.copy()
+    for key, value in kwargs.items():
+        assert key in default_pars.keys(), f"unknown kwarg for mesoscopic model: '{key}'"
+        pars[key] = value
+    return _probability_to_disconnect(
+        resources, pars["dt"], pars["thrs_gate"], pars["k_gate"], pars["tau_disconnect"]
+    )
+
+
+@jit(nopython=True, parallel=False, fastmath=False, cache=True)
+def _probability_to_disconnect(resources, dt, thrs_gate, k_gate, tau_disconnect):
+
     return 1.0 - np.exp(
         -dt
         * ((1 / tau_disconnect) - gate_sigm(resources, thrs_gate, k_gate, tau_disconnect))
@@ -454,7 +462,7 @@ def single_module_odes(y, t, **pars):
     rate_ode = \
         - rate / pars["tau_rate"] + 0.0 \
         + transfer_function(
-            total_input = rate * rsrc + rsrc * pars["ext_str"],
+            total_input = rate * rsrc + pars["ext_str"],
             gain_inpt   = pars["gain_inpt"],
             k_inpt      = pars["k_inpt"],
             thrs_inpt   = pars["thrs_inpt"],

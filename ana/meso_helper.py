@@ -567,7 +567,7 @@ def _plot_nullclines_for_input_array(ext_inpt_array=None, tolerance=1e-3, **kwar
         return fig
 
 
-def plot_nullcline(ax, tolerance=1e-3, ode_coords=None, **kwargs):
+def plot_nullcline(ax=None, tolerance=1e-3, ode_coords=None, **kwargs):
     """
     Does the actual computation of the nullclines using the indicated control parameter and plots them into the selected axis
 
@@ -595,6 +595,11 @@ def plot_nullcline(ax, tolerance=1e-3, ode_coords=None, **kwargs):
         assert key in default_pars.keys(), f"unknown kwarg for mesoscopic model: '{key}'"
         pars[key] = value
 
+    if ax is None:
+        fig, ax = plt.subplots(figsize=[6.4, 6.4])
+    else:
+        fig = ax.get_figure()
+
     # Get the nullcline for resources, which is quite easy
     r_values = np.linspace(0.01, pars["max_rsrc"] + 1, 1000)
     r_nullc = (
@@ -607,7 +612,6 @@ def plot_nullcline(ax, tolerance=1e-3, ode_coords=None, **kwargs):
     # which is used in sigmoid transfer function
     aux_thrsig = np.exp(pars["k_inpt"] * pars["thrs_inpt"])
 
-    # @victor: maybe we also move this definition to `mesoscopic_model.py`, see below.
     # Function defined by dx/dt = 0 that we want to solve,
     # it is transcendental so we will have to go for numerical
     def x_eq(x, r, aux_thrsig, **pars):
@@ -712,7 +716,25 @@ def plot_nullcline(ax, tolerance=1e-3, ode_coords=None, **kwargs):
     return ax
 
 
-def plot_flow_field(ax=None, time_points=None, rsrc_0=None, rate_0=None, **kwargs):
+def plot_flow_field(
+    ax=None,
+    time_points=None,
+    rsrc_max=1.5,
+    rsrc_min=0,
+    rate_max=17,
+    rate_min=0,
+    plot_kwargs=dict(),
+    **kwargs,
+):
+    """
+    Plot a flow field of the mesoscopic model at provided parameters.
+
+    Integrates the ode of the meso model from a range of initial conditions,
+    for a short time. Each IC creates a different trajectory.
+
+    # Paremters
+    **kwargs : dict of parameters passed to meso model
+    """
 
     sys.path.append("./src")
     from mesoscopic_model import default_pars, single_module_odes
@@ -736,11 +758,7 @@ def plot_flow_field(ax=None, time_points=None, rsrc_0=None, rate_0=None, **kwarg
 
     # initial_conditions = itertools.product(rate_0, rsrc_0)
 
-    num_trajectories = 5000
-    rsrc_max = pars["max_rsrc"] * 1.1
-    rsrc_min = 0
-    rate_max = 12
-    rate_min = 0
+    num_trajectories = 1000
     rate_0 = np.random.uniform(low=rate_min, high=rate_max, size=num_trajectories)
     rsrc_0 = np.random.uniform(low=rsrc_min, high=rsrc_max, size=num_trajectories)
     d_rate = rate_max - rate_min
@@ -769,21 +787,24 @@ def plot_flow_field(ax=None, time_points=None, rsrc_0=None, rate_0=None, **kwarg
     # maybe we want to color code this later
     traject_lens = np.array(traject_lens)
     traject_lens = np.log10(traject_lens)
-    traject_lens -= np.nanmin(traject_lens)*1.5
+    traject_lens -= np.nanmin(traject_lens) * 1.5
     traject_lens /= np.nanmax(traject_lens)
     traject_lens = np.clip(traject_lens, 0, 1)
+
+    plot_kwargs = plot_kwargs.copy()
+    plot_kwargs.setdefault("alpha", 0.3)
+    plot_kwargs.setdefault("zorder", 0)
+    plot_kwargs.setdefault("lw", 0.2)
+    plot_kwargs.setdefault("clip_on", False)
 
     for tdx, traj in enumerate(trajects):
         ax.plot(
             traj[:, 1],
             traj[:, 0],
             color="black",
-            alpha=0.3,
             # color=plt.cm.Spectral(traject_lens[tdx]),
             # alpha=1.0,
-            lw=0.2,
-            clip_on=False,
-            zorder=4,
+            **plot_kwargs,
         )
 
     return ax
@@ -876,6 +897,68 @@ def plot_h_diagram(ax, tf=1e5, dt=0.01, ode_coords=None, **kwargs):
     ax.plot(h_space, frequency)
 
     return ax
+
+
+def get_stationary_solutions(input_range, time_points=None, **kwargs):
+    """
+    Use scipy numeric solver to integrate `single_module_odes` for long times.
+
+    This yields the fixed points
+
+    # Parameters
+    input_range : array of floats
+        for which input strength to find fixed points
+    **kwargs
+        other mesoscopic model parameters
+
+    # Returns
+    rate, rsrc : 1d arrays
+        of length `input_range` corresponding to the stationary rate, and resources.
+    """
+
+    sys.path.append("./src")
+    from mesoscopic_model import default_pars, single_module_odes
+
+    # pars will be set to defaults, but everything provided here via kwargs is overwritten
+    pars = default_pars.copy()
+    for key, value in kwargs.items():
+        assert key in default_pars.keys(), f"unknown kwarg for mesoscopic model: '{key}'"
+        pars[key] = value
+
+    pars.pop("ext_str")
+
+    if time_points is None:
+        # lets assume this is t->infty
+        time_points = np.linspace(0, 10000, 100000)
+
+    y0 = (0.1, pars["max_rsrc"])
+
+    rates = []
+    rsrcs = []
+
+    # y0 is a 2d tuple passed to single_module_ode
+    for h in input_range:
+
+        # the line below sets every key in pars as default kwargs
+        ode_with_kwargs = functools.partial(single_module_odes, ext_str=h, **pars)
+
+        traj = odeint(ode_with_kwargs, y0, time_points)
+        # use the last time point as solution
+        rate = traj[-1, 0]
+        rsrc = traj[-1, 1]
+        rates.append(rate)
+        rsrcs.append(rsrc)
+
+        # keep track of how much stuff changed over the last few time steps
+        rate_converged = 1 - traj[-1000, 0] / rate
+        rsrc_converged = 1 - traj[-1000, 1] / rsrc
+
+        log.info(
+            f"h={h:.3f}, rate change {rate_converged:.2e}, resource change"
+            f" {rsrc_converged:.2e}"
+        )
+
+    return rates, rsrcs
 
 
 # ------------------------------------------------------------------------------ #
