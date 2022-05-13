@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2022-05-13 16:57:51
+# @Last Modified: 2022-05-13 17:01:50
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 and runs the simulations in brian.
@@ -103,7 +103,9 @@ record_state_vars = ["D"]
 record_state_idxs = True # [0, 1, 2, 3]
 record_state_idxs = np.arange(0, 160)
 
-record_state_dt = 0.5 * ms
+# use 0.5ms for the highres simulations and to do nice rate-resource cycles
+# bot 25ms were the default to save disk space
+record_state_dt = 25 * ms
 
 # whether to record population rates
 record_rates = False
