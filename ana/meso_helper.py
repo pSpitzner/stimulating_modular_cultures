@@ -739,6 +739,9 @@ def plot_flow_field(
     sys.path.append("./src")
     from mesoscopic_model import default_pars, single_module_odes
 
+    # this should look the same everytime we do it.
+    np.random.seed(815)
+
     # pars will be set to defaults, but everything provided here via kwargs is overwritten
     pars = default_pars.copy()
     for key, value in kwargs.items():
@@ -796,12 +799,12 @@ def plot_flow_field(
     plot_kwargs.setdefault("zorder", 0)
     plot_kwargs.setdefault("lw", 0.2)
     plot_kwargs.setdefault("clip_on", False)
+    plot_kwargs.setdefault("color", "black")
 
     for tdx, traj in enumerate(trajects):
         ax.plot(
             traj[:, 1],
             traj[:, 0],
-            color="black",
             # color=plt.cm.Spectral(traject_lens[tdx]),
             # alpha=1.0,
             **plot_kwargs,
@@ -937,7 +940,7 @@ def get_stationary_solutions(input_range, time_points=None, **kwargs):
     rsrcs = []
 
     # y0 is a 2d tuple passed to single_module_ode
-    for h in input_range:
+    for h in tqdm(input_range):
 
         # the line below sets every key in pars as default kwargs
         ode_with_kwargs = functools.partial(single_module_odes, ext_str=h, **pars)
@@ -953,12 +956,12 @@ def get_stationary_solutions(input_range, time_points=None, **kwargs):
         rate_converged = 1 - traj[-1000, 0] / rate
         rsrc_converged = 1 - traj[-1000, 1] / rsrc
 
-        log.info(
+        log.debug(
             f"h={h:.3f}, rate change {rate_converged:.2e}, resource change"
             f" {rsrc_converged:.2e}"
         )
 
-    return rates, rsrcs
+    return np.array(rates), np.array(rsrcs)
 
 
 # ------------------------------------------------------------------------------ #
