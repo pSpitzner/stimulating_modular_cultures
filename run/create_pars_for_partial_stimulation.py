@@ -12,9 +12,9 @@ seed = 7_000
 l_k_inter = np.array([5])
 l_mod = np.array(["02"])
 l_rep = np.arange(0, 50)
+l_jA = [45.0]
 # as a control, check without inhibition
-l_jA = [0, 45.0]
-l_jG = [50.0]
+l_jG = [0, 50.0]
 l_jM = [15.0]
 l_tD = [20.0]
 rate = 80
