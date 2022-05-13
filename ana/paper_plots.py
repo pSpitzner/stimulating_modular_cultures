@@ -17,6 +17,7 @@ import argparse
 import numbers
 import logging
 import warnings
+import functools
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -2478,7 +2479,8 @@ def sim_participating_fraction(
 def sim_modules_participating_in_bursts(
     input_path,
     simulation_coordinates,
-    xlim=[65, 110],
+    xlim_for_fill=[65, 110],
+    xlim_for_points=[65, 110],
     dim1="rate",
     drop_zero_len=True,
     apply_formatting=True,
@@ -2499,12 +2501,6 @@ def sim_modules_participating_in_bursts(
         data = data.sel(simulation_coordinates)
 
     x = data["any_num_b"].coords[dim1]
-    # for 92.5 Hz we only sampled k = 10, hence drop the point
-    try:
-        selects = np.where((x >= xlim[0]) & (x <= xlim[1]) & (x != 92.5))
-    except:
-        selects = ...
-    # selects = np.ones_like(x, dtype=bool)
 
     fig, ax = plt.subplots()
 
@@ -2531,6 +2527,16 @@ def sim_modules_participating_in_bursts(
         nxt = np.nan_to_num(ratio_mean, nan=0.0)
 
         clr = cc.cmap_cycle("cold", edge=False, N=5)[int(seq_len)]
+
+        # for 92.5 Hz we only sampled k = 10, hence drop the point
+        # this should really go elsewhere, but, you know. stuff grows over time.
+        try:
+            selects = np.where(
+                (x >= xlim_for_fill[0]) & (x <= xlim_for_fill[1]) & (x != 92.5)
+            )
+        except:
+            selects = ...
+        # selects = np.ones_like(x, dtype=bool)
         ax.fill_between(
             x[selects],
             prev[selects],
@@ -2539,6 +2545,14 @@ def sim_modules_participating_in_bursts(
             color=cc.alpha_to_solid_on_bg(clr, 0.2),
             clip_on=True,
         )
+
+        # for the error bars, we might want different xlims.
+        try:
+            selects = np.where(
+                (x >= xlim_for_points[0]) & (x <= xlim_for_points[1]) & (x != 92.5)
+            )
+        except:
+            selects = ...
         if seq_len != 0 and seq_len != 1:
             ax.errorbar(
                 x=x[selects],
@@ -2575,7 +2589,7 @@ def sim_modules_participating_in_bursts(
         ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(5))
         ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
         ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
-        ax.set_xlim(xlim)
+        ax.set_xlim(xlim_for_fill)
         ax.set_ylim(0, 1)
 
         # ax.spines["left"].set_position(("outward", 5))
@@ -3158,7 +3172,9 @@ def meso_xr_with_errors(da, ax=None, apply_formatting=True, **kwargs):
     return ax
 
 
-def meso_resource_cycle(input_file, show_nullclines=False, plot_kwargs=dict(), **kwargs):
+def meso_resource_cycle(
+    input_file, show_nullclines=False, plot_kwargs=dict(), ax=None, **kwargs
+):
     """
     Wrapper to plot a resource cycle for a single file created from the mesoscopic model
 
@@ -3173,7 +3189,8 @@ def meso_resource_cycle(input_file, show_nullclines=False, plot_kwargs=dict(), *
     else:
         h5f = input_file
 
-    _, ax = plt.subplots()
+    if ax is None:
+        _, ax = plt.subplots()
     ax.set_rasterization_zorder(0)
 
     plot_kwargs = plot_kwargs.copy()
@@ -3181,7 +3198,7 @@ def meso_resource_cycle(input_file, show_nullclines=False, plot_kwargs=dict(), *
     plot_kwargs.setdefault("alpha", 0.1)
     plot_kwargs.setdefault("lw", 0.25)
     plot_kwargs.setdefault("zorder", -1)
-    plot_kwargs.setdefault("max_traces_per_mod", 100)
+    plot_kwargs.setdefault("max_traces_per_mod", 50)
 
     ax = ph.plot_resources_vs_activity(
         h5f,
@@ -3191,7 +3208,7 @@ def meso_resource_cycle(input_file, show_nullclines=False, plot_kwargs=dict(), *
     )
     ax.set_xlabel("Synaptic resources")
     ax.set_ylabel("Module rate")
-    if isinstance(input_file, str):
+    if show_title and isinstance(input_file, str):
         ax.set_title(input_file)
     # ax.set_xlim(0, 5)
     # ax.set_ylim(-0.4, 4)
@@ -3246,7 +3263,8 @@ def meso_module_contribution(dset=None, coupling=0.3):
     ax = sim_modules_participating_in_bursts(
         dset,
         simulation_coordinates=dict(coupling=coupling),
-        xlim=None,
+        xlim_for_fill=None,
+        xlim_for_points=[0, 0.2],
         dim1="noise",
         drop_zero_len=False,
     )
@@ -3397,7 +3415,14 @@ def meso_activity_snapshot(
     return fig
 
 
-def meso_explore_single(activity_snapshot=True, resource_cycle=True, **kwargs):
+def meso_explore_single(
+    activity_snapshot=True,
+    resource_cycle=True,
+    flow_field=True,
+    cycle_kwargs=dict(),
+    ax=None,
+    **kwargs,
+):
     """
     Example
     ```
@@ -3438,20 +3463,25 @@ def meso_explore_single(activity_snapshot=True, resource_cycle=True, **kwargs):
         ret.append(fig)
 
     if resource_cycle:
+        cycle_kwargs = cycle_kwargs.copy()
+        cycle_kwargs.setdefault("alpha", 0.4)
+        cycle_kwargs.setdefault("zorder", 1)
+        cycle_kwargs.setdefault("clip_on", True)
+        cycle_kwargs.setdefault("color", "C3")
         ax = meso_resource_cycle(
             path,
+            ax=ax,
             show_nullclines=False,
-            plot_kwargs=dict(alpha=0.4, zorder=1, clip_on=True),
+            plot_kwargs=cycle_kwargs,
             **pars,
         )
         try:
-            # ax.set_title(f"input: {pars['ext_str']} | {pars['thrs_inpt']}")
-            ax.set_title(f"input: {pars['ext_str']}, noise: {pars['sigma']}")
+            if show_title:
+                # ax.set_title(f"input: {pars['ext_str']} | {pars['thrs_inpt']}")
+                ax.set_title(f"input: {pars['ext_str']}, noise: {pars['sigma']}")
         except:
             pass
 
-        pars.pop("simulation_time")
-        mh.plot_flow_field(ax=ax, plot_kwargs=dict(alpha=0.3, clip_on=True), **pars)
         ret.append(ax)
 
     # ax.set_xlim(0, 1.5)
@@ -3462,65 +3492,195 @@ def meso_explore_single(activity_snapshot=True, resource_cycle=True, **kwargs):
 
 def sm_meso_noise_and_input_flowfields():
 
-    for sdx, sigma in enumerate([0.05, 0.1, 0.2]):
-        for hdx, h in enumerate([0.0, 0.1, 0.2, 0.3]):
+    cmap, norm = meso_stationary_points()
+
+    total_width = 10.5
+    fig = plt.figure(figsize=[(total_width) / 2.54, (total_width * 0.67) / 2.54])
+    axes = []
+    gs = fig.add_gridspec(
+        nrows=3,
+        ncols=3,
+        width_ratios=[1.0] * 3,
+        height_ratios=[1.0] * 3,
+        wspace=0.1,
+        hspace=0.1,
+        left=0.15,
+        right=0.99,
+        top=0.95,
+        bottom=0.15,
+    )
+
+    axes = [[] for _ in range(3)]
+    #
+    # gridspec starts counting in top left corner
+    # high noise top, low noise bottom
+    for sdx, sigma in enumerate([0.025, 0.1, 0.2]):
+        row = sdx
+        # low input left, high input right
+        for hdx, h in enumerate([0.0, 0.1, 0.2]):
+            col = hdx
+
+            ax = fig.add_subplot(gs[row, col])
+            axes[row].append(ax)
+
             pars = {
                 "simulation_time": 5000,
                 "ext_str": h,
                 "w0": 0.0,
                 "sigma": sigma,
                 "gating_mechanism": False,
+                "rseed": sdx * 103 + hdx,
             }
-            ax = meso_explore_single(activity_snapshot=False, **pars)
-            ax = ax[0]
 
-            ax.set_xlim(-0.2, 1.5)
-            ax.set_ylim(-2, 15)
-            ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.25))
-            ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.25))
+            meso_explore_single(
+                activity_snapshot=False,
+                ax=ax,
+                cycle_kwargs=dict(
+                    color=cmap(norm(h)),
+                    alpha=0.6,
+                ),
+                **pars,
+            )
+
+            pars.pop("simulation_time")
+            mh.plot_flow_field(
+                ax=ax, plot_kwargs=dict(alpha=1, clip_on=True, color="#bbb"), **pars
+            )
+
+            txt = ""
+            txt += r"$h={h}$".format(h=h)
+            txt += "\n"
+            txt += r"$\sigma={sigma}$".format( sigma=sigma)
+            ax.text(0.95, 0.95, txt, transform=ax.transAxes, ha="right", va="top",
+            fontweight="bold", color="#666", fontsize=6)
+
+            ax.set_xlim(-0.1, 1.5)
+            ax.set_ylim(-1, 15)
+            ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
+            ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.5))
             ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(15))
             ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(5))
             sns.despine(ax=ax, offset=0, trim=True)
             ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1))
             ax.get_figure().tight_layout()
+            if row != 2 or col != 0:
+                clr = "#aaa"
+                ax.tick_params(
+                    axis="both",
+                    which="both",
+                    colors=clr,
+                    labelleft=False,
+                    labelbottom=False,
+                )
+                ax.spines["bottom"].set_color(clr)
+                ax.spines["left"].set_color(clr)
+                ax.xaxis.label.set_color(clr)
 
-            cc.set_size3(ax, 2.0, 1.6)
-
-            ax.get_figure().savefig(
-                f"./fig/paper/meso_noise_and_input_flowfields_{h:.3f}_{sigma:.3f}.pdf",
-                dpi=300,
-                bbox_inches="tight",
-            )
+    ax.get_figure().savefig(
+        f"./fig/paper/meso_noise_and_input_flowfields_combined.pdf",
+        dpi=300,
+    )
 
 
 def meso_stationary_points(input_range=None):
 
     if input_range is None:
-        input_range = np.arange(0.0, 0.8, 0.005)
-        # input_range = np.concatenate(
-        #     [
-        #         np.arange(0, 0.1, 0.005),
-        #         np.arange(0.1, 0.2, 0.005),
-        #         np.arange(0.2, 1.0, 0.01),
-        #     ]
-        # )
+        input_range = np.arange(0.0, 0.35, 0.0005)
 
     rates, rsrcs = mh.get_stationary_solutions(input_range=input_range)
 
-    fig, ax = plt.subplots()
-    ax.plot(rsrcs, rates, ".")
-    ax.set_xlabel("Resources")
-    ax.set_ylabel("Rate")
+    special_input = [0.0, 0.1, 0.2]
 
-    fig, ax = plt.subplots()
-    ax.plot(input_range, rates, ".")
-    ax.set_xlabel("Input")
-    ax.set_ylabel("Rate")
+    special_idx = [np.where(input_range == s)[0][0] for s in special_input]
 
-    fig, ax = plt.subplots()
-    ax.plot(input_range, rsrcs, ".")
-    ax.set_xlabel("Input")
-    ax.set_ylabel("Resources")
+    # z values for color map, ty this to input
+
+    cmap = matplotlib.colors.LinearSegmentedColormap.from_list(
+        "custom",
+        [
+            (0, "#C31B2B"),
+            # (0.25, "#FF9F68"),
+            (0.5, "#DABE49"),
+            (0.85, "#195571"),
+            (1, "#011A39"),
+        ],
+        N=512,
+    )
+    cmap = cmap.reversed()
+    norm = plt.Normalize(0, 0.2)
+
+    plot_kwargs = dict(
+        c=input_range,
+        cmap=cmap,
+        norm=norm,
+        zorder=0,
+        linewidths=0,
+        s=1,
+        clip_on=False,
+    )
+
+    str_to_data = dict(
+        Resources=rsrcs,
+        Rate=rates,
+        Input=input_range,
+    )
+    str_to_lim = dict(
+        Resources=[0, 1.15],
+        Rate=[0, 5],
+        Input=[0, 0.35],
+    )
+    str_to_minor = dict(
+        Resources=matplotlib.ticker.MultipleLocator(0.5),
+        Rate=matplotlib.ticker.MultipleLocator(1),
+        Input=matplotlib.ticker.MultipleLocator(0.1),
+    )
+    str_to_major = dict(
+        Resources=matplotlib.ticker.MultipleLocator(1),
+        Rate=matplotlib.ticker.MultipleLocator(5),
+        Input=matplotlib.ticker.MultipleLocator(0.2),
+    )
+
+    for combination in [
+        ("Resources", "Rate"),
+        ("Input", "Rate"),
+        ("Input", "Resources"),
+    ]:
+        x_str = combination[0]
+        y_str = combination[1]
+        x = str_to_data[x_str]
+        y = str_to_data[y_str]
+
+        kwargs = plot_kwargs.copy()
+        fig, ax = plt.subplots()
+        ax.set_rasterization_zorder(0)
+        ax.scatter(x=x, y=y, **kwargs)
+        ax.set_xlabel(x_str, labelpad=1.5)
+        ax.set_ylabel(y_str, labelpad=1.5)
+
+        # mark special points as vectors
+        kwargs["zorder"] = 2
+        kwargs["s"] = 8
+        if x_str == "Resources" and y_str == "Rate":
+            # points coincide at Resources=1, make both visible
+            kwargs["s"] = [8, 3, 8]
+        kwargs["c"] = special_input
+        ax.scatter(x=x[special_idx], y=y[special_idx], **kwargs)
+        ax.set_xlim(str_to_lim[x_str])
+        ax.set_ylim(str_to_lim[y_str])
+        ax.xaxis.set_major_locator(str_to_major[x_str])
+        ax.xaxis.set_minor_locator(str_to_minor[x_str])
+        ax.yaxis.set_major_locator(str_to_major[y_str])
+        ax.yaxis.set_minor_locator(str_to_minor[y_str])
+
+        sns.despine(ax=ax, offset=3)
+
+        cc.set_size2(ax, 2.2, 1.5)
+
+        ax.get_figure().savefig(
+            f"fig/paper/meso_stationary_points_{x_str}_{y_str}.pdf", dpi=300
+        )
+
+    return cmap, norm
 
 
 # ------------------------------------------------------------------------------ #
@@ -4114,6 +4274,46 @@ def _draw_error_stick(
         ax.scatter(mid, center, **kwargs)
     else:
         ax.scatter(center, mid, **kwargs)
+
+
+def _colorline(
+    x,
+    y,
+    z=None,
+    ax=None,
+    cmap=plt.get_cmap("copper"),
+    norm=plt.Normalize(0.0, 1.0),
+    **kwargs,
+):
+    """
+    http://nbviewer.ipython.org/github/dpsanders/matplotlib-examples/blob/master/colorline.ipynb
+    http://matplotlib.org/examples/pylab_examples/multicolored_line.html
+    Plot a colored line with coordinates x and y
+    Optionally specify colors in the array z
+    Optionally specify a colormap, a norm function and a line width
+    """
+
+    # Default colors equally spaced on [0,1]:
+    if z is None:
+        z = np.linspace(0.0, 1.0, len(x))
+
+    # Special case if a single number:
+    if not hasattr(z, "__iter__"):  # to check for numerical input -- this is a hack
+        z = np.array([z])
+
+    z = np.asarray(z)
+
+    points = np.array([x, y]).T.reshape(-1, 1, 2)
+    segments = np.concatenate([points[:-1], points[1:]], axis=1)
+    lc = matplotlib.collections.LineCollection(
+        segments, array=z, cmap=cmap, norm=norm, **kwargs
+    )
+
+    if ax is None:
+        ax = plt.gca()
+    ax.add_collection(lc)
+
+    return lc
 
 
 # ------------------------------------------------------------------------------ #
