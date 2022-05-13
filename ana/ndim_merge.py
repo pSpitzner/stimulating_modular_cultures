@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2022-04-04 10:39:45
+# @Last Modified: 2022-05-13 16:12:37
 # ------------------------------------------------------------------------------ #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into a single file, containing high-dimensional arrays.
@@ -123,6 +123,8 @@ def all_in_one(candidate=None):
         res["sys_orderpar_dist_median"] = 1
         res["sys_orderpar_dist_max"] = 1
         res["sys_modularity"] = 1
+        res["sys_mean_resources_at_burst_beg"] = 1
+        res["sys_std_resources_at_burst_beg"] = 1
         res["mod_mean_correlation"] = 1
         res["mod_median_correlation"] = 1
 
@@ -367,6 +369,14 @@ def all_in_one(candidate=None):
 
     res["vec_sys_hbins_resource_dist"] = ops["dist_edges"]
     res["vec_sys_hvals_resource_dist"] = ops["dist_hist"]
+
+    # res at bursts start, first dim modules, second dim times, nans if not part of burst
+    resources = ah.find_resources_at_burst_start(h5f, write_to_h5f=False, return_res=True)
+    # this is about module-level resource cycles, so we want to treat all modules
+    # as the ensemble -> flat list and then std and mean
+    resources = resources.flatten()
+    res["sys_mean_resources_at_burst_beg"] = np.nanmean(resources)
+    res["sys_std_resources_at_burst_beg"] = np.nanstd(resources)
 
     h5.close_hot(h5f)
     h5f.clear()

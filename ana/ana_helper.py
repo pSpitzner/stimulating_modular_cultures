@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2022-04-12 10:38:35
+# @Last Modified: 2022-05-13 16:02:01
 # ------------------------------------------------------------------------------ #
 # Here we collect all functions for importing and analyzing the data.
 # A central idea is that for every simulated/experimental trial, we have a
@@ -1184,6 +1184,59 @@ def find_state_variable(h5f, variable, write_to_h5f=True, return_res=False):
 
     if return_res:
         return states
+
+def find_module_resources_at_burst_begin(h5f, write_to_h5f=True, return_res=False):
+    """
+    Find what was the level of resources in every module when bursts started.
+
+    We should think about which begin times to use, for now it is only implemented
+    for the begin times at the whole-system level.
+    Then, we check if a module contributed and set the starting resource to nan
+    if it didnt.
+    """
+    beg_times = h5f["ana.bursts.system_level.beg_times"]
+    mod_seqs = h5f["ana.bursts.system_level.module_sequences"]
+
+    # 2d array, first dim is module, second dim is time
+    mod_res = get_module_resources_at_times(h5f, times=beg_times)
+
+    # dont count guys who are not participating
+    for mdx, m in enumerate(h5f["ana.mod_ids"]):
+        for tdx, t in enumerate(beg_times):
+            if m not in mod_seqs[tdx]:
+                mod_res[mdx, tdx] = np.nan
+
+    # how do we best aggregate across multiple modules?
+    mod_res_flat = np.nanmedian(mod_res, axis=0)
+
+    if write_to_h5f:
+        h5f["ana.bursts.system_level.module_resources_at_beg_times"] = mod_res_flat
+
+    # lets provide unflattened when returning
+    if return_res:
+        return mod_res
+
+
+def get_module_resources_at_times(h5f, times):
+    if "ana.adaptation" not in h5f.keypaths():
+        find_module_level_adaptation(h5f)
+
+    res = np.ones((len(h5f["ana.mods"]), len(times)))*np.nan
+
+    dt = h5f["ana.adaptation.dt"]
+
+    # we are mostly interested in the resources at burst begin time. so use
+    # the left hand time bin
+    for mdx, mod_id in enumerate(h5f["ana.mod_ids"]):
+        mod = f"mod_{mod_id}"
+        h5f[f"ana.adaptation.module_level.{mod}"]
+
+        # we are mostly interested in the resources at burst begin time.
+        # so using the lower time bin by when casting to int is fine
+        for tdx, t in enumerate(times):
+            res[mdx, tdx] = h5f[f"ana.adaptation.module_level.{mod}"][int(t / dt)]
+
+    return res
 
 
 def find_module_level_adaptation(h5f):
