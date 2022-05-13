@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-10-25 17:28:21
-# @Last Modified: 2022-05-13 16:51:09
+# @Last Modified: 2022-05-13 21:48:40
 # ------------------------------------------------------------------------------ #
 # Hard coded script to analyse experimental data
 # ------------------------------------------------------------------------------ #
@@ -55,9 +55,9 @@ time_bin_size_for_rij = 500 / 1000  # in seconds
 
 # threshold for burst detection [% of max peak height]
 def threshold_factor(etype):
-    if etype[0:4] == "exp":
+    if etype[0:3] == "exp":
         return 10 / 100
-    elif etype[0:4] == "sim":
+    elif etype[0:3] == "sim":
         return 2.5 / 100
     else:
         raise ValueError(f"etype {etype} not recognized")
