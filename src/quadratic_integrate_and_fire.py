@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2021-10-18 15:43:11
+# @Last Modified: 2022-05-13 16:53:28
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 and runs the simulations in brian.
@@ -23,7 +23,6 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-import stimulation as stim
 import topology as topo
 import hi5 as h5
 
@@ -137,10 +136,10 @@ parser.add_argument("-equil", "--equilibrate",
 
 parser.add_argument("-stim",
     dest="stimulation_type", default="off", type=str,
-    help="if/how to stimulate: 'off', 'poisson', 'hideaki'",)
+    help="if/how to stimulate: 'off', 'poisson'",)
 
 parser.add_argument("-stim_rate",  dest="stimulation_rate",
-    help="additional rate upon stim, in Hz", default=10, type=float)
+    help="additional rate upon stim, in Hz", default=20, type=float)
 
 parser.add_argument("-mod",
     dest="stimulation_module", default='0', type=str,
@@ -333,24 +332,7 @@ for n_id in excit_ids:
 # Stimulation if requested
 # ------------------------------------------------------------------------------ #
 
-if args.stimulation_type == "hideaki":
-    # get 5 candidates per stimulated module
-    stim_ids = stim._draw_candidates(
-        mod_ids=mod_ids, n_per_mod=5, mod_targets=args.stimulation_module
-    )
-    stim_ids = t2b[stim_ids]
-    # every 400ms, each candidate has a chance 0.4 to receive the stimulus as
-    # a constant input current
-    for sid in stim_ids:
-        G[sid].run_regularly(
-            """
-            stim_on = int(rand() < 0.4)
-            Istim = stim_on * jE
-        """,
-            dt=400 * ms,
-        )
-
-elif args.stimulation_type == "poisson":
+if args.stimulation_type == "poisson":
     stim_ids = []
     for mod in args.stimulation_module:
         stim_ids.extend(np.where(mod_ids == mod)[0])
@@ -359,6 +341,7 @@ elif args.stimulation_type == "poisson":
     stim_g = PoissonGroup(len(stim_ids), args.stimulation_rate)
     stim_s = Synapses(stim_g, G, on_pre="IA_post += jM")
     stim_s.connect(i=np.arange(0, len(stim_ids)), j=stim_ids)
+
 
 # ------------------------------------------------------------------------------ #
 # Running
