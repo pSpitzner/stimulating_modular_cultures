@@ -6,18 +6,20 @@ from itertools import product
 os.chdir(os.path.dirname(__file__))
 
 # seed for rank 0, will increase per thread
-seed = 6_000
+seed = 7_000
 
 # parameters to scan, noise rate, ampa strength, and a few repetitons for statistics
 l_k_inter = np.array([5])
 l_mod = np.array(["02"])
 l_rep = np.arange(0, 50)
-l_jA = [45.0]
+# as a control, check without inhibition
+l_jA = [0, 45.0]
 l_jG = [50.0]
 l_jM = [15.0]
 l_tD = [20.0]
 rate = 80
-l_stim_rate = np.arange(0, 50.1, 2.5)
+# for 20 Hz noise extra, results seemed consistent with experiments when inhib. enabled
+l_stim_rate = [0, 20]
 
 print("l_jA  ", l_jA)
 print("l_jG  ", l_jG)
@@ -51,7 +53,7 @@ with open("./parameters.tsv", "w") as f_dyn:
         for stim_rate in l_stim_rate:
             f_base = f"k={k_inter:d}_jA={jA:.1f}_jG={jG:.1f}_jM={jM:.1f}_tD={tD:.1f}_rate={rate:.1f}_stimrate={stim_rate:.1f}_rep={rep:03d}.hdf5"
 
-            dyn_path = f"/scratch03.local/pspitzner/inhib02/dat/the_last_one/dyn/stim={mod}_{f_base}"
+            dyn_path = f"/scratch03.local/pspitzner/inhib02/dat/partial_stim_inhib_blocked/dyn/stim={mod}_{f_base}"
 
             if mod == "off":
                 stim_arg = ""
