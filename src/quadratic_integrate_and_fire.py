@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2022-05-13 16:53:28
+# @Last Modified: 2022-05-13 16:57:51
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 and runs the simulations in brian.
@@ -18,9 +18,7 @@ import logging
 
 from brian2 import *
 
-logging.basicConfig(
-    level=logging.INFO, format="%(levelname)-8s [%(name)s] %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(levelname)-8s [%(name)s] %(message)s")
 log = logging.getLogger(__name__)
 
 import topology as topo
@@ -189,9 +187,7 @@ log.info("equilibration:    %s", args.equil_duration)
 log.info("recording states: %s", record_state)
 log.info("recording rates:  %s", record_rates)
 log.info("bridge weight:    %s", args.bridge_weight)
-log.info(
-    "inhibition:       %s (fraction of all neurons)", args.inhibition_fraction
-)
+log.info("inhibition:       %s (fraction of all neurons)", args.inhibition_fraction)
 log.info("stimulation:      %s", args.stimulation_type)
 if args.stimulation_type != "off":
     log.info("stim. module:     %s", args.stimulation_module)
@@ -280,7 +276,11 @@ G_exc.j = jA
 if len(bridge_ids) > 0:
     G_bridge.j *= args.bridge_weight
 
-assert np.all(G.j != 0)
+if not np.all(G.j != 0):
+    log.warn(
+        "Some synapse strenght `j` were zero after initialization. This should only"
+        " happen if you manually set some `j` to zero!"
+    )
 
 
 # ------------------------------------------------------------------------------ #
