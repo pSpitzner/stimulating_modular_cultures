@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-10-25 17:28:21
-# @Last Modified: 2022-04-15 14:10:51
+# @Last Modified: 2022-05-13 16:51:09
 # ------------------------------------------------------------------------------ #
 # Hard coded script to analyse experimental data
 # ------------------------------------------------------------------------------ #
@@ -54,32 +54,33 @@ save_analysed_h5f = False
 time_bin_size_for_rij = 500 / 1000  # in seconds
 
 # threshold for burst detection [% of max peak height]
-threshold_factor = dict()
-threshold_factor["exp"] = 10 / 100
-threshold_factor["exp_chemical"] = 10 / 100
-threshold_factor["exp_bic"] = 10 / 100
-
-threshold_factor["sim"] = 2.5 / 100
-threshold_factor["sim_partial"] = 2.5 / 100
+def threshold_factor(etype):
+    if etype[0:4] == "exp":
+        return 10 / 100
+    elif etype[0:4] == "sim":
+        return 2.5 / 100
+    else:
+        raise ValueError(f"etype {etype} not recognized")
 
 # for pop. rate, width of gaussian placed on every spike, in seconds
-bs_large = dict()
-bs_large["exp"] = 200 / 1000
-bs_large["exp_chemical"] = 200 / 1000
-bs_large["exp_bic"] = 200 / 1000
+def bs_large(etype):
+    if etype[0:4] == "exp":
+        return 200 / 1000
+    elif etype[0:4] == "sim":
+        return 20 / 1000
+    else:
+        raise ValueError(f"etype {etype} not recognized")
 
-bs_large["sim"] = 20 / 1000
-bs_large["sim_partial"] = 20 / 1000
 
 
 def main():
     global h5f
-    parser = argparse.ArgumentParser(description="Merge Multidm")
+    parser = argparse.ArgumentParser(description="Process conditions")
     parser.add_argument(
         "-t",
         dest="etype",
         required=True,
-        help="'exp', 'exp_chemical', 'exp_bic', or 'sim'",
+        help="'exp', 'exp_chemical', 'exp_bic', 'sim_partial', 'sim_partial_no_inhib'",
     )
     parser.add_argument(
         "-i",
@@ -123,8 +124,10 @@ def main():
         # for the case where we only stimulate 2 modules instead of uniform
         # noise to all, we need a bit more tweaking below
         conditions["k=5"] = ["0.0", "20.0"]
+    elif args.etype == "sim_partial_no_inhib":
+        conditions["k=5"] = ["0.0", "20.0"]
     else:
-        raise KeyError("type should be 'exp', 'exp_chemical' or 'sim'")
+        raise KeyError("type should be 'exp', 'exp_chemical' or 'sim_partial'")
 
     # ------------------------------------------------------------------------------ #
     # iterate over all combination
@@ -151,6 +154,10 @@ def main():
             elif args.etype == "sim_partial":
                 input_paths = glob.glob(
                     f"{args.input_base}/stim=02_{layout}_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=80.0_stimrate={condition}_rep=*.hdf5"
+                )
+            elif args.etype == "sim_partial_no_inhib":
+                input_paths = glob.glob(
+                    f"{args.input_base}/stim=02_{layout}_jA=45.0_jG=0.0_jM=15.0_tD=20.0_rate=80.0_stimrate={condition}_rep=*.hdf5"
                 )
 
             print(f"found {len(input_paths)} files for {layout} {condition}")
@@ -352,6 +359,7 @@ def main():
                         "Mean Correlation": [mean_rij],
                         "Mean IBI": [np.nanmean(ibis)],
                         "Median IBI": [np.nanmedian(ibis)],
+                        "Mean Rate": [np.nanmean(h5f["ana.rates.system_level"])],
                         "Mean Fraction": [np.nanmean(fracs)],
                         "Median Fraction": [np.nanmedian(fracs)],
                         "Mean Core delays": [np.nanmean(delays)],
@@ -405,10 +413,10 @@ def prepare_file(etype, condition, path_prefix):
     elif "sim" in etype:
         h5f = ah.prepare_file(path_prefix)
 
-    ah.find_rates(h5f, bs_large=bs_large[etype])
+    ah.find_rates(h5f, bs_large=bs_large(etype))
     ah.find_system_bursts_from_global_rate(
         h5f,
-        rate_threshold=threshold_factor[etype]
+        rate_threshold=threshold_factor(etype)
         * np.nanmax(h5f["ana.rates.system_level"]),
         merge_threshold=0.1,
         skip_sequences=False,
