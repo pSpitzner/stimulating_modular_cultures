@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2022-04-25 14:04:33
+# @Last Modified: 2022-05-19 14:07:30
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -1006,18 +1006,20 @@ def plot_resources_vs_activity(
     if mod_ids is None:
         mod_ids = h5f["ana.mod_ids"]
 
+    if "ana.adaptation" not in h5f.keypaths():
+        ah.find_module_level_adaptation(h5f)
+
     for mdx, mod_id in enumerate(mod_ids):
         mod = f"mod_{mod_id}"
         assert f"ana.rates.module_level.{mod}" in h5f.keypaths(), f"rate for {mod} needed"
-        n_ids = np.where(h5f["data.neuron_module_id"][:] == mod_id)[0]
-        mod_adapt = np.mean(h5f["data.state_vars_D"][n_ids, :], axis=0)
+        mod_adapt = h5f[f"ana.adaptation.module_level.{mod}"]
         mod_rate = h5f[f"ana.rates.module_level.{mod}"]
 
-        # we need matching time steps. unfortunately, i have not saved the dt of the
-        # state vars, so this is a bit fishy.
+        # we need matching time steps. unfortunately, i have not always saved
+        # the dt of the state vars, so this is a bit fishy.
         stride = int(
             np.round(
-                (h5f["data.state_vars_time"][1] - h5f["data.state_vars_time"][0])
+                h5f["ana.adaptation.dt"]
                 / h5f["ana.rates.dt"]
             )
         )
@@ -1032,6 +1034,7 @@ def plot_resources_vs_activity(
         # subsample or smooth over window ?
         mod_rate = mod_rate[0 : len(mod_rate) : stride]
 
+        # we could do this via dt
         adap_times = h5f["data.state_vars_time"][:]
 
         try:
