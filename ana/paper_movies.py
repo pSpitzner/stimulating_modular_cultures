@@ -37,8 +37,7 @@ def main():
         )
 
     # simulations
-    # for k in [1, 5, 10, -1]:
-    for k in [-1]:
+    for k in [1, 5, 10, -1]:
         for noise in [80, 90]:
             title = f"k={k}, {noise}Hz"
             if k == -1:
@@ -70,7 +69,9 @@ def make_a_movie(
     only_test_layout=False,
 ):
     """
-    Wrapper to create the layout used for movies of simulions.
+    Wrapper to create the layout used for movies.
+
+    simulations and experiments have similar layout so we do it in one function.
 
     Here we do the data analysis in place, using default parameters.
     (For Experiments we use the analyzed files coming out of process_conditions.)
@@ -321,6 +322,199 @@ def make_a_movie(
     else:
         writer.render()
 
+
+def comparison_simulation(
+    input_top = "./dat/the_last_one/dyn/highres_stim=off_k=5_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=80.0_rep=001.hdf5",
+    input_bot = "./dat/the_last_one/dyn/highres_stim=off_k=5_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=90.0_rep=001.hdf5",
+    output_path="./mov/simulation_test.mp4",
+    title=None,
+    show_time=False,
+    movie_duration=20,
+    window_from=-20,
+    window_to=100,
+    tbeg=0,
+    tend=310,
+    only_test_layout=False,
+):
+    """tweaked layout to compare the simulation at 80Hz and 90Hz in the same clip."""
+
+    writer = MovieWriter(
+        output_path=output_path,
+        movie_duration=movie_duration,
+        tbeg=tbeg,
+        tend=tend,
+    )
+
+    # I like to set the decay time propto movie playback speed
+    time_ratio = writer.movie_duration / (writer.tend - writer.tbeg)
+    decay_time = 0.5 / time_ratio
+
+    # ------------------------------------------------------------------------------ #
+    # Figure layout
+    # ------------------------------------------------------------------------------ #
+
+    fig = plt.figure(figsize=(1920 / 300, 1080 / 300), dpi=300)
+    fig.patch.set_facecolor("black")
+    gs = fig.add_gridspec(
+        nrows=2,
+        ncols=4,
+        # use one dummy column for the axis ticks
+        width_ratios=[0.4, 0.53, 0.15, 0.2],
+        height_ratios=[0.5, 0.5],
+        wspace=0.02,
+        hspace=0.5,
+        left=0.01,
+        right=0.99,
+        top=0.95,
+        bottom=0.15,
+    )
+
+    for row in range(2):
+        input_path = input_top if row == 0 else input_bot
+        h5f = ah.prepare_file(input_path)
+        ah.find_rates(h5f)
+
+        # ------------------------------------------------------------------------------ #
+        # Topology plot
+        # ------------------------------------------------------------------------------ #
+
+        ax = fig.add_subplot(gs[row, 0])
+        tpr = TopologyRenderer(input_path=input_path, ax=ax)
+        tpr.decay_time = decay_time
+
+        ax.set_xlim(-40, 640)
+        ax.set_ylim(-40, 640)
+        ax.set_clip_on(False)
+        writer.renderers.append(tpr)
+
+        # ------------------------------------------------------------------------------ #
+        # Resource cycles
+        # ------------------------------------------------------------------------------ #
+
+        if not only_test_layout:
+            # speed things up by not doing the analysis
+            ah.find_module_level_adaptation(h5f)
+
+        ax = fig.add_subplot(gs[row, 3])
+        x_sets = []
+        y_sets = []
+        colors = []
+        dt = None
+        for mod_id in [0, 1, 2, 3]:
+            try:
+                y = h5f[f"ana.rates.module_level.mod_{mod_id}"]
+                x = h5f[f"ana.adaptation.module_level.mod_{mod_id}"]
+                dt = h5f[f"ana.rates.dt"]
+                assert (
+                    h5f[f"ana.adaptation.dt"] == dt
+                ), "adaptation and rates need to share the same time step"
+            except:
+                continue
+
+            # limit data range to whats needed
+            x = x[0 : int(writer.tend / dt) + 2]
+            y = y[0 : int(writer.tend / dt) + 2]
+            x_sets.append(x)
+            y_sets.append(y)
+            colors.append(f"C{mod_id}")
+
+        if not only_test_layout:
+            flr = FadingLineRenderer(
+                x=x_sets,
+                y=y_sets,
+                colors=colors,
+                dt=dt,
+                ax=ax,
+                tbeg=writer.tbeg,
+                clip_on=False,
+            )
+            flr.decay_time = decay_time
+
+        ax.set_xlim(0, 1)
+        ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1.0))
+        ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.2))
+        ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(100))
+        ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(50))
+        ax.set_ylim(-15, 130)
+        # ax.yaxis.tick_right()
+        # ax.yaxis.set_ticks_position("both")
+        sns.despine(ax=ax, left=False, right=True, top=True, trim=True, offset=1)
+        # workaround for despine
+        ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(100))
+
+        # if row == 1:
+        ax.set_xlabel("Resources")
+        ax.set_ylabel("Firing\nRates (Hz)")
+
+        if not only_test_layout:
+            writer.renderers.append(flr)
+
+        # ------------------------------------------------------------------------------ #
+        # raster plot
+        # ------------------------------------------------------------------------------ #
+
+        ax = fig.add_subplot(gs[row, 1])
+
+        ph.plot_raster(h5f=h5f, ax=ax)
+
+        ax.set_xlabel("")
+        ax.set_ylabel("")
+
+        # if row == 0:
+            # sns.despine(ax=ax, right=True, top=True, left=True, bottom=True)
+            # ax.xaxis.set_visible(False)
+            # ax.tick_params(left=False, labelleft=False)
+        # else:
+        sns.despine(ax=ax, right=True, top=True, left=True, bottom=True, offset=1)
+        ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(30.0))
+        ax.xaxis.set_minor_locator(matplotlib.ticker.NullLocator())
+        ax.tick_params(left=False, labelleft=False, bottom=False)
+        ax.set_xlabel("Time (seconds)")
+
+        axis_to_data = ax.transAxes + ax.transData.inverted()
+        ti_y_pos = -0.05
+        ti_y_pos = axis_to_data.transform([1, ti_y_pos])[1]
+        ti = ax.plot([0], [ti_y_pos], marker="^", markersize=3, color="white", clip_on=False)[
+            0
+        ]
+
+        writer.renderers.append(
+            MovingWindowRenderer(
+                ax=ax,
+                tbeg=writer.tbeg,
+                tend=writer.tend,
+                window_from=window_from,
+                window_to=window_to,
+                time_indicator=ti.set_xdata,
+            )
+        )
+
+    # ------------------------------------------------------------------------------ #
+    # Finalize and movie loop
+    # ------------------------------------------------------------------------------ #
+
+    # fig.text(0.81, 0.48, "Raster", fontsize=8, ha="right")
+    # fig.text(0.83, 0.435, "Firing\nRates (Hz)", fontsize=8, ha="right")
+    # fig.text(0.83, 0.915, "Firing\nRates (Hz)", fontsize=8, ha="right")
+
+    fig.text(0.04, 0.22, "High Noise", fontweight="bold", fontsize=8, ha="center", rotation=90)
+    fig.text(0.04, 0.72, "Low Noise", fontweight="bold", fontsize=8, ha="center", rotation=90)
+
+
+    if title is not None:
+        fig.text(0.19, 0.95, title, fontsize=8, ha="center", va="top")
+
+    if show_time:
+        writer.renderers.append(TextRenderer(fig.text(0.45, 0.8, "Time", fontsize=8)))
+
+    fig.tight_layout()
+
+    if only_test_layout:
+        for r in writer.renderers:
+            r.set_time(tbeg + (tend - tbeg) / 2)
+        fig.savefig(f'{output_path.replace(".mp4", ".png")}', dpi=300)
+    else:
+        writer.render()
 
 if __name__ == "__main__":
     main()
