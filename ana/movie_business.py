@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-01-24 13:43:39
-# @Last Modified: 2022-04-14 18:00:49
+# @Last Modified: 2022-06-01 10:45:25
 # ------------------------------------------------------------------------------- #
 # Create a movie of the network for a given time range and visualize
 # firing neurons. Saves to mp4.
@@ -68,7 +68,7 @@ class MovieWriter(object):
         kwargs = kwargs.copy()
         kwargs.setdefault(
             "metadata",
-            dict(title="Plot movie", artist="Matplotlib", comment="Yikes! Spikes!"),
+            dict(title="Noise-driven control of synchrony", artist="Matplotlib", comment="Yikes! Spikes!"),
         )
 
         os.makedirs(os.path.dirname(output_path), exist_ok=True)

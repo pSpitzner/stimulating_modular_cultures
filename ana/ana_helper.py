@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2022-05-13 16:02:01
+# @Last Modified: 2022-06-02 18:13:00
 # ------------------------------------------------------------------------------ #
 # Here we collect all functions for importing and analyzing the data.
 # A central idea is that for every simulated/experimental trial, we have a
@@ -31,7 +31,7 @@ import pandas as pd
 import networkx as nx
 
 import hi5 as h5
-from addict import Dict
+
 from benedict import benedict
 from tqdm import tqdm
 from itertools import permutations

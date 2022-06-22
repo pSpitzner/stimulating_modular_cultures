@@ -497,8 +497,8 @@ def comparison_simulation(
     # fig.text(0.83, 0.435, "Firing\nRates (Hz)", fontsize=8, ha="right")
     # fig.text(0.83, 0.915, "Firing\nRates (Hz)", fontsize=8, ha="right")
 
-    fig.text(0.04, 0.22, "High Noise", fontweight="bold", fontsize=8, ha="center", rotation=90)
-    fig.text(0.04, 0.72, "Low Noise", fontweight="bold", fontsize=8, ha="center", rotation=90)
+    fig.text(0.04, 0.72, "Base Input", fontweight="bold", fontsize=8, ha="center", rotation=90)
+    fig.text(0.04, 0.18, "Increased Input", fontweight="bold", fontsize=8, ha="center", rotation=90)
 
 
     if title is not None:
