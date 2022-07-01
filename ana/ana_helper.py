@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2022-06-02 18:13:00
+# @Last Modified: 2022-07-01 13:36:21
 # ------------------------------------------------------------------------------ #
 # Here we collect all functions for importing and analyzing the data.
 # A central idea is that for every simulated/experimental trial, we have a
@@ -42,6 +42,7 @@ import warnings
 logging.basicConfig(level=logging.INFO, format="%(levelname)-8s [%(name)s] %(message)s")
 log = logging.getLogger(__name__)
 warnings.filterwarnings("ignore")  # suppress numpy warnings
+
 
 try:
     from numba import jit, prange
@@ -322,6 +323,27 @@ def load_experimental_files(path_prefix, condition="1_pre_"):
         # log.exception(e)
 
     return prepare_file(h5f)
+
+
+def prepare_minimal(spikes):
+    """
+    Wrapper to create the bare minimum of needed attributes from an array of spiketimes.
+    For now assuming the 2d nan-padded format.
+
+    # Example
+    ```
+    ph.overview_dynamic(ah.prepare_minimal(foo))
+    ```
+    """
+
+    h5f = benedict()
+    num_n = spikes.shape[0]
+    h5f["meta.topology_num_neur"] = num_n
+    h5f["data.spiketimes"] = spikes
+    h5f["data.neuron_module_id"] = np.zeros(num_n, dtype=int)
+
+    prepare_file(h5f);
+    return h5f
 
 
 def nx_graph_from_connectivity_matrix(h5f):
