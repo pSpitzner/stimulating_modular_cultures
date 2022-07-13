@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2022-07-13 12:43:22
+# @Last Modified: 2022-07-13 12:53:42
 # ------------------------------------------------------------------------------ #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into a single file, containing high-dimensional arrays.
@@ -389,8 +389,11 @@ def all_in_one(candidate=None):
     # ------------------------------------------------------------------------------ #
     # out degrees
     # ------------------------------------------------------------------------------ #
-
-    b_ids = h5f["data.neuron_bridge_ids"][:]
+    try:
+        b_ids = h5f["data.neuron_bridge_ids"][:]
+    except:
+        # merged topo has no bridge ids
+        b_ids = np.array([], dtype="int")
     nb_ids = np.isin(h5f["ana.neuron_ids"], b_ids, invert=True)
 
     bin_edges = np.arange(0, 161) - 0.5 # no self-cupling was allowed
