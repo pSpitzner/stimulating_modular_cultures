@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2022-05-13 16:38:51
+# @Last Modified: 2022-07-13 12:43:22
 # ------------------------------------------------------------------------------ #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into a single file, containing high-dimensional arrays.
@@ -138,6 +138,13 @@ def all_in_one(candidate=None):
 
         res["vec_sys_hbins_resource_dist"] = 101
         res["vec_sys_hvals_resource_dist"] = 100
+
+        # integer histograms of out degrees, max k_out is num_neurons, 160
+        res["vec_sys_hbins_kout_no_bridge"] = 161
+        res["vec_sys_hvals_kout_no_bridge"] = 160
+        res["vec_sys_hbins_kout_yes_bridge"] = 161
+        res["vec_sys_hvals_kout_yes_bridge"] = 160
+
 
         # correlation coefficients, within
         # for mod in [0, 1, 2, 3]:
@@ -377,6 +384,23 @@ def all_in_one(candidate=None):
     resources = resources.flatten()
     res["sys_mean_resources_at_burst_beg"] = np.nanmean(resources)
     res["sys_std_resources_at_burst_beg"] = np.nanstd(resources)
+
+
+    # ------------------------------------------------------------------------------ #
+    # out degrees
+    # ------------------------------------------------------------------------------ #
+
+    b_ids = h5f["data.neuron_bridge_ids"][:]
+    nb_ids = np.isin(h5f["ana.neuron_ids"], b_ids, invert=True)
+
+    bin_edges = np.arange(0, 161) - 0.5 # no self-cupling was allowed
+    hist, _ =  np.histogram(h5f["data.neuron_k_out"][nb_ids], bins=bin_edges)
+    res["vec_sys_hbins_kout_no_bridge"] = bin_edges
+    res["vec_sys_hvals_kout_no_bridge"] = hist
+
+    hist, _ =  np.histogram(h5f["data.neuron_k_out"][b_ids], bins=bin_edges)
+    res["vec_sys_hbins_kout_yes_bridge"] = bin_edges
+    res["vec_sys_hvals_kout_yes_bridge"] = hist
 
     h5.close_hot(h5f)
     h5f.clear()
