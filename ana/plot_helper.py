@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2022-05-19 14:07:30
+# @Last Modified: 2022-07-14 14:26:10
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -2494,6 +2494,8 @@ def _style_legend(leg):
         leg.get_frame().set_alpha(0.9)
     except:
         log.warning("Failed to style legend")
+
+    return leg
 
 
 def _ticklabels_lin_to_log10(x, pos):

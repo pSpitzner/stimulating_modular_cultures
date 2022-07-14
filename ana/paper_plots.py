@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-11-08 17:51:24
-# @Last Modified: 2022-05-19 14:59:38
+# @Last Modified: 2022-07-14 16:21:54
 # ------------------------------------------------------------------------------ #
 # collect the functions to create figure panels here
 # ------------------------------------------------------------------------------ #
@@ -699,6 +699,10 @@ def fig_supplementary():
             "./dat/sim_partial_out_20/k=5.hdf5",
         ],
     )
+    sim_out_degrees_sampled(-1)
+    sim_out_degrees_sampled(1)
+    sim_out_degrees_sampled(5)
+    sim_out_degrees_sampled(10)
 
 
 def tables(output_folder):
@@ -2911,6 +2915,168 @@ def sim_resource_cycles(apply_formatting=True, k_list=None):
             axes[str(k)][rate] = ax
 
     return axes
+
+
+def sim_out_degrees(
+    path,
+    simulation_coordinates=reference_coordinates,
+    ax=None,
+    colors=None,
+    **kwargs,
+):
+    """Loads the ndim merged file and plot the out-degree distribution"""
+    ndims = nh.load_ndim_h5f(path)
+    # rates do not matter, we just need reps
+    if "rate" not in simulation_coordinates:
+        simulation_coordinates["rate"] = 75.0
+
+    for obs in ndims.keys():
+        for coord in simulation_coordinates.keys():
+            try:
+                ndims[obs] = ndims[obs].sel({coord: simulation_coordinates[coord]})
+            except:
+                log.debug(f"Could not select {coord}")
+
+    bin_edges = ndims["vec_sys_hbins_kout_no_bridge"][0].to_numpy()
+    x = bin_edges[0:-1] + 0.5
+
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.get_figure()
+
+    def _plot(key, **kwargs):
+        # reconstruct series of observations from histogram
+        hist = ndims[key].sum(dim="repetition").to_numpy()
+        series = []
+        for idx in range(0, len(hist)):
+            y = hist[idx]
+            series.extend([x[idx]] * int(y))
+
+        # print(series)
+
+        sns.histplot(
+            series,
+            **kwargs,
+        )
+
+    bins = np.arange(-0.5, 160.5, 4)
+
+    kwargs = dict(
+        kde=False,
+        stat="probability",
+        element="step",
+        alpha=0.25,
+        bins=bins,
+    )
+    _plot(
+        key="vec_sys_hvals_kout_no_bridge",
+        label="no bridge",
+        color="C0",
+        **kwargs,
+    )
+    _plot(
+        key="vec_sys_hvals_kout_yes_bridge",
+        color="C1",
+        label="yes bridge",
+        **kwargs,
+    )
+    ax.legend()
+
+    return ndims
+
+
+def sim_out_degrees_sampled(k_inter=5):
+    """
+    Sample realizations of the topology and plot the out-degree distribution
+    """
+
+    sys.path.append(os.path.dirname(__file__) + "/../src")
+    from topology import (
+        ModularTopology,
+        MergedTopology,
+        _get_in_degrees_by_internal_external,
+    )
+
+    res = dict(
+        k_out=[],
+        k_in_total=[],
+        k_in_internal=[],
+        k_in_external=[],
+    )
+
+    num_reps = 50
+    for rep in tqdm(range(0, num_reps)):
+        if k_inter == -1:
+            topo = MergedTopology()
+        else:
+            topo = ModularTopology(par_k_inter=k_inter)
+        res["k_out"].extend(topo.k_out)
+        res["k_in_total"].extend(topo.k_in)
+
+        try:
+            k_int, k_ext = _get_in_degrees_by_internal_external(
+                topo.aij_nested, topo.neuron_module_ids
+            )
+            res["k_in_internal"].extend(k_int)
+            res["k_in_external"].extend(k_ext)
+        except:
+            # merged topo
+            pass
+
+    fig, ax = plt.subplots()
+
+    def _plot(series, **kwargs):
+
+        sns.histplot(
+            series,
+            **kwargs,
+        )
+
+    bins = np.arange(-0.5, 160.5, 1)
+
+    kwargs = dict(
+        kde=False,
+        stat="probability",
+        element="step",
+        alpha=0.25,
+        bins=bins,
+    )
+    _plot(
+        series=res["k_in_total"],
+        color="C0",
+        label="total",
+        **kwargs,
+    )
+    _plot(
+        series=res["k_in_external"],
+        label="external",
+        color="C3",
+        linestyle=":",
+        **kwargs,
+    )
+    _plot(
+        series=res["k_in_internal"],
+        color="C1",
+        label="internal",
+        linestyle="--",
+        **kwargs,
+    )
+
+    ax.set_ylim(0, 0.25)
+    ax.set_title("merged" if k_inter == -1 else f"k={k_inter}")
+    ax.set_xlabel("Number of incoming connections")
+    ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(10))
+
+    if k_inter == -1:
+        ax.set_xlim(0, 80)
+        ph._style_legend(ax.legend())
+        cc.set_size3(ax, w=3.0*8/5, h=2.5)
+    else:
+        ax.set_xlim(0, 50)
+        cc.set_size3(ax, w=3.0, h=2.5)
+
+    return res
 
 
 # ------------------------------------------------------------------------------ #

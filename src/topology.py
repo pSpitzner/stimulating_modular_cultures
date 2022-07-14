@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-05 10:37:47
-# @Last Modified: 2021-11-17 11:06:07
+# @Last Modified: 2022-07-14 12:29:04
 # ------------------------------------------------------------------------------ #
 # Helper to load the topology from hdf5
 # ------------------------------------------------------------------------------ #
@@ -925,6 +925,19 @@ def _get_degrees(aij_nested):
         k_in[targets] += 1
 
     return k_in, k_out
+
+def _get_in_degrees_by_internal_external(aij_nested, module_ids):
+    k_internal = np.zeros(len(aij_nested), dtype="int")
+    k_external = np.zeros(len(aij_nested), dtype="int")
+    for n_id in range(0, len(aij_nested)):
+        targets = aij_nested[n_id]
+        same_mask = (module_ids[targets] == module_ids[n_id])
+        int_ids = targets[same_mask]
+        ext_ids = targets[~same_mask]
+        k_internal[int_ids] += 1
+        k_external[ext_ids] += 1
+
+    return k_internal, k_external
 
 
 def _get_degrees_from_sparse(aij_sparse):
