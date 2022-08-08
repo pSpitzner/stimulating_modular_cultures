@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2022-07-14 14:26:10
+# @Last Modified: 2022-08-08 18:00:20
 # ------------------------------------------------------------------------------ #
 # All the plotting is in here.
 #
@@ -15,12 +15,7 @@
 # fmt: off
 import os
 import sys
-import glob
-import h5py
-import argparse
 import logging
-import functools
-import re
 
 import matplotlib
 # matplotlib.rcParams['font.sans-serif'] = "Arial"
@@ -57,23 +52,22 @@ import pandas as pd
 import networkx as nx
 from tqdm import tqdm
 from brian2.units.allunits import *
+from benedict import benedict
 
-
-log = logging.getLogger(__name__)
-log.setLevel("INFO")
 sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/../ana/"))
 
-# import logisi as logisi
-# requires my python helpers https://github.com/pSpitzner/pyhelpers
-import hi5 as h5
-# from hi5 import BetterDict
-from benedict import benedict
-from addict import Dict
-import colors as cc
+# our custom modules
+from bitsandbobs import hi5 as h5
+from bitsandbobs.plt import alpha_to_solid_on_bg
 import ana_helper as ah
 
+logging.basicConfig(
+    format="%(asctime)s | %(levelname)-8s | %(name)-12s | %(message)s",
+    datefmt="%y-%m-%d %H:%M",
+)
+log = logging.getLogger(__name__)
+log.setLevel("WARNING")
 # fmt: on
-
 
 # ------------------------------------------------------------------------------ #
 # overview panels
@@ -325,7 +319,7 @@ def plot_raster(
         else:
             plot_kws.setdefault(
                 "color",
-                cc.alpha_to_solid_on_bg(base_color, (num_mods - m_id) / num_mods),
+                alpha_to_solid_on_bg(base_color, (num_mods - m_id) / num_mods),
             )
 
         ax.plot(
@@ -650,7 +644,7 @@ def plot_fluorescence_trace(
             except:
                 color = "black"
         else:
-            color = cc.alpha_to_solid_on_bg(base_color, (num_mods - m_id) / num_mods)
+            color = alpha_to_solid_on_bg(base_color, (num_mods - m_id) / num_mods)
 
         plot_kws.setdefault("color", color)
         plot_kws.setdefault("lw", 0.5)
@@ -1064,7 +1058,7 @@ def plot_resources_vs_activity(
             log.info(f"plotted {num_traces} cycle-traces for {mod}")
 
         else:
-            ax.plot(mod_adapt, mod_rate, alpha=1, **plot_kwargs)
+            ax.plot(mod_adapt, mod_rate, **plot_kwargs)
             # ax.scatter(mod_rate, mod_adapt, alpha=0.6, s=0.5)
 
         if apply_formatting:
@@ -1320,10 +1314,10 @@ def plot_pd_violin(df, x, y, ax=None, apply_formatting=True, split=True):
 
     palette = {
         "Off": c0,
-        "On (0)": cc.alpha_to_solid_on_bg(base=c1, alpha=0.25, bg="white"),
-        "On (0, 2)": cc.alpha_to_solid_on_bg(base=c1, alpha=0.50, bg="white"),
-        "On (0, 1, 2)": cc.alpha_to_solid_on_bg(base=c1, alpha=0.75, bg="white"),
-        "On (0, 1, 2, 3)": cc.alpha_to_solid_on_bg(base=c1, alpha=1.00, bg="white"),
+        "On (0)": alpha_to_solid_on_bg(base=c1, alpha=0.25, bg="white"),
+        "On (0, 2)": alpha_to_solid_on_bg(base=c1, alpha=0.50, bg="white"),
+        "On (0, 1, 2)": alpha_to_solid_on_bg(base=c1, alpha=0.75, bg="white"),
+        "On (0, 1, 2, 3)": alpha_to_solid_on_bg(base=c1, alpha=1.00, bg="white"),
     }
 
     order = None
@@ -1430,10 +1424,10 @@ def _stimulation_color_palette():
 
     palette = {
         "Off": c0,
-        "On (0)": cc.alpha_to_solid_on_bg(base=c1, alpha=0.25, bg="white"),
-        "On (0, 2)": cc.alpha_to_solid_on_bg(base=c1, alpha=0.50, bg="white"),
-        "On (0, 1, 2)": cc.alpha_to_solid_on_bg(base=c1, alpha=0.75, bg="white"),
-        "On (0, 1, 2, 3)": cc.alpha_to_solid_on_bg(base=c1, alpha=1.00, bg="white"),
+        "On (0)": alpha_to_solid_on_bg(base=c1, alpha=0.25, bg="white"),
+        "On (0, 2)": alpha_to_solid_on_bg(base=c1, alpha=0.50, bg="white"),
+        "On (0, 1, 2)": alpha_to_solid_on_bg(base=c1, alpha=0.75, bg="white"),
+        "On (0, 1, 2, 3)": alpha_to_solid_on_bg(base=c1, alpha=1.00, bg="white"),
     }
 
     return palette
@@ -1527,8 +1521,8 @@ def plot_comparison_rij_between_conditions_serial(
 
     fig.tight_layout()
 
-    ah.h5.close_hot(h5f_1)
-    ah.h5.close_hot(h5f_2)
+    h5.close_hot(h5f_1)
+    h5.close_hot(h5f_2)
 
     # return rij_within_1, rij_within_2
     # return rij_1, rij_2
@@ -1622,8 +1616,8 @@ def plot_comparison_rij_between_conditions_batch(
 
     fig.tight_layout()
 
-    ah.h5.close_hot(h5f_1)
-    ah.h5.close_hot(h5f_2)
+    h5.close_hot(h5f_1)
+    h5.close_hot(h5f_2)
 
     # return rij_within_1, rij_within_2
     # return rij_1, rij_2

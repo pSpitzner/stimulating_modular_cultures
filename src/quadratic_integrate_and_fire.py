@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2022-05-13 17:01:50
+# @Last Modified: 2022-08-01 11:32:01
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 and runs the simulations in brian.
@@ -78,9 +78,6 @@ rate = 80 * Hz     # rate for the poisson input (shot-noise), between 10 - 50 Hz
 jM   = 15 * mV     # shot noise (minis) strength, between 10 - 50 mV
                    # (sum of minis arriving at target neuron)
 jS = 300 * mV * mV * ms * ms  # white noise strength, via xi = dt**.5 * randn()
-
-jE = 0 * mV        # strength of external, constant current that is turned on when
-                   # stimulating optogenetically
 
 # ------------------------------------------------------------------------------ #
 # simulation parameters

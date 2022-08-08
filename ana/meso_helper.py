@@ -16,28 +16,29 @@ import matplotlib
 import numpy as np
 import pandas as pd
 import xarray as xr
+import logging
+import warnings
 from tqdm import tqdm
-
+from benedict import benedict
 import matplotlib.pyplot as plt
 
 # Cluster detection, very useful for avalanches
 from scipy.ndimage import measurements
-
 # nullclines
 from scipy.optimize import fsolve
 from scipy.integrate import odeint
 from scipy.signal import find_peaks
 
-from benedict import benedict
+# out tools
+import bitsandbobs as bnb
 import ana_helper as ah
 
-import logging
-import warnings
-
-import hi5 as h5
-
-logging.basicConfig(level=logging.INFO, format="%(levelname)-8s [%(name)s] %(message)s")
+logging.basicConfig(
+    format="%(asctime)s | %(levelname)-8s | %(name)-12s | %(message)s",
+    datefmt="%y-%m-%d %H:%M",
+)
 log = logging.getLogger(__name__)
+log.setLevel("INFO")
 warnings.filterwarnings("ignore")  # suppress numpy warnings
 
 
@@ -63,16 +64,16 @@ def prepare_file(file_path):
 
     # try meta data
     try:
-        h5f["meta.coupling"] = h5.load(file_path, "/meta/coupling")
-        h5f["meta.noise"] = h5.load(file_path, "/meta/noise")
-        h5f["meta.rep"] = h5.load(file_path, "/meta/rep")
-        h5f["meta.gating_mechanism"] = h5.load(file_path, "/meta/gating_mechanism")
+        h5f["meta.coupling"] = bnb.hi5.load(file_path, "/meta/coupling")
+        h5f["meta.noise"] = bnb.hi5.load(file_path, "/meta/noise")
+        h5f["meta.rep"] = bnb.hi5.load(file_path, "/meta/rep")
+        h5f["meta.gating_mechanism"] = bnb.hi5.load(file_path, "/meta/gating_mechanism")
     except:
         pass
 
     # we may want to plot the gates, they are saved native to hdf5, not part of
     # the dataframe
-    h5f["data.gate_history"] = h5.load(file_path, "/data/gate_history")
+    h5f["data.gate_history"] = bnb.hi5.load(file_path, "/data/gate_history")
 
     # to get many of pauls analysis working, we can pretend every module has
     # only one neuron
@@ -287,9 +288,9 @@ def _coords_from_file(candidate):
     try:
         if isinstance(candidate, str):
             # get values from meta data of hdf5 on disk
-            coupling = h5.load(candidate, "/meta/coupling")
-            noise = h5.load(candidate, "/meta/noise")
-            rep = h5.load(candidate, "/meta/rep")
+            coupling = bnb.hi5.load(candidate, "/meta/coupling")
+            noise = bnb.hi5.load(candidate, "/meta/noise")
+            rep = bnb.hi5.load(candidate, "/meta/rep")
         else:
             # already loaded as benedict
             coupling = candidate["meta.coupling"]

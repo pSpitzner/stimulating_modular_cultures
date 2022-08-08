@@ -2,46 +2,33 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-10-25 17:28:21
-# @Last Modified: 2022-05-13 21:50:51
+# @Last Modified: 2022-08-08 17:09:05
 # ------------------------------------------------------------------------------ #
-# Hard coded script to analyse experimental data
+# Analysis script that preprocesses experiments and creates dataframes to compare
+# across condtions. Plots and more detailed analysis are in `paper_plots.py`
 # ------------------------------------------------------------------------------ #
 
 import os
-import sys
 import glob
-import h5py
 import argparse
 import logging
 import warnings
-import functools
-import itertools
-import tempfile
-import psutil
-import re
 import pandas as pd
-import seaborn as sns
-
-import matplotlib as mpl
-import matplotlib.pyplot as plt
 import numpy as np
+import matplotlib.pyplot as plt
 
-# import seaborn as sns
-# import pandas as pd
-from collections import OrderedDict
-from tqdm import tqdm
-from benedict import benedict
-
-# from addict import Dict
-
+logging.basicConfig(
+    format="%(asctime)s | %(levelname)-8s | %(name)-12s | %(message)s",
+    datefmt="%y-%m-%d %H:%M",
+)
 log = logging.getLogger(__name__)
+log.setLevel("INFO")
 warnings.filterwarnings("ignore")  # suppress numpy warnings
 
-import dask_helper as dh
+# our custom modules
+import bitsandbobs as bnb
 import ana_helper as ah
 import plot_helper as ph
-import hi5 as h5
-import colors as cc
 
 # only affects simulations, as in the experiments we have only few neurons
 # per module, thus the 20% of neurons in the module are just one neuron.
@@ -91,18 +78,13 @@ def main():
     parser.add_argument(
         "-o",
         dest="output_path",
-        required=False,
+        required=True,
         help="`./dat/exp_out/`",
     )
     args = parser.parse_args()
 
-    if args.output_path is not None:
-        output_path = args.output_path
-    else:
-        if "exp" in args.etype:
-            output_path = "./dat/exp_out"
-        elif args.etype == "sim":
-            output_path = "./dat/sim_out"
+
+    output_path = args.output_path
 
     conditions = dict()
     if args.etype == "exp":
@@ -133,8 +115,8 @@ def main():
     # iterate over all combination
     # ------------------------------------------------------------------------------ #
 
-    print(f"Reading from {args.input_base}")
-    print(f"Writing to {output_path}")
+    log.info(f"Reading from {args.input_base}")
+    log.info(f"Writing to {output_path}")
 
     for layout in conditions.keys():
         dataframes = dict()
@@ -145,6 +127,8 @@ def main():
             dataframes["drij"] = []
 
         for cdx, condition in enumerate(conditions[layout]):
+            # depending on the type of experiment, we have different naming conventions
+            # where wildcards '*' should be completed
             if "exp" in args.etype:
                 input_paths = glob.glob(f"{args.input_base}/{layout}/*")
             elif args.etype == "sim":
@@ -160,7 +144,7 @@ def main():
                     f"{args.input_base}/stim=02_{layout}_jA=45.0_jG=0.0_jM=15.0_tD=20.0_rate=80.0_stimrate={condition}_rep=*.hdf5"
                 )
 
-            print(f"found {len(input_paths)} files for {layout} {condition}")
+            log.info(f"found {len(input_paths)} files for {layout} {condition}")
 
             # trials / realizations
             for path in input_paths:
@@ -168,7 +152,9 @@ def main():
                 if "sim" in args.etype:
                     trial = trial.split("rep=")[-1].split(".")[0]
 
-                print(f"\n{args.etype} {layout} {condition} {trial}\n")
+                log.info("------------")
+                log.info(f"{args.etype} {layout} {condition} {trial}")
+                log.info("------------")
 
                 # for the dataframes, we need to tidy up some labels
                 if "exp" in args.etype:
@@ -381,12 +367,12 @@ def main():
                 # ------------------------------------------------------------------------------ #
 
                 if "exp" in args.etype and save_analysed_h5f:
-                    h5.recursive_write(
+                    bnb.hi5.recursive_write(
                         filename=f"{output_path}/{layout}/{trial}/{condition}_analyzed.hdf5",
                         h5_data=h5f,
                     )
 
-                h5.close_hot()
+                bnb.hi5.close_hot()
                 del h5f
 
         # for every layout, join list of dataframes and save
@@ -397,7 +383,13 @@ def main():
                     lambda row: np.log10(row["ISI"]), axis=1
                 )
 
-        dict_of_dfs_to_hdf5(dataframes, f"{output_path}/{layout}.hdf5")
+        # for the extra simulations we append the suffix.
+        if "sim" in args.etype:
+            suffix = args.etype[3:]
+        else:
+            suffix = ""
+
+        dict_of_dfs_to_hdf5(dataframes, f"{output_path}/{layout}{suffix}.hdf5")
 
 
 # ------------------------------------------------------------------------------ #

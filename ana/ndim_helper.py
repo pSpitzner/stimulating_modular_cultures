@@ -2,32 +2,25 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-10-19 18:20:20
-# @Last Modified: 2022-04-01 19:28:43
+# @Last Modified: 2022-08-08 12:54:49
+# ------------------------------------------------------------------------------ #
+# This is essentially a poor-mans version of xarray that only exists for
+# historic reasons. Unfortunately, some of our code still needs it.
 # ------------------------------------------------------------------------------ #
 
-
-import os
-import sys
-import glob
-import h5py
-import re
-import tempfile
-import numbers
 import numpy as np
 import pandas as pd
 import xarray as xr
-
-import hi5 as h5
-from addict import Dict
-from benedict import benedict
-from tqdm import tqdm
-from itertools import permutations
-
 import logging
-import warnings
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)-8s [%(name)s] %(message)s")
+import bitsandbobs as bnb
+
+logging.basicConfig(
+    format="%(asctime)s | %(levelname)-8s | %(name)-12s | %(message)s",
+    datefmt="%y-%m-%d %H:%M",
+)
 log = logging.getLogger(__name__)
+log.setLevel("INFO")
 
 
 def custom_ndim_to_xr_dset(filename, exclude_pattern=None):
@@ -36,7 +29,7 @@ def custom_ndim_to_xr_dset(filename, exclude_pattern=None):
     This is a wrapper that constructs a conventional xarray dataset from my
     custom hdf5 file (that uses a slightly different layout than the xarray/netcdf does)
     """
-    h5f = h5.recursive_load(filename)
+    h5f = bnb.hi5.recursive_load(filename)
 
     res = dict()
     for obs in h5f["data"].keys():
@@ -74,7 +67,7 @@ def load_ndim_h5f(filename, exclude_pattern=None):
         every key of the dict is an observable and every dimension of the xarrays
         corresponds to one parameter that we investiagted (or repetitions)
     """
-    h5f = h5.recursive_load(filename)
+    h5f = bnb.hi5.recursive_load(filename)
 
     res = dict()
     for obs in h5f["data"].keys():

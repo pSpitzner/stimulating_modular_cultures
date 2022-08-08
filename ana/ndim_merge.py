@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2022-07-13 12:53:42
+# @Last Modified: 2022-08-08 12:55:17
 # ------------------------------------------------------------------------------ #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into a single file, containing high-dimensional arrays.
@@ -12,8 +12,6 @@
 # Essentially, we construct an xarray.Dataset. But when I wrote this, I did not
 # know about xarrays so this is a poormans version. The resulting file can be
 # read with the `ndim_helper` that also has a function to cast to xarray.
-# dataset
-#
 # ------------------------------------------------------------------------------ #
 
 import os

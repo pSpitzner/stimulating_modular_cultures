@@ -1,0 +1,31 @@
+# run: conda env create --file environment.yml
+name: modular_cultures
+channels:
+  - conda-forge
+dependencies:
+  - python>=3.7
+  # - anaconda
+  - dask
+  - dask-jobqueue
+  - tqdm
+  - numpy
+  - scipy
+  - h5py
+  - xarray
+  - pytables
+  - matplotlib
+  - seaborn
+  - palettable
+  - networkx
+  - brian2
+  - cython
+  - numba
+  - ipywidgets
+  - ipython
+  - jupyter
+  - jupyterlab
+  - pip
+  - pip:
+    - ipy_dict_hierarchy
+    - python-benedict
+    - git+https://github.com/pSpitzner/bitsandbobs

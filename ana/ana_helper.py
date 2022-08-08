@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2022-07-01 13:36:21
+# @Last Modified: 2022-08-02 13:19:33
 # ------------------------------------------------------------------------------ #
 # Here we collect all functions for importing and analyzing the data.
 # A central idea is that for every simulated/experimental trial, we have a
@@ -30,7 +30,7 @@ import numpy as np
 import pandas as pd
 import networkx as nx
 
-import hi5 as h5
+from bitsandbobs import hi5 as h5
 
 from benedict import benedict
 from tqdm import tqdm
