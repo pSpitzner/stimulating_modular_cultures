@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-11-08 17:51:24
-# @Last Modified: 2022-08-08 18:32:55
+# @Last Modified: 2022-08-09 18:47:32
 # ------------------------------------------------------------------------------ #
 #
 # How to read this monstosity of a file?
@@ -29,7 +29,7 @@ import pandas as pd
 import seaborn as sns
 import xarray as xr
 import palettable
-from tqdm import tqdm
+from tqdm.auto import tqdm
 from scipy import stats
 from benedict import benedict
 
@@ -152,6 +152,15 @@ colors["partial"]["20.0 Hz"] = colors["stim"]
 # ------------------------------------------------------------------------------ #
 
 def fig_1(show_time_axis=False):
+    """
+    Wrapper for Figure 1 containing
+    - an example raster plot for single-bond topology
+        at the stimulation conditions pre | stim | post
+    - an example raster plot of the single-bond controls exposed to KCl ("chemical")
+    - Trial-level "stick" plots for Functional Complexity and Event Size,
+        * comparing pre (left) vs stim (right)
+        * for optogenetic stimulation (yellow) and chemical (gray)
+    """
 
     # set the global seed once for each figure to produce consistent results, when
     # calling repeatedly.
@@ -258,6 +267,20 @@ def fig_1(show_time_axis=False):
 
 
 def fig_2(skip_plots=False):
+    """
+    Wrapper for Figure 2 containing
+    - pooled Violins that aggregate the results of all trials for
+        * observables: Event size, Correclation Coefficient, IEI, Burst-Core delay
+        * sorted by topology: single-bond | triple-bond | merged
+        * for conditions: pre | stim | post,
+    - Decomposition plots (scatter and bar) that show Correlation Coefficients
+        * sorted by the location of the neuron pairs:
+            - both targeted (yellow)
+            - both not targeted (blue)
+            - either one targeted (red)
+        * for conditions: pre (dark) vs stim (light)
+    - Trial level stick plots of FC for all topologies, 1-b, 3-b, merged
+    """
 
     # set the global seed once for each figure to produce consistent results, when
     # calling repeatedly.
@@ -279,6 +302,13 @@ def fig_2(skip_plots=False):
 
 
 def fig_3(pd_path=None, raw_paths=None, out_suffix=""):
+    """
+    Wrapper for Figure 3 on Simulations containing
+    - pooled Violins that aggregate the results of all trials for
+        * Event size and Correlation Coefficient
+        * at 0Hz vs 20Hz additional stimulation in targeted modules (on top of 80Hz baseline)
+    - Decomposition plots (scatter and bar) anaologous to Figure 2
+    """
 
     # set the global seed once for each figure to produce consistent results, when
     # calling repeatedly.
@@ -329,7 +359,7 @@ def fig_3(pd_path=None, raw_paths=None, out_suffix=""):
         palette=colors["partial"],
     )
     apply_formatting(ax)
-    ax.set_xlabel("Burst size")
+    ax.set_xlabel("Event size")
     ax.get_figure().savefig(f"{p_fo}/sim_partial_violins_fraction{osx}.pdf", dpi=300)
 
     log.info("")
@@ -403,11 +433,172 @@ def fig_3(pd_path=None, raw_paths=None, out_suffix=""):
 
 
 def fig_4(skip_rasters=True, skip_cycles=True, style_for_sm=True):
+    """
+    Wrapper for Figure 4 (extended) on Simulations containing
+    - As a function of increasing Synaptic Noise Rate:
+        * For k=5, the "Fraction of events that span"
+            across 4 (dark), 3, 2, or only 1 modules (light)
+        * For k=1 (lightest), k=5, k=10 and merged (darkest)
+            - Mean Event size (Fraction of neurons that contribute to the event)
+            - Mean Correlation Coefficient (neuron pairs)
+            - Median and Mean rij (module pairs)
+            - Functional Complexity
+            - Average Number of spikes each neuron fired during a detected event
+            - Inter-event interval
+            - Core delay (the delay between the time points of each involved
+                modules maximum firing rate)
+            - The average amount of synaptic resources at the time of the starting
+                of the bursting event
+    - Optionally, example raster plots
+        * A sketch of the topology
+        * Population-level rates in Hz (top)
+        * Raster, color coded by module
+        * Module-level synaptic resources available (bottom)
+        * A zoomin of the raster of a single bursting event (right)
+        Sorted by
+            - the number of connections between modules (k)
+            - and the "Synaptic Noise Rate" - a Poisson input provided to all neurons.
+    - Optionally, charge-discharge cycles for the examples in the raster plots.
+
+    """
 
     # set the global seed once for each figure to produce consistent results, when
     # calling repeatedly.
     # many panels rely on bootstrapping and drawing random samples
     np.random.seed(814)
+
+
+    # ------------------------------------------------------------------------------ #
+    # Number of modules over which bursts / events extend
+    # ------------------------------------------------------------------------------ #
+
+    cs = reference_coordinates.copy()
+    cs["k_inter"] = 5
+
+    ax = sim_modules_participating_in_bursts(
+        input_path=f"{p_sim}/lif/processed/ndim.hdf5",
+        simulation_coordinates=cs,
+        xlim_for_points=[65, 100],
+        xlim_for_fill=[65, 100],
+        drop_zero_len=True,
+    )
+    cc.set_size(ax, 3.5, 2.0)
+    if show_legend:
+        ax.legend(loc="lower left", ncol=1, frameon=False, handletextpad=0.01, fontsize=6)
+    ax.get_figure().savefig(f"{p_fo}/sim_fractions.pdf", dpi=300)
+
+    # ------------------------------------------------------------------------------ #
+    # observables vs noise for differen k
+    # this is also creates supplementary panels
+    # ------------------------------------------------------------------------------ #
+
+    unit_observables = [
+        "sys_mean_participating_fraction",
+        "sys_mean_correlation",
+        "sys_functional_complexity",
+        "mod_mean_correlation",
+        "mod_median_correlation",
+    ]
+    observables = unit_observables + [
+        "any_num_spikes_in_bursts",
+        # "sys_median_any_ibis",
+        "sys_mean_any_ibis",
+        # testing order parameters
+        # "sys_orderpar_fano_neuron",
+        # "sys_orderpar_fano_population",
+        # "sys_orderpar_baseline_neuron",
+        # "sys_orderpar_baseline_population",
+        "sys_mean_core_delay",
+        "sys_mean_resources_at_burst_beg",
+    ]
+
+    ylabels = dict()
+    ylabels["sys_mean_participating_fraction"] = "Event size"
+    ylabels["sys_mean_correlation"] = "Correlation\ncoefficient"
+    ylabels["sys_functional_complexity"] = "Functional\ncomplexity"
+    ylabels["any_num_spikes_in_bursts"] = "Spikes\nper neuron in event"
+    ylabels["sys_median_any_ibis"] = "Inter-event-interval\n(seconds)"
+    ylabels["sys_mean_any_ibis"] = "Inter-event-interval\n(seconds)"
+    ylabels["sys_orderpar_fano_neuron"] = "fano neuron"
+    ylabels["sys_orderpar_fano_population"] = "fano population"
+    ylabels["sys_orderpar_baseline_neuron"] = "baseline neuron"
+    ylabels["sys_orderpar_baseline_population"] = "baseline population"
+    ylabels["sys_mean_core_delay"] = "Core delay (seconds)"
+    ylabels["sys_mean_resources_at_burst_beg"] = "Resources\nat event start"
+    ylabels["mod_median_correlation"] = "mod rij median"
+    ylabels["mod_mean_correlation"] = "mod rij mean"
+
+    coords = reference_coordinates.copy()
+    coords["k_inter"] = [1, 5, 10, -1]
+
+    base_colors = [
+        "#1D484F",
+        "#371D4F",
+        "#4F1D20",
+        "#4F481D",
+        "#333",
+    ]
+
+    for odx, obs in enumerate(observables):
+
+        # setup colors
+        # base_color = f"C{odx}"
+        # base_color = palettable.cartocolors.qualitative.Antique_5.hex_colors[
+        #     4 - odx
+        # ]
+        try:
+            base_color = base_colors[odx]
+            assert False  # we decided against colors
+        except:
+            base_color = "#333"
+        clrs = dict()
+        for kdx, k in enumerate([1, 5, 10, -1]):
+            clrs[k] = cc.alpha_to_solid_on_bg(base_color, cc.fade(kdx, 4, invert=True))
+
+        ax = sim_obs_vs_noise_for_all_k(
+            observable=obs,
+            path=f"{p_sim}/lif/processed/ndim.hdf5",
+            simulation_coordinates=coords,
+            colors=clrs,
+            clip_on=False if obs in unit_observables else True,
+        )
+        ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(10))
+        ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(5))
+        ax.set_xlim(62.5, 112.5)
+        if obs in unit_observables:
+            ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
+            ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
+            ax.set_ylim(0, 1.0)
+
+        if obs in ["sys_median_any_ibis", "sys_mean_any_ibis"]:
+            ax.set_ylim(0, 70)
+        if obs == "any_num_spikes_in_bursts":
+            ax.set_ylim(0, 10)
+        if "sys_orderpar_baseline" in obs:
+            ax.set_ylim(0, 1.05)
+        if "sys_orderpar_fano" in obs:
+            ax.set_ylim(0, 0.1)
+        if obs == "sys_mean_core_delay":
+            ax.set_ylim(0, None)
+
+        if show_ylabel:
+            ax.set_ylabel(ylabels[obs])
+        if obs in [
+            "sys_mean_any_ibis",
+            "sys_mean_core_delay",
+            "any_num_spikes_in_bursts",
+            "sys_mean_resources_at_burst_beg",
+        ]:
+            # these guys only go to the supplemental material
+            cc.set_size(ax, 3.5, 2.5)
+        else:
+            cc.set_size(ax, 2.5, 1.8)
+
+        if show_legend:
+            leg = ax.legend(ncol=1, handletextpad=0.01, fontsize=6)
+            cc.apply_default_legend_style(leg)
+
+        ax.get_figure().savefig(f"{p_fo}/sim_ksweep_{obs}.pdf", dpi=300)
 
     # ------------------------------------------------------------------------------ #
     # raster plots
@@ -587,130 +778,138 @@ def fig_4(skip_rasters=True, skip_cycles=True, style_for_sm=True):
                     transparent=False,
                 )
 
-    # ------------------------------------------------------------------------------ #
-    # Number of modules over which bursts / events extend
-    # ------------------------------------------------------------------------------ #
 
-    cs = reference_coordinates.copy()
-    cs["k_inter"] = 5
 
-    ax = sim_modules_participating_in_bursts(
-        input_path=f"{p_sim}/lif/processed/ndim.hdf5",
-        simulation_coordinates=cs,
-        xlim_for_points=[65, 100],
-        xlim_for_fill=[65, 100],
-        drop_zero_len=True,
-    )
-    cc.set_size(ax, 3.5, 2.0)
-    ax.get_figure().savefig(f"{p_fo}/sim_fractions.pdf", dpi=300)
+
+def fig_5(
+    dset=None,
+    rep_path="./dat/meso_in",
+    out_path="{p_fo}/meso_gates_on",
+    skip_snapshots=False,
+    skip_cycles=False,
+    skip_observables=False,
+    zoom_times=None,
+):
 
     # ------------------------------------------------------------------------------ #
-    # observables vs noise for differen k
-    # this is also creates supplementary panels
+    # Observables changing as a function of input
     # ------------------------------------------------------------------------------ #
 
-    unit_observables = [
-        "sys_mean_participating_fraction",
-        "sys_mean_correlation",
-        "sys_functional_complexity",
-        "mod_mean_correlation",
-        "mod_median_correlation",
-    ]
-    observables = unit_observables + [
-        "any_num_spikes_in_bursts",
-        # "sys_median_any_ibis",
-        "sys_mean_any_ibis",
-        # testing order parameters
-        # "sys_orderpar_fano_neuron",
-        # "sys_orderpar_fano_population",
-        # "sys_orderpar_baseline_neuron",
-        # "sys_orderpar_baseline_population",
-        "sys_mean_core_delay",
-        "sys_mean_resources_at_burst_beg",
-    ]
+    if not skip_observables:
+        if dset is None:
+            try:
+                dset = xr.load_dataset("./dat/meso_out/analysed.hdf5")
+            except:
+                dset = mh.process_data_from_folder("./dat/meso_in/")
+                mh.write_xr_dset_to_hdf5(dset, output_path="./dat/meso_out/analysed.hdf5")
 
-    ylabels = dict()
-    ylabels["sys_mean_participating_fraction"] = "Event size"
-    ylabels["sys_mean_correlation"] = "Correlation\ncoefficient"
-    ylabels["sys_functional_complexity"] = "Functional\ncomplexity"
-    ylabels["any_num_spikes_in_bursts"] = "Spikes\nper neuron in event"
-    ylabels["sys_median_any_ibis"] = "Inter-event-interval\n(seconds)"
-    ylabels["sys_mean_any_ibis"] = "Inter-event-interval\n(seconds)"
-    ylabels["sys_orderpar_fano_neuron"] = "fano neuron"
-    ylabels["sys_orderpar_fano_population"] = "fano population"
-    ylabels["sys_orderpar_baseline_neuron"] = "baseline neuron"
-    ylabels["sys_orderpar_baseline_population"] = "baseline population"
-    ylabels["sys_mean_core_delay"] = "Core delay (seconds)"
-    ylabels["sys_mean_resources_at_burst_beg"] = "Resources\nat event start"
-    ylabels["mod_median_correlation"] = "mod rij median"
-    ylabels["mod_mean_correlation"] = "mod rij mean"
+            # dset = dset.sel(coupling=[0.025, 0.04, 0.1])
 
-    coords = reference_coordinates.copy()
-    coords["k_inter"] = [1, 5, 10, -1]
+        ax = meso_obs_for_all_couplings(dset, "mean_correlation_coefficient")
+        ax.set_xlim(0, 0.3125)
+        sns.despine(ax=ax, offset=2)
+        cc.set_size(ax, w=3.0, h=1.41)
+        ax.get_figure().savefig(f"{out_path}_mean_rij.pdf", dpi=300, transparent=True)
 
-    base_colors = [
-        "#1D484F",
-        "#371D4F",
-        "#4F1D20",
-        "#4F481D",
-        "#333",
-    ]
+        for c in dset["coupling"].to_numpy():
+            try:
+                ax = meso_module_contribution(dset, coupling=c)
+                if show_title:
+                    ax.set_title(f"coupling {c:.3f}")
+                    ax.get_figure().tight_layout()
+                ax.set_xlim(0, 0.3125)
+                cc.set_size(ax, w=3.0, h=1.41)
+                ax.get_figure().savefig(
+                    f"{out_path}_module_contrib_{c:.3f}.pdf", dpi=300, transparent=True
+                )
+            except:
+                log.error(f"failed for {c:3.f}")
 
-    for odx, obs in enumerate(observables):
+        ax = meso_sketch_gate_deactivation()
+        ax.get_figure().savefig(f"{out_path}_gate_sketch.pdf", dpi=300, transparent=True)
 
-        # setup colors
-        # base_color = f"C{odx}"
-        # base_color = palettable.cartocolors.qualitative.Antique_5.hex_colors[
-        #     4 - odx
-        # ]
-        try:
-            base_color = base_colors[odx]
-            assert False  # we decided against colors
-        except:
-            base_color = "#333"
-        clrs = dict()
-        for kdx, k in enumerate([1, 5, 10, -1]):
-            clrs[k] = cc.alpha_to_solid_on_bg(base_color, cc.fade(kdx, 4, invert=True))
+    # ------------------------------------------------------------------------------ #
+    # Snapshots and resource cycles use a single realization
+    # ------------------------------------------------------------------------------ #
 
-        ax = sim_obs_vs_noise_for_all_k(
-            observable=obs,
-            path=f"{p_sim}/lif/processed/ndim.hdf5",
-            simulation_coordinates=coords,
-            colors=clrs,
-            clip_on=False if obs in unit_observables else True,
-        )
-        ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(10))
-        ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(5))
-        ax.set_xlim(62.5, 112.5)
-        if obs in unit_observables:
-            ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
-            ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
-            ax.set_ylim(0, 1.0)
+    # get file path, try to use the longer time series
+    if rep_path[-1] == "/":
+        rep_path = rep_path[:-1]
+    if os.path.exists(rep_path + "_long_ts"):
+        rep_path += "_long_ts"
 
-        if obs in ["sys_median_any_ibis", "sys_mean_any_ibis"]:
-            ax.set_ylim(0, 70)
-        if obs == "any_num_spikes_in_bursts":
-            ax.set_ylim(0, 10)
-        if "sys_orderpar_baseline" in obs:
-            ax.set_ylim(0, 1.05)
-        if "sys_orderpar_fano" in obs:
-            ax.set_ylim(0, 0.1)
-        if obs == "sys_mean_core_delay":
-            ax.set_ylim(0, None)
+    # for snapshots we have zoomed insets. where should they be anchored?
+    # zoom_times[coupling_float][noise_float] = start_time of zoom
+    if zoom_times is None:
+        zoom_times = benedict(keypath_separator="/")
+        zoom_times[f"0.1/0.025"] = 753
+        zoom_times[f"0.1/0.05"] = 756
+        zoom_times[f"0.025/0.025"] = 930
 
-        if show_ylabel:
-            ax.set_ylabel(ylabels[obs])
-        if obs in [
-            "sys_mean_any_ibis",
-            "sys_mean_core_delay",
-            "any_num_spikes_in_bursts",
-            "sys_mean_resources_at_burst_beg",
-        ]:
-            # these guys only go to the supplemental material
-            cc.set_size(ax, 3.5, 2.5)
-        else:
-            cc.set_size(ax, 2.5, 1.8)
-        ax.get_figure().savefig(f"{p_fo}/sim_ksweep_{obs}.pdf", dpi=300)
+    r = 0  # repetition
+    # for c in dset["coupling"].to_numpy():
+    for c in [0.1, 0.025]:
+        print(dset["noise"])
+        for n in [1, 2, 4, 6, 7]:
+
+            input_file = f"{rep_path}/coup{c:0.2f}-{r:d}/noise{n}.hdf5"
+            if not os.path.exists(input_file):
+                log.info(f"File not found {input_file}")
+                continue
+
+            coupling, noise, rep = mh._coords_from_file(input_file)
+            h5f = mh.prepare_file(input_file)
+            mh.find_system_bursts_and_module_contributions2(h5f)
+            gates = h5f["meta.gating_mechanism"]
+
+            if ("gates_on" in out_path and not gates) or (
+                "gates_off" in out_path and gates
+            ):
+                log.warning(f"out_path '{out_path}' seems to mismatch gates {gates}")
+
+            if not skip_cycles:
+                ode_coords = None
+                max_rsrc = 1.0
+                # defaults work well for low noise
+                # if noise >= 0.125:
+                #     ode_coords = np.concatenate(
+                #         (np.linspace(0, 20, 1000), np.linspace(20.01, 60, 500))
+                #     )
+                #     max_rsrc = 1.3
+
+                ax = meso_resource_cycle(h5f, ode_coords=ode_coords, max_rsrc=max_rsrc)
+                if show_title:
+                    ax.set_title(f"coupling={c:.3f}\ninput={noise:.3f}")
+                # print(f"coupling={c}, noise={noise}")
+                # cc.set_size(ax, 1.6, 1.4) # this is the size of microscopic
+                ax.set_xlim(0, 1.2)
+                ax.set_ylim(0, 15)
+                cc.set_size(ax, 1.8, 1.1)
+                ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1))
+                ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.5))
+                ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(15.0))
+                ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(5.0))
+                sns.despine(ax=ax, trim=False, offset=2)
+
+                ax.get_figure().savefig(
+                    f"{out_path}_cycles_{c:.3f}_{noise:.3f}.pdf",
+                    dpi=300,
+                    transparent=True,
+                )
+
+            if not skip_snapshots:
+                try:
+                    z = zoom_times[f"{coupling}"][f"{noise}"]
+                except:
+                    z = 950
+                fig = meso_activity_snapshot(h5f, zoom_start=z)
+                if show_title:
+                    fig.suptitle(f"coupling={c:.3f}, input={noise:.3f}", va="center")
+                fig.savefig(
+                    f"{out_path}_snapshot_{c:.3f}_{noise:.3f}.pdf",
+                    dpi=300,
+                    transparent=True,
+                )
 
 
 def fig_supplementary():
@@ -718,11 +917,44 @@ def fig_supplementary():
     wrapper to produce the panels of most supplementary figures.
     """
     sm_exp_trialwise_observables(prefix=f"{p_fo}/exp_layouts_sticks")
+    exp_pairwise_tests_for_trials(
+        observables=[
+            # "Mean Correlation",
+            # "Mean IBI",
+            "Mean Fraction", # this is the event size
+            "Functional Complexity",
+            # "Mean Core delays",
+            # "Mean Rate",
+            # "Median IBI",
+            # "Median Core delays",
+        ],
+        layouts=["1b", "3b", "merged"],
+    )
+
     sm_exp_trialwise_observables(
         prefix=f"{p_fo}/exp_layouts_sticks_only_chem",
         layouts=["KCl_1b"],
-        conditions=dict(KCl_1b=["KCl_0mM", "KCl_2mM"], draw_error_bars=False),
+        conditions=dict(
+            KCl_1b=["KCl_0mM", "KCl_2mM"],
+            # this is a hack, conditions are passed through to the stick plotter
+            draw_error_bars=False,
+        ),
     )
+    exp_pairwise_tests_for_trials(
+        observables=[
+            # "Mean Correlation",
+            # "Mean IBI",
+            "Mean Fraction", # this is the event size
+            "Functional Complexity",
+            # "Mean Core delays",
+            # "Mean Rate",
+            # "Median IBI",
+            # "Median Core delays",
+        ],
+        layouts=["1b", "3b", "merged"],
+    )
+
+
     sm_exp_bicuculline()
     fig_3(
         pd_path="./dat/sim_partial_out_20/k=5.hdf5",
@@ -730,10 +962,10 @@ def fig_supplementary():
             "./dat/sim_partial_out_20/k=5.hdf5",
         ],
     )
-    sim_out_degrees_sampled(-1)
-    sim_out_degrees_sampled(1)
-    sim_out_degrees_sampled(5)
-    sim_out_degrees_sampled(10)
+    sim_degrees_sampled(-1)
+    sim_degrees_sampled(1)
+    sim_degrees_sampled(5)
+    sim_degrees_sampled(10)
 
 
 def tables(output_folder):
@@ -796,9 +1028,15 @@ def sm_exp_trialwise_observables(
     prefix=None, layouts=None, conditions=None, draw_error_bars=True
 ):
     """
-    We can calculate estimates for every trial and see how they change within each
-    trial.
-    Also does stat. significance tests.
+    We can calculate estimates for every trial and see how they change
+    within each trial across the conditions (usually, pre  → stim → post).
+
+    Each trial is denoted by a faint purple line, averages across trials
+    are denoted as a white dot, with error bars (thick vertical lines) and
+    maximal observed values (thin vertical lines).
+
+    We used some custom settings for each observable (plot range etc),
+    so they are hidden inside the function definition.
 
     This has some overlap with fig. 1 and 2
     """
@@ -820,23 +1058,29 @@ def sm_exp_trialwise_observables(
     if prefix is None:
         prefix = f"{p_fo}/exp_layouts_sticks"
 
+    axes = []
     ax = exp_sticks_across_layouts(observable="Functional Complexity", **kwargs)
     ax.get_figure().savefig(f"{prefix}_functional_complexity.pdf", dpi=300)
+    axes.append(ax)
 
     ax = exp_sticks_across_layouts(observable="Mean Fraction", **kwargs)
     ax.set_ylabel("Mean Event size")
     ax.get_figure().savefig(f"{prefix}_mean_event_size.pdf", dpi=300)
+    axes.append(ax)
 
     ax = exp_sticks_across_layouts(observable="Mean Correlation", **kwargs)
     ax.get_figure().savefig(f"{prefix}_mean_correlation.pdf", dpi=300)
+    axes.append(ax)
 
     ax = exp_sticks_across_layouts(observable="Mean IBI", set_ylim=[0, None], **kwargs)
     ax.set_ylabel("Mean IEI (seconds)")
     ax.get_figure().savefig(f"{prefix}_mean_iei.pdf", dpi=300)
+    axes.append(ax)
 
     ax = exp_sticks_across_layouts(observable="Mean Rate", set_ylim=[0, None], **kwargs)
     ax.set_ylabel("Mean Rate (Hz)")
     ax.get_figure().savefig(f"{prefix}_mean_rate.pdf", dpi=300)
+    axes.append(ax)
 
     ax = exp_sticks_across_layouts(
         observable="Mean Core delays", set_ylim=[0, None], **kwargs
@@ -846,20 +1090,17 @@ def sm_exp_trialwise_observables(
     # sns.despine(ax=ax, bottom=True, left=False, trim=True, offset=5)
     # cc.set_size(ax, 2.2, 2)
     ax.get_figure().savefig(f"{prefix}_mean_core_delay.pdf", dpi=300)
+    axes.append(ax)
 
-    exp_pairwise_tests_for_trials(
-        observables=[
-            "Mean Correlation",
-            "Mean IBI",
-            "Mean Fraction",
-            "Functional Complexity",
-            "Mean Core delays",
-            "Mean Rate",
-            # "Median IBI",
-            # "Median Core delays",
-        ],
-        layouts=layouts,
-    )
+    if show_xlabel:
+        try:
+            # this wont get saved but never mind. mainly for the jupyter notebook
+            xlabel = " | ".join([layout for layout in layouts])
+            for ax in axes:
+                ax.set_xlabel(xlabel)
+        except:
+            pass
+
 
 
 def sm_exp_bicuculline():
@@ -954,6 +1195,8 @@ def sm_exp_number_of_cells():
     layouts = df["Layout"].unique()
     for layout in layouts:
         dfs[layout] = df.query("Layout == @layout")
+
+    print(layouts)
 
     ax = exp_sticks_across_layouts(
         observable="Num Cells",
@@ -2271,7 +2514,7 @@ def sim_obs_vs_noise_for_all_k(
 
         plot_kwargs = kwargs.copy()
         plot_kwargs.setdefault("color", colors[k])
-        plot_kwargs.setdefault("label", f"k={k}")
+        plot_kwargs.setdefault("label", f"k={k}" if k != -1 else "mrgd.")
         plot_kwargs.setdefault("fmt", "o")
         plot_kwargs.setdefault("markersize", 1.5)
         plot_kwargs.setdefault("elinewidth", 0.5)
@@ -2973,7 +3216,7 @@ def sim_out_degrees(
     colors=None,
     **kwargs,
 ):
-    """Loads the ndim merged file and plot the out-degree distribution"""
+    """Loads the ndim merged file and plot the out-degree distribution, depending on the type of neuron (bridging or not)"""
     ndims = nh.load_ndim_h5f(path)
     # rates do not matter, we just need reps
     if "rate" not in simulation_coordinates:
@@ -3035,9 +3278,9 @@ def sim_out_degrees(
     return ndims
 
 
-def sim_out_degrees_sampled(k_inter=5):
+def sim_degrees_sampled(k_inter=5, num_reps=50):
     """
-    Sample realizations of the topology and plot the out-degree distribution
+    Sample realizations of the topology and plot the in-degree distribution
     """
 
     sys.path.append(os.path.dirname(__file__) + "/../src")
@@ -3054,8 +3297,7 @@ def sim_out_degrees_sampled(k_inter=5):
         k_in_external=[],
     )
 
-    num_reps = 50
-    for rep in tqdm(range(0, num_reps)):
+    for rep in tqdm(range(0, num_reps), leave=False):
         if k_inter == -1:
             topo = MergedTopology()
         else:
@@ -3117,9 +3359,19 @@ def sim_out_degrees_sampled(k_inter=5):
     ax.set_xlabel("Number of incoming connections")
     ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(10))
 
+    if show_legend:
+        leg = ax.legend(fontsize=6)
+        cc.apply_default_legend_style(leg)
+
+    if not show_xlabel:
+        ax.set_xlabel("")
+    if not show_ylabel:
+        ax.set_ylabel("")
+    if not show_title:
+        ax.set_title("")
+
     if k_inter == -1:
         ax.set_xlim(0, 80)
-        ph._style_legend(ax.legend())
         cc.set_size(ax, w=3.0*8/5, h=2.5)
     else:
         ax.set_xlim(0, 50)
@@ -3132,136 +3384,6 @@ def sim_out_degrees_sampled(k_inter=5):
 # Mesoscopic model
 # ------------------------------------------------------------------------------ #
 
-
-def fig_5(
-    dset=None,
-    rep_path="./dat/meso_in",
-    out_path="{p_fo}/meso_gates_on",
-    skip_snapshots=False,
-    skip_cycles=False,
-    skip_observables=False,
-    zoom_times=None,
-):
-
-    # ------------------------------------------------------------------------------ #
-    # Observables changing as a function of input
-    # ------------------------------------------------------------------------------ #
-
-    if not skip_observables:
-        if dset is None:
-            try:
-                dset = xr.load_dataset("./dat/meso_out/analysed.hdf5")
-            except:
-                dset = mh.process_data_from_folder("./dat/meso_in/")
-                mh.write_xr_dset_to_hdf5(dset, output_path="./dat/meso_out/analysed.hdf5")
-
-            # dset = dset.sel(coupling=[0.025, 0.04, 0.1])
-
-        ax = meso_obs_for_all_couplings(dset, "mean_correlation_coefficient")
-        ax.set_xlim(0, 0.3125)
-        sns.despine(ax=ax, offset=2)
-        cc.set_size(ax, w=3.0, h=1.41)
-        ax.get_figure().savefig(f"{out_path}_mean_rij.pdf", dpi=300, transparent=True)
-
-        for c in dset["coupling"].to_numpy():
-            try:
-                ax = meso_module_contribution(dset, coupling=c)
-                if show_title:
-                    ax.set_title(f"coupling {c:.3f}")
-                    ax.get_figure().tight_layout()
-                ax.set_xlim(0, 0.3125)
-                cc.set_size(ax, w=3.0, h=1.41)
-                ax.get_figure().savefig(
-                    f"{out_path}_module_contrib_{c:.3f}.pdf", dpi=300, transparent=True
-                )
-            except:
-                log.error(f"failed for {c:3.f}")
-
-        ax = meso_sketch_gate_deactivation()
-        ax.get_figure().savefig(f"{out_path}_gate_sketch.pdf", dpi=300, transparent=True)
-
-    # ------------------------------------------------------------------------------ #
-    # Snapshots and resource cycles use a single realization
-    # ------------------------------------------------------------------------------ #
-
-    # get file path, try to use the longer time series
-    if rep_path[-1] == "/":
-        rep_path = rep_path[:-1]
-    if os.path.exists(rep_path + "_long_ts"):
-        rep_path += "_long_ts"
-
-    # for snapshots we have zoomed insets. where should they be anchored?
-    # zoom_times[coupling_float][noise_float] = start_time of zoom
-    if zoom_times is None:
-        zoom_times = benedict(keypath_separator="/")
-        zoom_times[f"0.1/0.025"] = 753
-        zoom_times[f"0.1/0.05"] = 756
-        zoom_times[f"0.025/0.025"] = 930
-
-    r = 0  # repetition
-    # for c in dset["coupling"].to_numpy():
-    for c in [0.1, 0.025]:
-        print(dset["noise"])
-        for n in [1, 2, 4, 6, 7]:
-
-            input_file = f"{rep_path}/coup{c:0.2f}-{r:d}/noise{n}.hdf5"
-            if not os.path.exists(input_file):
-                log.info(f"File not found {input_file}")
-                continue
-
-            coupling, noise, rep = mh._coords_from_file(input_file)
-            h5f = mh.prepare_file(input_file)
-            mh.find_system_bursts_and_module_contributions2(h5f)
-            gates = h5f["meta.gating_mechanism"]
-
-            if ("gates_on" in out_path and not gates) or (
-                "gates_off" in out_path and gates
-            ):
-                log.warning(f"out_path '{out_path}' seems to mismatch gates {gates}")
-
-            if not skip_cycles:
-                ode_coords = None
-                max_rsrc = 1.0
-                # defaults work well for low noise
-                # if noise >= 0.125:
-                #     ode_coords = np.concatenate(
-                #         (np.linspace(0, 20, 1000), np.linspace(20.01, 60, 500))
-                #     )
-                #     max_rsrc = 1.3
-
-                ax = meso_resource_cycle(h5f, ode_coords=ode_coords, max_rsrc=max_rsrc)
-                if show_title:
-                    ax.set_title(f"coupling={c:.3f}\ninput={noise:.3f}")
-                # print(f"coupling={c}, noise={noise}")
-                # cc.set_size(ax, 1.6, 1.4) # this is the size of microscopic
-                ax.set_xlim(0, 1.2)
-                ax.set_ylim(0, 15)
-                cc.set_size(ax, 1.8, 1.1)
-                ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1))
-                ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.5))
-                ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(15.0))
-                ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(5.0))
-                sns.despine(ax=ax, trim=False, offset=2)
-
-                ax.get_figure().savefig(
-                    f"{out_path}_cycles_{c:.3f}_{noise:.3f}.pdf",
-                    dpi=300,
-                    transparent=True,
-                )
-
-            if not skip_snapshots:
-                try:
-                    z = zoom_times[f"{coupling}"][f"{noise}"]
-                except:
-                    z = 950
-                fig = meso_activity_snapshot(h5f, zoom_start=z)
-                if show_title:
-                    fig.suptitle(f"coupling={c:.3f}, input={noise:.3f}", va="center")
-                fig.savefig(
-                    f"{out_path}_snapshot_{c:.3f}_{noise:.3f}.pdf",
-                    dpi=300,
-                    transparent=True,
-                )
 
 
 def meso_explore_multiple(
