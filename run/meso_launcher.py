@@ -8,14 +8,14 @@ import numpy as np
 import os
 import sys
 
-sys.path.append("./src/")
+sys.path.append(f"{os.path.dirname(os.path.realpath(__file__))}/../src/")
 import mesoscopic_model as mm
 from tqdm import tqdm
 
 # Set RNG seed and configure output folders
 rng_start_seed = 55436434
 n_trajectories = 15
-output_folder = "./dat/meso_in_new_p_yes_gates/"
+output_folder = "./dat/simulations/meso/raw_long_ts"
 
 gating_mechanism = True
 

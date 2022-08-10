@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-11-08 17:51:24
-# @Last Modified: 2022-08-09 18:47:32
+# @Last Modified: 2022-08-10 17:21:42
 # ------------------------------------------------------------------------------ #
 #
 # How to read this monstosity of a file?
@@ -781,52 +781,82 @@ def fig_4(skip_rasters=True, skip_cycles=True, style_for_sm=True):
 
 
 
-def fig_5(
+def fig_5_(
     dset=None,
-    rep_path="./dat/meso_in",
-    out_path="{p_fo}/meso_gates_on",
-    skip_snapshots=False,
-    skip_cycles=False,
-    skip_observables=False,
-    zoom_times=None,
+    out_path=f"{p_fo}/meso_gates_on",
 ):
+    """
+    Wrapper for Figure 5 (extended) on Mesoscopic model containing
+    - As a function of increasing External input h:
+        * Module-level correlation coefficients (mean)"
+            - for different coupling values (low coupling light, high coupling dark)
+            - Note that this is only loosely comparable to the rij of the neuron model
+            as those were pairwise correlations.
+        * The average number of modules that contributed in an event (like in Fig 4)
+            - one panel for each coupling value
+            - dark blue: 4 modules, ... light: 1 module
+    - A sketch of the Resrouces vs Probability to disconnect.
+
+    """
+
 
     # ------------------------------------------------------------------------------ #
     # Observables changing as a function of input
     # ------------------------------------------------------------------------------ #
 
-    if not skip_observables:
-        if dset is None:
-            try:
-                dset = xr.load_dataset("./dat/meso_out/analysed.hdf5")
-            except:
-                dset = mh.process_data_from_folder("./dat/meso_in/")
-                mh.write_xr_dset_to_hdf5(dset, output_path="./dat/meso_out/analysed.hdf5")
+    if dset is None:
+        try:
+            dset = xr.load_dataset(f"{p_sim}/meso/processed/analysed.hdf5")
+        except:
+            dset = mh.process_data_from_folder(f"{p_sim}/meso/raw/")
+            mh.write_xr_dset_to_hdf5(dset, output_path=f"{p_sim}/meso/processed/analysed.hdf5")
 
-            # dset = dset.sel(coupling=[0.025, 0.04, 0.1])
+        # dset = dset.sel(coupling=[0.025, 0.04, 0.1])
 
-        ax = meso_obs_for_all_couplings(dset, "mean_correlation_coefficient")
-        ax.set_xlim(0, 0.3125)
-        sns.despine(ax=ax, offset=2)
-        cc.set_size(ax, w=3.0, h=1.41)
-        ax.get_figure().savefig(f"{out_path}_mean_rij.pdf", dpi=300, transparent=True)
+    # since this is meso model, everything is module level. lets clean up a bit.
+    ax = meso_obs_for_all_couplings(dset, "mean_correlation_coefficient")
+    ax.set_xlabel("External input")
+    ax.set_ylabel("Module-level\ncorrelation (mean)")
 
-        for c in dset["coupling"].to_numpy():
-            try:
-                ax = meso_module_contribution(dset, coupling=c)
-                if show_title:
-                    ax.set_title(f"coupling {c:.3f}")
-                    ax.get_figure().tight_layout()
-                ax.set_xlim(0, 0.3125)
-                cc.set_size(ax, w=3.0, h=1.41)
-                ax.get_figure().savefig(
-                    f"{out_path}_module_contrib_{c:.3f}.pdf", dpi=300, transparent=True
-                )
-            except:
-                log.error(f"failed for {c:3.f}")
+    if not show_xlabel:
+        ax.set_xlabel("")
+    if not show_ylabel:
+        ax.set_ylabel("")
 
-        ax = meso_sketch_gate_deactivation()
-        ax.get_figure().savefig(f"{out_path}_gate_sketch.pdf", dpi=300, transparent=True)
+    ax.set_xlim(0, 0.3125)
+    sns.despine(ax=ax, offset=2)
+    cc.set_size(ax, w=3.0, h=1.41)
+    ax.get_figure().savefig(f"{out_path}_mean_rij.pdf", dpi=300, transparent=True)
+
+    for c in dset["coupling"].to_numpy():
+        try:
+            ax = meso_module_contribution(dset, coupling=c)
+            if show_title:
+                ax.set_title(f"coupling {c:.3f}")
+                ax.get_figure().tight_layout()
+            if show_xlabel:
+                ax.set_xlabel("External input")
+            else:
+                ax.set_xlabel("")
+            ax.set_xlim(0, 0.3125)
+            cc.set_size(ax, w=3.0, h=1.41)
+            ax.get_figure().savefig(
+                f"{out_path}_module_contrib_{c:.3f}.pdf", dpi=300, transparent=True
+            )
+        except:
+            log.error(f"failed for {c:3.f}")
+
+    ax = meso_sketch_gate_deactivation()
+    ax.get_figure().savefig(f"{out_path}_gate_sketch.pdf", dpi=300, transparent=True)
+
+def fig_5_snapshots(
+    rep_path=f"{p_sim}/meso/raw/",
+    out_path=f"{p_fo}/meso_gates_on",
+    skip_snapshots=False,
+    skip_cycles=False,
+    zoom_times=None,
+
+):
 
     # ------------------------------------------------------------------------------ #
     # Snapshots and resource cycles use a single realization
@@ -849,12 +879,11 @@ def fig_5(
     r = 0  # repetition
     # for c in dset["coupling"].to_numpy():
     for c in [0.1, 0.025]:
-        print(dset["noise"])
         for n in [1, 2, 4, 6, 7]:
 
             input_file = f"{rep_path}/coup{c:0.2f}-{r:d}/noise{n}.hdf5"
             if not os.path.exists(input_file):
-                log.info(f"File not found {input_file}")
+                log.error(f"File not found {input_file}")
                 continue
 
             coupling, noise, rep = mh._coords_from_file(input_file)
@@ -3387,7 +3416,7 @@ def sim_degrees_sampled(k_inter=5, num_reps=50):
 
 
 def meso_explore_multiple(
-    rep_path="./dat/meso_in_no_gates", out_path="{p_fo}/meso_gates_off"
+    rep_path=f"{p_sim}/meso/raw_no_gates", out_path="{p_fo}/meso_gates_off"
 ):
     """
     Run meso_launcher before and save to a custom folder.
@@ -3397,7 +3426,7 @@ def meso_explore_multiple(
     ```
     # to produce no gates sm figure:
     pp.meso_explore_multiple(
-        rep_path="./dat/meso_in_no_gates", out_path="{p_fo}/meso_gates_off"
+        rep_path=f"{p_sim}/meso/raw_no_gates", out_path="{p_fo}/meso_gates_off"
     )
     ```
 
@@ -3443,7 +3472,7 @@ def meso_obs_for_all_couplings(dset, obs, base_clr="#333", **kwargs):
     import paper_plots as pp
     import xarray as xr
 
-    dset = xr.load_dataset("./dat/meso_out/analysed.hdf5"
+    dset = xr.load_dataset(f"{p_sim}/meso/processed/analysed.hdf5"
     ax = pp.meso_obs_for_all_couplings(dset, "event_size")
     ```
     """
@@ -3459,6 +3488,7 @@ def meso_obs_for_all_couplings(dset, obs, base_clr="#333", **kwargs):
             zorder=cdx,
             **kwargs,
         )
+
     if show_legend:
         ax.legend()
 
@@ -3600,7 +3630,10 @@ def meso_resource_cycle(
 
 
 def meso_sketch_gate_deactivation(**kwargs):
-    sys.path.append("./src")
+    if f"{_p_base}/../src" not in sys.path:
+        sys.path.append(f"{_p_base}/../src")
+    # if you get an import error here, we may need to append another location for
+    # the src folder, this is a bit of a hack.
     from mesoscopic_model import probability_to_disconnect
 
     src_resources = np.arange(0.0, 1.3, 0.01)
@@ -3612,11 +3645,18 @@ def meso_sketch_gate_deactivation(**kwargs):
     ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.2))
     sns.despine(ax=ax, right=True, top=True, trim=True)
 
+    if show_xlabel:
+        ax.set_xlabel("Resources")
+
+    if show_ylabel:
+        ax.set_ylabel("Probability to disconnect")
+
     return ax
 
 
 def meso_sketch_activation_function():
-    sys.path.append("./src")
+    if f"{_p_base}/../src" not in sys.path:
+        sys.path.append(f"{_p_base}/../src")
     from mesoscopic_model import transfer_function, default_pars
 
     kwargs = dict()
@@ -3664,7 +3704,7 @@ def meso_module_contribution(dset=None, coupling=0.3):
     """
 
     if dset is None:
-        dset = xr.load_dataset("./dat/meso_out/analysed.hdf5")
+        dset = xr.load_dataset(f"{p_sim}/meso/processed/analysed.hdf5")
 
     ax = sim_modules_participating_in_bursts(
         dset,
@@ -3840,7 +3880,8 @@ def meso_explore_single(
     )
     ```
     """
-    sys.path.append("./src")
+    if f"{_p_base}/../src" not in sys.path:
+        sys.path.append(f"{_p_base}/../src")
     import mesoscopic_model as mm
     import tempfile
 
