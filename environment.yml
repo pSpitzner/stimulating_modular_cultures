@@ -24,6 +24,9 @@ dependencies:
   - ipython
   - jupyter
   - jupyterlab
+  # - pymc
+  # - theano-pymc
+  # - arviz
   - pip
   - pip:
     - ipy_dict_hierarchy

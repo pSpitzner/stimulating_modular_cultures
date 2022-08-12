@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-11-08 17:51:24
-# @Last Modified: 2022-08-10 17:21:42
+# @Last Modified: 2022-08-12 16:15:55
 # ------------------------------------------------------------------------------ #
 #
 # How to read this monstosity of a file?
@@ -998,6 +998,12 @@ def fig_supplementary():
 
 
 def tables(output_folder):
+    """
+    Wrapper to create (and save) tables of our plotted values and error bars
+    * `trials`:  trialwise observables (Fig 1)
+    * `rij`:     neuron-pair correlations (Fig 2, 3)
+    * `violins`: pooled violins (Fig 2)
+    """
 
     funcs = dict(
         trials=table_for_trials,
@@ -1005,11 +1011,14 @@ def tables(output_folder):
         violins=table_for_violins,
     )
 
+    res = dict()
+
     for key in funcs.keys():
         func = funcs[key]
         df = func()
-        # we want core delay in miliseconds
+        # add units as labels of some columns
         try:
+            # we want core delay in miliseconds
             df["Core delays (ms)"] = df["Core delays"].apply(lambda x: x * 1000)
             df = df.drop("Core delays", axis=1)
         except:
@@ -1051,6 +1060,10 @@ def tables(output_folder):
             multicolumn=True,
             float_format="{:2.2f}".format,
         )
+
+        res[key] = df
+
+    return res
 
 
 def sm_exp_trialwise_observables(
@@ -1270,12 +1283,12 @@ def table_for_violins():
     ref["simulation.conditions"] = ["0.0 Hz", "20.0 Hz"]
 
     # where are the data frames stored
-    ref["single-bond.df_path"] = "./dat/exp_out/1b.hdf5"
-    ref["tripe-bond.df_path"] = "./dat/exp_out/3b.hdf5"
-    ref["merged.df_path"] = "./dat/exp_out/merged.hdf5"
-    ref["chem.df_path"] = "./dat/exp_out/KCl_1b.hdf5"
-    ref["bic.df_path"] = "./dat/exp_out/Bicuculline_1b.hdf5"
-    ref["simulation.df_path"] = "./dat/sim_partial_out_20/k=5.hdf5"
+    ref["single-bond.df_path"] = f"{p_exp}/processed/1b.hdf5"
+    ref["tripe-bond.df_path"] = f"{p_exp}/processed/3b.hdf5"
+    ref["merged.df_path"] = f"{p_exp}/processed/merged.hdf5"
+    ref["chem.df_path"] = f"{p_exp}/processed/KCl_1b.hdf5"
+    ref["bic.df_path"] = f"{p_exp}/processed/Bicuculline_1b.hdf5"
+    ref["simulation.df_path"] = f"{p_sim}/lif/processed/k=5_partial.hdf5"
 
     # depending on the observable, we may need a different data frame and different
     # querying. so we use retreiving functions of the form
@@ -1367,20 +1380,23 @@ def table_for_trials():
     ref["simulation.conditions"] = ["0.0 Hz", "20.0 Hz"]
 
     # where are the data frames stored
-    ref["single-bond.df_path"] = "./dat/exp_out/1b.hdf5"
-    ref["tripe-bond.df_path"] = "./dat/exp_out/3b.hdf5"
-    ref["merged.df_path"] = "./dat/exp_out/merged.hdf5"
-    ref["chem.df_path"] = "./dat/exp_out/KCl_1b.hdf5"
-    ref["bic.df_path"] = "./dat/exp_out/Bicuculline_1b.hdf5"
-    ref["simulation.df_path"] = "./dat/sim_partial_out_20/k=5.hdf5"
+    ref["single-bond.df_path"] = f"{p_exp}/processed/1b.hdf5"
+    ref["tripe-bond.df_path"] = f"{p_exp}/processed/3b.hdf5"
+    ref["merged.df_path"] = f"{p_exp}/processed/merged.hdf5"
+    ref["chem.df_path"] = f"{p_exp}/processed/KCl_1b.hdf5"
+    ref["bic.df_path"] = f"{p_exp}/processed/Bicuculline_1b.hdf5"
+    ref["simulation.df_path"] = f"{p_sim}/lif/processed/k=5_partial.hdf5"
 
-    # same idea as before, but we use the trial data frame, where every row is a trial
+    # same idea as before:
+    # use retreiving functions of the form
+    # f(layout, condition) -> observable value, upper error, lower error
+    # but now we use the trial data frame, where every row is a trial
     def f(df_path, condition, observable, df_key="trials"):
         try:
             df = load_pd_hdf5(input_path=df_path, keys=df_key)
             trials = df["Trial"].unique()
             df = df.query(f"`Condition` == '{condition}'")
-            assert len(df) == len(trials)
+            assert len(df) == len(trials), "every trial present once per condition"
             mid, std, percentiles = ah.pd_bootstrap(
                 df,
                 obs=observable,
@@ -1475,10 +1491,10 @@ def table_for_rij():
     ref["simulation.conditions"] = ["0.0 Hz", "20.0 Hz"]
 
     # where are the data frames stored
-    ref["single-bond.df_path"] = "./dat/exp_out/1b.hdf5"
-    ref["tripe-bond.df_path"] = "./dat/exp_out/3b.hdf5"
-    ref["merged.df_path"] = "./dat/exp_out/merged.hdf5"
-    ref["simulation.df_path"] = "./dat/sim_partial_out_20/k=5.hdf5"
+    ref["single-bond.df_path"] = f"{p_exp}/processed/1b.hdf5"
+    ref["tripe-bond.df_path"] = f"{p_exp}/processed/3b.hdf5"
+    ref["merged.df_path"] = f"{p_exp}/processed/merged.hdf5"
+    ref["simulation.df_path"] = f"{p_sim}/lif/processed/k=5_partial.hdf5"
 
     pairings = ["within_stim", "within_nonstim", "across", "all"]
     observable = "Correlation Coefficient"
@@ -4904,6 +4920,10 @@ def _paired_sample_t_test(
     assert len(before) == len(after)
     num_samples = len(before)
 
+    # lets check that trials are ordered correctly in both frames.
+    # for the future use the newer `_filter_df_for_pairwise` function, below
+    assert np.all(before["Trial"].values == after["Trial"].values)
+
     # log.debug(f"df.describe():\n{before.describe()}\n{after.describe()}")
 
     # using shapiro test we could _reject_ the H0 that the obs are normally
@@ -4947,6 +4967,66 @@ def _paired_sample_t_test(
     if return_num_samples:
         return p_values, num_samples
     return p_values
+
+def _filter_df_for_pairwise(df, filter_col, filter_vals, pairby_col, value_col):
+    """
+
+
+    # Parameters:
+    - df : pandas dataframe
+    - filter_col : str, we search this column for `col_vals`
+    - filter_vals : list of str, values to search for
+    - pairby_col : str, this column hold the identifier by which to pair vals.
+    - value_col : str, this is the column from where we get the returned values
+
+    # Example:
+    ```
+    filter_col = "Condition"
+    filer_vals = ["pre", "stim"]
+    pairby_col = "Trial"
+    value_col = "Observable"
+    | ... | Observable | Condition  | Trial |
+    |-----|------------|------------|-------|
+    |     | 0.1        |  pre       | id_0  |
+    |     | 0.2        |  stim      | id_0  |
+    |     | 1.1        |  pre       | id_1  |
+    |     | 1.2        |  stim      | id_1  |
+    |     | 2.2        |  stim      | id_2  |
+    |     | 2.1        |  pre       | id_2  |
+    |-----|------------|------------|-------|
+
+    ->
+    dict(
+        pre = [0.1, 1.1, 2.1],
+        stim = [0.2, 1.2, 2.2],
+        Trial = [id_0, id_1, id_2],
+    )
+    ```
+    """
+
+    # filter
+    df0 = df.query(f"`{filter_col}` == @filter_vals[0]")
+    df1 = df.query(f"`{filter_col}` == @filter_vals[1]")
+    assert len(df0) == len(df1), "number of samples must be the same"
+    assert len(df0) == len(df0[pairby_col].unique()), "each `pairby` must be unique"
+
+    # make sure both dataframes have the same order in terms of `pairby`
+    df1.set_index(pairby_col, inplace=True)
+    df1 = df1.reindex(df0[pairby_col])
+    df1.reset_index(inplace=True)
+
+    # lets check that worked
+    assert np.all(df0[pairby_col].values == df1[pairby_col].values)
+
+    # get the values
+    res = dict()
+    res[filter_vals[0]] = df0[value_col].values
+    res[filter_vals[1]] = df1[value_col].values
+    res[pairby_col] = df1[pairby_col].values
+
+    return res
+
+
 
 
 def exp_tests_for_joint_distributions(observables=["Fraction"], dfkind=None):
@@ -5232,3 +5312,86 @@ def _p_str(p_values, alternatives=None):
             p_str += f"({p:.05f})\n"
 
     return p_str
+
+
+# ------------------------------------------------------------------------------ #
+# Bayesian testing
+# ------------------------------------------------------------------------------ #
+
+
+def exp_pairwise_best_for_trials(observables, layouts=None):
+
+    import bayesian
+    from itertools import product
+
+    # observables = ["Mean Fraction", "Mean Correlation", "Functional Complexity"]
+
+    if layouts is None:
+        layouts = ["1b", "3b", "merged", "KCl_1b", "Bicuculline_1b"]
+
+    table = pd.DataFrame(
+        columns=["layout", "kind", "N", "stat"] + observables,
+    )
+
+    # create an appendable row for each layout
+    def row(trial_df, layout, filter_vals, kind=None):
+        # well, actually we create three rows (2x hdi, 1x pd), but never mind.
+
+        if kind is None:
+            kind = "-".join(filter_vals)
+
+        for odx, obs in enumerate(tqdm(observables, desc="observables", leave=False)):
+            # create pair-wise samples for current observable from dataframe
+            pair_dict = _filter_df_for_pairwise(
+                trial_df,
+                filter_col="Condition",
+                filter_vals=filter_vals,
+                pairby_col="Trial",
+                value_col = obs,
+            )
+            num_trials = len(pair_dict["Trial"])
+
+            # init, trials should be consistent across all observables
+            if odx == 0:
+                rows = dict(
+                    layout=[layout]*3,
+                    kind=[kind]*3,
+                    N=[num_trials]*3,
+                    stat=["hdi_3%", "hdi_97%", "pd"],
+                )
+
+            # bayesian HDI for each pairwise sample
+            trace = bayesian.best_paired(
+                pair_dict[filter_vals[0]],
+                pair_dict[filter_vals[1]],
+                progressbar=False,
+            )
+            summary = bayesian.az.summary(trace)
+            rows[obs] = [
+                summary["hdi_3%"]["mean_of_diffs"],
+                summary["hdi_97%"]["mean_of_diffs"],
+                bayesian.probability_of_direction(trace.posterior["mean_of_diffs"]),
+            ]
+
+        # return dataframe consisting of the rows
+        return pd.DataFrame(rows)
+
+    for layout in tqdm(layouts, desc="layouts", leave=False):
+        dfs = load_pd_hdf5(f"{p_exp}/processed/{layout}.hdf5")
+        df = dfs["trials"]
+
+        if layout in ["1b", "3b", "merged"]:
+            table = table.append(row(df, layout, ["pre", "stim"]), ignore_index=True)
+            table = table.append(row(df, layout, ["stim", "post"]), ignore_index=True)
+            table = table.append(row(df, layout, ["pre", "post"]), ignore_index=True)
+
+        elif layout == "KCl_1b":
+            table = table.append(row(df, layout, ["KCl_0mM", "KCl_2mM"], kind="pre-stim"), ignore_index=True)
+
+        elif layout == "Bicuculline_1b":
+            table = table.append(row(df, layout, ["spon_Bic_20uM", "stim_Bic_20uM"], kind="pre-stim"), ignore_index=True)
+
+    # set multi index so its easier to read
+    table = table.set_index(["layout", "N", "kind", "stat"])
+
+    return table
