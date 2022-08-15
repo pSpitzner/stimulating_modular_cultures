@@ -127,7 +127,9 @@ def best_paired(y1, y2, **kwargs):
         # I guess here our prior is more important then when unpaired.
         # here, we operate on differences, so mu is the mean difference etc
         mu = pm.Normal(
-            f"mean_of_diffs", mu=np.mean(observed_diff), sigma=2 * np.fmax(np.std(observed_diff), 1e-5)
+            f"mean_of_diffs",
+            mu=np.mean(observed_diff),
+            sigma=2 * np.fmax(np.std(observed_diff), 1e-5),
         )
         # std = pm.Uniform(f"std_of_diffs", lower=0.01, upper=10)
         std = pm.HalfCauchy(f"std_of_diffs", beta=1)
@@ -175,9 +177,7 @@ def probability_of_direction(
         posterior_samples = posterior_samples.to_numpy()
 
     size = np.prod(posterior_samples.shape)
-    prob = (
-        np.sum(ref_func(posterior_samples, ref_val)) / size
-    )
+    prob = np.sum(ref_func(posterior_samples, ref_val)) / size
 
     if not pretty_print:
         return prob
@@ -192,5 +192,3 @@ def probability_of_direction(
         center = f"{ref_val:.2f}" if isinstance(ref_val, float) else f"{ref_val}"
 
         return f"{left} {cp} {center} {cp} {right}"
-
-

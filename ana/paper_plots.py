@@ -2,17 +2,31 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-11-08 17:51:24
-# @Last Modified: 2022-08-12 16:15:55
+# @Last Modified: 2022-08-15 11:41:43
 # ------------------------------------------------------------------------------ #
 #
-# How to read this monstosity of a file?
+# How to read / work this monstrosity of a file?
 #
-# Start at the high-level functions for compound figures, they are named `fig_x()`
-# and are placed in the beginning. From there, use your code editor to jump
-# to lower-level functions that come further down. (in vscode option/alt+click)
+# * Start at the high-level functions for compound figures, they are named `fig_x()`
+#   and are placed in the beginning. From there, use your code editor to jump
+#   to lower-level functions that come further down. (in vscode option/alt+click)
+#
+# * Take a look at the strucutre of the data frames, e.g.
+#   ```
+#   dfs = pp.load_pd_hdf5(f"{pp.p_exp}/processed/1b.hdf5")
+#   dfs["trials"]
+#   dfs["bursts"]
+#   ```
+#   Note that we refactored "Fraction" to "Event size" in the manuscript at some point,
+#   which has not been translated back into code (yet?).
+#
+# * I (tried to) prefix functions according to which part they belong to:
+#   `exp_` `sim_` `meso_` ...
+#
 # ------------------------------------------------------------------------------ #
 
 import os
+from pydoc import doc
 import sys
 import glob
 import re
@@ -55,6 +69,7 @@ warnings.filterwarnings("ignore")  # suppress numpy warnings
 # Settings
 # ------------------------------------------------------------------------------ #
 
+# this is the point in phase space (simulations) that we usually plot.
 reference_coordinates = dict()
 reference_coordinates["jA"] = 45
 reference_coordinates["jG"] = 50
@@ -294,7 +309,7 @@ def fig_2(skip_plots=False):
 
     log.debug("-------------------------")
     log.debug("Pairwise tests for trials")
-    exp_pairwise_tests_for_trials(
+    nhst_pairwise_for_trials(
         observables=[
             "Functional Complexity",
         ]
@@ -432,7 +447,7 @@ def fig_3(pd_path=None, raw_paths=None, out_suffix=""):
         fig.savefig(f"{p_fo}/sim_raster_stim_02_{pdx}{osx}.pdf", dpi=900)
 
 
-def fig_4(skip_rasters=True, skip_cycles=True, style_for_sm=True):
+def fig_4():
     """
     Wrapper for Figure 4 (extended) on Simulations containing
     - As a function of increasing Synaptic Noise Rate:
@@ -449,17 +464,6 @@ def fig_4(skip_rasters=True, skip_cycles=True, style_for_sm=True):
                 modules maximum firing rate)
             - The average amount of synaptic resources at the time of the starting
                 of the bursting event
-    - Optionally, example raster plots
-        * A sketch of the topology
-        * Population-level rates in Hz (top)
-        * Raster, color coded by module
-        * Module-level synaptic resources available (bottom)
-        * A zoomin of the raster of a single bursting event (right)
-        Sorted by
-            - the number of connections between modules (k)
-            - and the "Synaptic Noise Rate" - a Poisson input provided to all neurons.
-    - Optionally, charge-discharge cycles for the examples in the raster plots.
-
     """
 
     # set the global seed once for each figure to produce consistent results, when
@@ -600,6 +604,21 @@ def fig_4(skip_rasters=True, skip_cycles=True, style_for_sm=True):
 
         ax.get_figure().savefig(f"{p_fo}/sim_ksweep_{obs}.pdf", dpi=300)
 
+def fig_4_snapshots(skip_rasters=True, skip_cycles=True, style_for_sm=True):
+    """
+    Wrapper to create the snapshots of LIF simulations in Figure 4 and the SM.
+    - example raster plots
+        * A sketch of the topology
+        * Population-level rates in Hz (top)
+        * Raster, color coded by module
+        * Module-level synaptic resources available (bottom)
+        * A zoomin of the raster of a single bursting event (right)
+        Sorted by
+            - the number of connections between modules (k)
+            - and the "Synaptic Noise Rate" - a Poisson input provided to all neurons.
+    - charge-discharge cycles for the examples in the raster plots.
+    """
+
     # ------------------------------------------------------------------------------ #
     # raster plots
     # ------------------------------------------------------------------------------ #
@@ -647,7 +666,8 @@ def fig_4(skip_rasters=True, skip_cycles=True, style_for_sm=True):
         zooms.append(338.45)
         times.append(0)
     else:
-        # these points give roughly matching IEI across realizations
+        # these coordinates give roughly matching IEI across topologies,
+        # but we dropped them from the manuscript
         coords.append(dict(k=1, rate=75, rep=1))
         zooms.append(299.5)
         times.append(0)
@@ -777,8 +797,6 @@ def fig_4(skip_rasters=True, skip_cycles=True, style_for_sm=True):
                     f"{p_fo}/sim_resource_cycle_{k_str}_{rate}Hz.pdf",
                     transparent=False,
                 )
-
-
 
 
 def fig_5_(
@@ -946,7 +964,7 @@ def fig_supplementary():
     wrapper to produce the panels of most supplementary figures.
     """
     sm_exp_trialwise_observables(prefix=f"{p_fo}/exp_layouts_sticks")
-    exp_pairwise_tests_for_trials(
+    nhst_pairwise_for_trials(
         observables=[
             # "Mean Correlation",
             # "Mean IBI",
@@ -969,7 +987,7 @@ def fig_supplementary():
             draw_error_bars=False,
         ),
     )
-    exp_pairwise_tests_for_trials(
+    nhst_pairwise_for_trials(
         observables=[
             # "Mean Correlation",
             # "Mean IBI",
@@ -1185,7 +1203,7 @@ def sm_exp_bicuculline():
     # sns.despine(ax=ax, bottom=True, left=False, trim=True, offset=5)
     # ax.get_figure().savefig(f"{save_path}_coredelays.pdf", dpi=300)
 
-    exp_pairwise_tests_for_trials(
+    nhst_pairwise_for_trials(
         observables=[
             "Mean Correlation",
             # "Mean IBI",
@@ -1564,6 +1582,9 @@ def exp_raster_plots(
     bs_large=200 / 1000,  # width of the gaussian kernel for rate
     threshold_factor=10 / 100,  # fraction of max peak height for burst
 ):
+    """
+    Plot raster plots for a given experiment and condition. (Fig. 1)
+    """
 
     # description usable for annotating
     c_str = condition[2:]
@@ -1694,8 +1715,13 @@ def exp_raster_plots(
 
 
 def exp_chemical_vs_opto(observable="Functional Complexity", draw_error_bars=False):
-    # here we decided to not show error bars because we had few realizations
-    # and put more focus on individual trials
+    """
+    This creates the comparison between chemical and opto conditions. (Fig. 1)
+
+    We decided to not show error bars because we had few realizations for chemcical and instead put more focus
+    on individual trials by drawing them as before-after.
+    """
+
     chem = load_pd_hdf5(f"{p_exp}/processed/KCl_1b.hdf5")
     opto = load_pd_hdf5(f"{p_exp}/processed/1b.hdf5")
 
@@ -1810,6 +1836,15 @@ def exp_sticks_across_layouts(
     dfs=None,
     x_offset=0,
 ):
+    """
+    This draws stick (error-bar) plots comparing
+    `conditions` for each `layout`.
+
+    Layouts are the major grouping (left to right)
+    conditions the minor grouping (and color coded).
+
+    Trials are drawn as faint lines from one condition to the next.
+    """
     log.info(f"")
     log.info(f"# sticks for {observable}")
 
@@ -1988,6 +2023,12 @@ def exp_sticks_across_layouts(
 
 # Fig 2
 def exp_violins_for_layouts(remove_outlier_for_ibis=True, layouts=None, observables=None):
+
+    """
+    Creates our pooled violins for all (experimental) layouts.
+
+    See the `custom_violins` function for more details.
+    """
 
     if layouts is None:
         layouts = ["single-bond", "triple-bond", "merged"]
@@ -2324,7 +2365,7 @@ def sim_raster_plots(
 def sim_vs_exp_violins(**kwargs):
     dfs = dict()
     dfs["exp"] = load_pd_hdf5(f"{p_exp}/processed/1b.hdf5")
-    dfs["sim"] = load_pd_hdf5("./dat/sim_out/k=5.hdf5")
+    dfs["sim"] = load_pd_hdf5(f"{p_sim}/lif/processed/k=5.hdf5")
 
     for key in dfs["sim"].keys():
         dfs["sim"][key] = dfs["sim"][key].query(
@@ -4214,6 +4255,26 @@ def custom_violins(
     bs_estimator=np.nanmedian,
     **violin_kwargs,
 ):
+    """
+    Plot our pooled violins for a given observable.
+
+    On the left we have a Gaussian KDE using seaborns' violinplot.
+    `sns.violinplot(x=category, y=observable, data=df)`
+
+    On the right half we have a tweaked swarmplot using seaborns'
+    swarmplot.
+
+    Centre bars are error estimates from bootstrapping.
+
+    # Parameters
+    df : pandas.DataFrame
+        usually a subframe, e.g. `load_pd_hdf5()["bursts"]`
+    category : str,
+        the column in `df` that is used to group the data
+        usually `category="Condition"`
+    observable : str,
+        e.g. "Fraction"
+    """
 
     log.debug(bs_estimator)
     # log.info(f'|{"":-^75}|')
@@ -4826,9 +4887,22 @@ def _set_size(ax, w, h=None):
 # ------------------------------------------------------------------------------ #
 
 
-def exp_pairwise_tests_for_trials(observables, layouts=None):
+def nhst_pairwise_for_trials(observables, layouts=None):
+    """
+    Wrapper to do Null-Hypothesis-Significane-Testing.
+    Returns p-values for trialwise (before-after) comparison.
+
+    See also `bayesian_best_for_trials` for a bayesian ansatz.
+
+    # Parameters
+    observables : list of strings,
+        the usual candidates...
+        ["Mean Fraction", "Mean Correlation", "Functional Complexity"]
+    """
     # observables = ["Mean Fraction", "Mean Correlation", "Functional Complexity"]
     kwargs = dict(observables=observables, col="Condition", return_num_samples=True)
+
+    assert isinstance(observables, list)
 
     if layouts is None:
         layouts = ["1b", "3b", "merged", "KCl_1b", "Bicuculline_1b"]
@@ -4881,155 +4955,37 @@ def exp_pairwise_tests_for_trials(observables, layouts=None):
             )
             table = table.append(row(layout, "pre-stim", p, n), ignore_index=True)
 
+
+    # move the number of trials to the layout description
+    table["layout"] = table["layout"] + " (N=" + table["N"].map(str) + " trials)"
+    table = table.drop("N", axis=1)
+    # set multi index so its easier to read
+    table = table.set_index(["layout", "kind"])
+
     return table
 
-
-def _paired_sample_t_test(
-    df, col, col_vals, observables=None, alternatives=None, return_num_samples=False
-):
+def nhst_joint_distributions(observables=["Fraction"], dfkind=None, layouts=None):
     """
+    For our violin plots, we pooled together bursts and correlation coefficients across all trials.
+
+    This assumes observations are not paired (a burst in one
+    trial does not occur in another trial with the same culture).
+
+    Yet, observables may be dependent (correlation coefficients) or independent (burst size).
+
     # Parameters
-    df : dataframe, each row an observable estimated over a whole trial (e.g. mean ibi)
-    col : str, column label in which to check the `col_vals`
-    observables : list
-    alternatives : dict mapping observables to the alternative hypothesis:
-        values can be "less", "greater", "two-sided"
-
-    # Assumptions
-    - dependent variable is continuous
-        here: e.g. burst size or corr. coefficients.
-    - observarions are independent
-        here: observartions correspond to trials, measured independently.
-    - dependent variable should be normally distributed.
-        here: when using an observed variable in a trial, e.g. burst size,
-        the we look at the mean of means (or mean of medians),
-        hence central limit theorem applies.
-        Does not hold for functional complexity, though.
-    - no significant outliers
-
+    observables : list of str,
+        Note: this uses different data frames than nhst_pairwise
+        and observables may be named differently.
+        ["Fraction", "Correlation Coefficient"]
+    layouts: list of str,
+        the layouts to use. We abuse this argument to also detect
+        whether this is from a simulation or an experiment
+        (loading the correct data frame and passing the right
+        conditions.)
+        ["1b", "3b", "merged"] (experiment)
+        ["k=5"] (simulation)
     """
-
-    assert len(col_vals) == 2
-
-    # make sure we only have rows where the column values are relevant
-    # df = df.query(f"`{col}` == @col_vals")
-
-    # we want to do a pairwise test, where a pair is before vs after in col_vals
-    before = df.query(f"`{col}` == @col_vals[0]")
-    after = df.query(f"`{col}` == @col_vals[1]")
-    assert len(before) == len(after)
-    num_samples = len(before)
-
-    # lets check that trials are ordered correctly in both frames.
-    # for the future use the newer `_filter_df_for_pairwise` function, below
-    assert np.all(before["Trial"].values == after["Trial"].values)
-
-    # log.debug(f"df.describe():\n{before.describe()}\n{after.describe()}")
-
-    # using shapiro test we could _reject_ the H0 that the obs are normally
-    # distributed
-    # print(stats.shapiro(before[observable]))
-
-    # focus on numeric values and do the test for selected observables
-    if observables is None:
-        before = before.select_dtypes(include="number")
-        after = after.select_dtypes(include="number")
-        observables = list(before.columns)
-
-    if alternatives is None:
-        alternatives = {obs: "two-sided" for obs in observables}
-    elif isinstance(alternatives, str):
-        alternatives = {obs: alternatives for obs in observables}
-
-    p_values = dict()
-
-    # H0 that two related and repeated samples have identical expectation value
-    for obs in observables:
-        alternative = alternatives[obs]
-        if alternative == "one-sided":
-            alternative = "two-sided"
-        ttest = stats.ttest_rel(before[obs], after[obs], alternative=alternative)
-        p = ttest.pvalue
-
-        # this is a lazy workaround so we do not need to specify in which direction
-        # our alternative hypothesis goes - since this will be different for
-        # any of the passed observables!
-        if alternatives[obs] == "one-sided":
-            p /= 2.0
-
-        p_values[obs] = p
-
-    log.info(
-        f"paired_sample_t_test for {col_vals}, {len(before)} samples."
-        f" p_values:\n{_p_str(p_values, alternatives)}"
-    )
-
-    if return_num_samples:
-        return p_values, num_samples
-    return p_values
-
-def _filter_df_for_pairwise(df, filter_col, filter_vals, pairby_col, value_col):
-    """
-
-
-    # Parameters:
-    - df : pandas dataframe
-    - filter_col : str, we search this column for `col_vals`
-    - filter_vals : list of str, values to search for
-    - pairby_col : str, this column hold the identifier by which to pair vals.
-    - value_col : str, this is the column from where we get the returned values
-
-    # Example:
-    ```
-    filter_col = "Condition"
-    filer_vals = ["pre", "stim"]
-    pairby_col = "Trial"
-    value_col = "Observable"
-    | ... | Observable | Condition  | Trial |
-    |-----|------------|------------|-------|
-    |     | 0.1        |  pre       | id_0  |
-    |     | 0.2        |  stim      | id_0  |
-    |     | 1.1        |  pre       | id_1  |
-    |     | 1.2        |  stim      | id_1  |
-    |     | 2.2        |  stim      | id_2  |
-    |     | 2.1        |  pre       | id_2  |
-    |-----|------------|------------|-------|
-
-    ->
-    dict(
-        pre = [0.1, 1.1, 2.1],
-        stim = [0.2, 1.2, 2.2],
-        Trial = [id_0, id_1, id_2],
-    )
-    ```
-    """
-
-    # filter
-    df0 = df.query(f"`{filter_col}` == @filter_vals[0]")
-    df1 = df.query(f"`{filter_col}` == @filter_vals[1]")
-    assert len(df0) == len(df1), "number of samples must be the same"
-    assert len(df0) == len(df0[pairby_col].unique()), "each `pairby` must be unique"
-
-    # make sure both dataframes have the same order in terms of `pairby`
-    df1.set_index(pairby_col, inplace=True)
-    df1 = df1.reindex(df0[pairby_col])
-    df1.reset_index(inplace=True)
-
-    # lets check that worked
-    assert np.all(df0[pairby_col].values == df1[pairby_col].values)
-
-    # get the values
-    res = dict()
-    res[filter_vals[0]] = df0[value_col].values
-    res[filter_vals[1]] = df1[value_col].values
-    res[pairby_col] = df1[pairby_col].values
-
-    return res
-
-
-
-
-def exp_tests_for_joint_distributions(observables=["Fraction"], dfkind=None):
 
     kwargs = dict(
         observables=observables,
@@ -5038,7 +4994,7 @@ def exp_tests_for_joint_distributions(observables=["Fraction"], dfkind=None):
 
     # depending on the observables, we may need a different dataframe.
     # make sure to provide observables that are in the same dataframe
-    # try to find the right frame
+    # okay, lets try to automatically find the right data frame
     if dfkind is None:
         if "Fraction" in observables:
             dfkind = "bursts"
@@ -5050,29 +5006,27 @@ def exp_tests_for_joint_distributions(observables=["Fraction"], dfkind=None):
     layouts = ["1b", "3b", "merged"]
     for layout in layouts:
         log.info(f"\n{layout}")
-        dfs = load_pd_hdf5(f"./dat/exp_out/{layout}.hdf5")
+        if "k=" in layout:
+            dfs = load_pd_hdf5(f"{p_sim}/lif/processed/{layout}.hdf5")
+        else:
+            dfs = load_pd_hdf5(f"{p_exp}/processed/{layout}.hdf5")
 
         # depending on dfkind, we need a different test
         if dfkind == "bursts":
-            # groups are indpenendent
-            _mann_whitney_u_test(dfs[dfkind], col_vals=["pre", "stim"], **kwargs)
-            _mann_whitney_u_test(dfs[dfkind], col_vals=["stim", "post"], **kwargs)
-            # _mann_whitney_u_test(
-            #     dfs[dfkind], col_vals=["pre", "post"], **kwargs
-            # )
-            # _kolmogorov_smirnov_test(
-            #     dfs[dfkind], col_vals=["pre", "post"], **kwargs
-            # )
+            # groups are indpenendent -> u_test
+            if "k=" in layout:
+                # simulation, need other col vals
+                _mann_whitney_u_test(dfs[dfkind], col_vals=["0.0 Hz", "20.0 Hz"], **kwargs)
+            else:
+                _mann_whitney_u_test(dfs[dfkind], col_vals=["pre", "stim"], **kwargs)
+                _mann_whitney_u_test(dfs[dfkind], col_vals=["stim", "post"], **kwargs)
         elif dfkind == "rij":
-            # groups are dependent
-            _wilcoxon_signed_rank_test(dfs[dfkind], col_vals=["pre", "stim"], **kwargs)
-            _wilcoxon_signed_rank_test(dfs[dfkind], col_vals=["stim", "post"], **kwargs)
-            # _wilcoxon_signed_rank_test(
-            #     dfs[dfkind], col_vals=["pre", "post"], **kwargs
-            # )
-            # _kolmogorov_smirnov_test(
-            #     dfs[dfkind], col_vals=["pre", "post"], **kwargs
-            # )
+            # groups are dependent  -> signed_rank
+            if "k=" in layout:
+                _wilcoxon_signed_rank_test(dfs[dfkind], col_vals=["0.0 Hz", "20.0 Hz"], **kwargs)
+            else:
+                _wilcoxon_signed_rank_test(dfs[dfkind], col_vals=["pre", "stim"], **kwargs)
+                _wilcoxon_signed_rank_test(dfs[dfkind], col_vals=["stim", "post"], **kwargs)
         else:
             raise NotImplementedError()
 
@@ -5252,44 +5206,158 @@ def _kolmogorov_smirnov_test(df, col, col_vals, observables=None):
     return p_values
 
 
-def sim_tests_stimulating_two_modules(observables=["Fraction"], dfkind=None):
+def _paired_sample_t_test(
+    df, col, col_vals, observables=None, alternatives=None, return_num_samples=False
+):
+    """
+    # Parameters
+    df : dataframe,
+        each row an observable estimated over a whole trial (e.g. mean ibi)
+    col : str,
+        column label in which to check the `col_vals`
+    observables : list
+    alternatives : dict
+        mapping observables to the alternative hypothesis.
+        values can be "less", "greater", "two-sided"
 
-    kwargs = dict(
-        observables=observables,
-        col="Condition",
+    # Assumptions
+    - dependent variable is continuous
+        here: e.g. burst size or corr. coefficients.
+    - observarions are independent
+        here: observartions correspond to trials, measured independently.
+    - dependent variable should be normally distributed.
+        here: when using an observed variable in a trial, e.g. burst size,
+        the we look at the mean of means (or mean of medians),
+        hence central limit theorem applies.
+        Does not hold for functional complexity, though.
+    - no significant outliers
+
+    """
+
+    assert len(col_vals) == 2
+
+    # make sure we only have rows where the column values are relevant
+    # df = df.query(f"`{col}` == @col_vals")
+
+    # we want to do a pairwise test, where a pair is before vs after in col_vals
+    before = df.query(f"`{col}` == @col_vals[0]")
+    after = df.query(f"`{col}` == @col_vals[1]")
+    assert len(before) == len(after)
+    num_samples = len(before)
+
+    # lets check that trials are ordered correctly in both frames.
+    # for the future use the newer `_filter_df_for_pairwise` function, below
+    assert np.all(before["Trial"].values == after["Trial"].values)
+
+    # log.debug(f"df.describe():\n{before.describe()}\n{after.describe()}")
+
+    # using shapiro test we could _reject_ the H0 that the obs are normally
+    # distributed
+    # print(stats.shapiro(before[observable]))
+
+    # focus on numeric values and do the test for selected observables
+    if observables is None:
+        before = before.select_dtypes(include="number")
+        after = after.select_dtypes(include="number")
+        observables = list(before.columns)
+
+    if alternatives is None:
+        alternatives = {obs: "two-sided" for obs in observables}
+    elif isinstance(alternatives, str):
+        alternatives = {obs: alternatives for obs in observables}
+
+    p_values = dict()
+
+    # H0 that two related and repeated samples have identical expectation value
+    for obs in observables:
+        alternative = alternatives[obs]
+        if alternative == "one-sided":
+            alternative = "two-sided"
+        ttest = stats.ttest_rel(before[obs], after[obs], alternative=alternative)
+        p = ttest.pvalue
+
+        # this is a lazy workaround so we do not need to specify in which direction
+        # our alternative hypothesis goes - since this will be different for
+        # any of the passed observables!
+        if alternatives[obs] == "one-sided":
+            p /= 2.0
+
+        p_values[obs] = p
+
+    log.info(
+        f"paired_sample_t_test for {col_vals}, {len(before)} samples."
+        f" p_values:\n{_p_str(p_values, alternatives)}"
     )
 
-    # depending on the observables, we may need a different dataframe.
-    # make sure to provide observables that are in the same dataframe
-    # try to find the right frame
-    if dfkind is None:
-        if "Fraction" in observables:
-            dfkind = "bursts"
-        elif "Correlation Coefficient":
-            dfkind = "rij"
-        else:
-            raise ValueError(f"could not determine df, provide `dfkind`")
+    if return_num_samples:
+        return p_values, num_samples
+    return p_values
 
-    layouts = ["k=5"]
-    for layout in layouts:
-        log.info(f"\n{layout}")
-        dfs = load_pd_hdf5(f"./dat/sim_partial_out_20/{layout}.hdf5")
+def _filter_df_for_pairwise(df, filter_col, filter_vals, pairby_col, value_col):
+    """
 
-        # depending on dfkind, we need a different test
-        if dfkind == "bursts":
-            # groups are indpenendent
-            _mann_whitney_u_test(dfs[dfkind], col_vals=["0.0 Hz", "20.0 Hz"], **kwargs)
-        elif dfkind == "rij":
-            # groups are dependent
-            _wilcoxon_signed_rank_test(
-                dfs[dfkind], col_vals=["0.0 Hz", "20.0 Hz"], **kwargs
-            )
-        else:
-            raise NotImplementedError()
+
+    # Parameters:
+    - df : pandas dataframe
+    - filter_col : str, we search this column for `col_vals`
+    - filter_vals : list of str, values to search for
+    - pairby_col : str, this column hold the identifier by which to pair vals.
+    - value_col : str, this is the column from where we get the returned values
+
+    # Example:
+    ```
+    filter_col = "Condition"
+    filer_vals = ["pre", "stim"]
+    pairby_col = "Trial"
+    value_col = "Observable"
+    | ... | Observable | Condition  | Trial |
+    |-----|------------|------------|-------|
+    |     | 0.1        |  pre       | id_0  |
+    |     | 0.2        |  stim      | id_0  |
+    |     | 1.1        |  pre       | id_1  |
+    |     | 1.2        |  stim      | id_1  |
+    |     | 2.2        |  stim      | id_2  |
+    |     | 2.1        |  pre       | id_2  |
+    |-----|------------|------------|-------|
+
+    ->
+    dict(
+        pre = [0.1, 1.1, 2.1],
+        stim = [0.2, 1.2, 2.2],
+        Trial = [id_0, id_1, id_2],
+    )
+    ```
+    """
+
+    # filter
+    df0 = df.query(f"`{filter_col}` == @filter_vals[0]")
+    df1 = df.query(f"`{filter_col}` == @filter_vals[1]")
+    assert len(df0) == len(df1), "number of samples must be the same"
+    assert len(df0) == len(df0[pairby_col].unique()), "each `pairby` must be unique"
+
+    # make sure both dataframes have the same order in terms of `pairby`
+    df1.set_index(pairby_col, inplace=True)
+    df1 = df1.reindex(df0[pairby_col])
+    df1.reset_index(inplace=True)
+
+    # lets check that worked
+    assert np.all(df0[pairby_col].values == df1[pairby_col].values)
+
+    # get the values
+    res = dict()
+    res[filter_vals[0]] = df0[value_col].values
+    res[filter_vals[1]] = df1[value_col].values
+    res[pairby_col] = df1[pairby_col].values
+
+    return res
+
 
 
 def _p_str(p_values, alternatives=None):
     """
+    Format p-values for printing according to some arbitrary
+    conventions someone decided would be "good".
+
     # Parameters
     p_values : dict, with observable as key and float p value
     alternaives : None or dict, mapping observables (keys of `p_values`) to the
@@ -5319,12 +5387,28 @@ def _p_str(p_values, alternatives=None):
 # ------------------------------------------------------------------------------ #
 
 
-def exp_pairwise_best_for_trials(observables, layouts=None):
+def bayesian_best_for_trials(observables, layouts=None):
+    """
+    Bayesian estimation supersedes the t-test.
+    http://doi.apa.org/getdoi.cfm?doi=10.1037/a0029146
+
+    Uses pymc to get bayesian highest density intervals (HDI) for the mean difference
+    between two conditions, and the Probability of Direction (PD), see also
+    https://doi.org/10.3389/fpsyg.2019.02767
+
+    Takes around ~10 minutes to run.
+
+    # Parameters
+    observables : list of strings,
+        the usual candidates...
+        ["Mean Fraction", "Mean Correlation", "Functional Complexity"]
+    """
 
     import bayesian
     from itertools import product
 
     # observables = ["Mean Fraction", "Mean Correlation", "Functional Complexity"]
+    assert isinstance(observables, list)
 
     if layouts is None:
         layouts = ["1b", "3b", "merged", "KCl_1b", "Bicuculline_1b"]
@@ -5364,7 +5448,10 @@ def exp_pairwise_best_for_trials(observables, layouts=None):
             trace = bayesian.best_paired(
                 pair_dict[filter_vals[0]],
                 pair_dict[filter_vals[1]],
+                # kwargs are passed to pymc.sample
                 progressbar=False,
+                tune = 2000,
+                draws = 2000,
             )
             summary = bayesian.az.summary(trace)
             rows[obs] = [
@@ -5391,7 +5478,11 @@ def exp_pairwise_best_for_trials(observables, layouts=None):
         elif layout == "Bicuculline_1b":
             table = table.append(row(df, layout, ["spon_Bic_20uM", "stim_Bic_20uM"], kind="pre-stim"), ignore_index=True)
 
+    # move the number of trials to the layout description
+    table["layout"] = table["layout"] + " (N=" + table["N"].map(str) + " trials)"
+    table = table.drop("N", axis=1)
     # set multi index so its easier to read
-    table = table.set_index(["layout", "N", "kind", "stat"])
+    table = table.set_index(["layout", "kind", "stat"])
+    # table = table.set_index(["layout", "N", "kind", "stat"])
 
     return table
