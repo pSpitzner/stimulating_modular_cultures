@@ -92,9 +92,9 @@ default_pars = dict(
 
 def simulate_model(simulation_time, **kwargs):
     """
-    Simulate the mesoscopic model up to time tf, with the given parameters.
+    Simulate the mesoscopic model with the given parameters.
 
-    #Parameters:
+    # Parameters:
     simulation_time: float
         Duration of the simulation in arbitrary units. use 1000 as a starting point
 
@@ -145,7 +145,8 @@ def simulate_model(simulation_time, **kwargs):
         Timestep of the Euler integrator (default=0.01)
 
     rseed : int, optional
-        Use a custom random seed to ensure reproducitibility. If None (default), will use whatever Numpy selects
+        Use a custom random seed to ensure reproducitibility.
+        If None (default), will use whatever Numpy selects
 
     # Returns
 

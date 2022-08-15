@@ -18,7 +18,7 @@ import pandas as pd
 import xarray as xr
 import logging
 import warnings
-from tqdm import tqdm
+from tqdm.auto import tqdm
 from benedict import benedict
 import matplotlib.pyplot as plt
 
@@ -38,7 +38,7 @@ logging.basicConfig(
     datefmt="%y-%m-%d %H:%M",
 )
 log = logging.getLogger(__name__)
-log.setLevel("INFO")
+# log.setLevel("INFO")
 warnings.filterwarnings("ignore")  # suppress numpy warnings
 
 
@@ -778,7 +778,7 @@ def plot_flow_field(
     trajects = []
     traject_lens = []
     # y0 is a 2d tuple passed to single_module_ode
-    for y0 in tqdm(initial_conditions, desc="Flow field"):
+    for y0 in tqdm(initial_conditions, desc="Flow field", leave=False):
         traj = odeint(ode_with_kwargs, y0, time_points)
         trajects.append(traj)
 
@@ -941,7 +941,7 @@ def get_stationary_solutions(input_range, time_points=None, **kwargs):
     rsrcs = []
 
     # y0 is a 2d tuple passed to single_module_ode
-    for h in tqdm(input_range):
+    for h in tqdm(input_range, desc="Stationary solutions", leave=False):
 
         # the line below sets every key in pars as default kwargs
         ode_with_kwargs = functools.partial(single_module_odes, ext_str=h, **pars)

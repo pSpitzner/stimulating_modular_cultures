@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-11-08 17:51:24
-# @Last Modified: 2022-08-15 11:41:43
+# @Last Modified: 2022-08-15 14:24:52
 # ------------------------------------------------------------------------------ #
 #
 # How to read / work this monstrosity of a file?
@@ -82,7 +82,7 @@ remove_outlier = True
 # some default file paths, relative to this file
 _p_base = os.path.dirname(os.path.realpath(__file__))
 # output path for figure panels
-p_fo =  os.path.abspath(_p_base + f"/../fig/paper/")
+p_fo = os.path.abspath(_p_base + f"/../fig/paper/")
 p_exp = os.path.abspath(_p_base + f"/../dat/experiments/")
 p_sim = os.path.abspath(_p_base + f"/../dat/simulations/")
 
@@ -165,6 +165,7 @@ colors["partial"]["20.0 Hz"] = colors["stim"]
 # ------------------------------------------------------------------------------ #
 # Whole-figure wrapper functions
 # ------------------------------------------------------------------------------ #
+
 
 def fig_1(show_time_axis=False):
     """
@@ -268,7 +269,7 @@ def fig_1(show_time_axis=False):
 
     for obs in ["Functional Complexity", "Mean Fraction"]:
         ax = exp_chemical_vs_opto(observable=obs, draw_error_bars=False)
-        cc.set_size(ax, w=1.2, h=2, l=1.2, r=.7, b=.2, t=.5)
+        cc.set_size(ax, w=1.2, h=2, l=1.2, r=0.7, b=0.2, t=0.5)
         ax.set_ylim(0, 1.0)
         ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
         ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
@@ -471,7 +472,6 @@ def fig_4():
     # many panels rely on bootstrapping and drawing random samples
     np.random.seed(814)
 
-
     # ------------------------------------------------------------------------------ #
     # Number of modules over which bursts / events extend
     # ------------------------------------------------------------------------------ #
@@ -603,6 +603,7 @@ def fig_4():
             cc.apply_default_legend_style(leg)
 
         ax.get_figure().savefig(f"{p_fo}/sim_ksweep_{obs}.pdf", dpi=300)
+
 
 def fig_4_snapshots(skip_rasters=True, skip_cycles=True, style_for_sm=True):
     """
@@ -799,7 +800,7 @@ def fig_4_snapshots(skip_rasters=True, skip_cycles=True, style_for_sm=True):
                 )
 
 
-def fig_5_(
+def fig_5(
     dset=None,
     out_path=f"{p_fo}/meso_gates_on",
 ):
@@ -817,7 +818,6 @@ def fig_5_(
 
     """
 
-
     # ------------------------------------------------------------------------------ #
     # Observables changing as a function of input
     # ------------------------------------------------------------------------------ #
@@ -827,7 +827,9 @@ def fig_5_(
             dset = xr.load_dataset(f"{p_sim}/meso/processed/analysed.hdf5")
         except:
             dset = mh.process_data_from_folder(f"{p_sim}/meso/raw/")
-            mh.write_xr_dset_to_hdf5(dset, output_path=f"{p_sim}/meso/processed/analysed.hdf5")
+            mh.write_xr_dset_to_hdf5(
+                dset, output_path=f"{p_sim}/meso/processed/analysed.hdf5"
+            )
 
         # dset = dset.sel(coupling=[0.025, 0.04, 0.1])
 
@@ -867,14 +869,30 @@ def fig_5_(
     ax = meso_sketch_gate_deactivation()
     ax.get_figure().savefig(f"{out_path}_gate_sketch.pdf", dpi=300, transparent=True)
 
+
 def fig_5_snapshots(
     rep_path=f"{p_sim}/meso/raw/",
     out_path=f"{p_fo}/meso_gates_on",
     skip_snapshots=False,
     skip_cycles=False,
     zoom_times=None,
-
 ):
+    """
+    Analogous to fig_4, we created snapshots of the time series of the mesoscopic
+    model and the resource cycles.
+
+    * Timeseries
+        - top: Global average (black) and module-level Firing rates (colored by mod)
+        - middle: state of the gates going out from each (colored) module, the colored
+            bar indicates when the gate is connected and activity can pass
+        - bottom: Available synaptic resources.
+        - right, inset: zoom of all panels at the position marked by the black dot.
+    * Cycles:
+        - uses detectied time points of bursts ending,
+        to depcit full charge-discharge repetition in the module-rate vs
+        resources plane.
+        - see also `ph.plot_resources_vs_activity`
+    """
 
     # ------------------------------------------------------------------------------ #
     # Snapshots and resource cycles use a single realization
@@ -959,16 +977,138 @@ def fig_5_snapshots(
                 )
 
 
+def fig_sm_meso_noise_and_input_flowfields():
+    """
+    Creates Suppl. Fig S7, exploring single-module dynamics in the mesoscopic model.
+
+    * 3 panels showing the stationary (infinite time) solutions in different planes.
+        - inputs go from low (blue) to medium (yellow) to high (red)
+    * Matrix of flow fields
+        - for increasting input strength h (left to right, matching colors from above)
+        - and increasing noise intensity sigma (top to bottom)
+        - gray lines indicate the trajectory a single module would _determinsitically_
+            follow if placed at a given position in phase space
+        - colored lines indicate actual trajectories, when the module is exposed
+            to permutations due to the noise.
+    """
+
+    # plot the stable points. this opens and saves the figs to disk, and gives
+    # us the used colormap + norm, so we can reuse it for the flow fields.
+    cmap, norm = meso_stationary_points()
+
+    total_width = 10.5
+    fig = plt.figure(figsize=[(total_width) / 2.54, (total_width * 0.67) / 2.54])
+    axes = []
+    gs = fig.add_gridspec(
+        nrows=3,
+        ncols=3,
+        width_ratios=[1.0] * 3,
+        height_ratios=[1.0] * 3,
+        wspace=0.1,
+        hspace=0.1,
+        left=0.15,
+        right=0.99,
+        top=0.95,
+        bottom=0.15,
+    )
+
+    axes = [[] for _ in range(3)]
+    #
+    # gridspec starts counting in top left corner
+    # high noise top, low noise bottom
+    for sdx, sigma in enumerate([0.025, 0.1, 0.2]):
+        row = sdx
+        # low input left, high input right
+        for hdx, h in enumerate([0.0, 0.1, 0.2]):
+            col = hdx
+
+            ax = fig.add_subplot(gs[row, col])
+            axes[row].append(ax)
+
+            pars = {
+                "simulation_time": 5000,
+                "ext_str": h,
+                "w0": 0.0,
+                "sigma": sigma,
+                "gating_mechanism": False,
+                "rseed": sdx * 103 + hdx,
+            }
+
+            meso_explore(
+                activity_snapshot=False,
+                ax=ax,
+                cycle_kwargs=dict(
+                    color=cmap(norm(h)),
+                    alpha=0.6,
+                ),
+                **pars,
+            )
+
+            pars.pop("simulation_time")
+            mh.plot_flow_field(
+                ax=ax, plot_kwargs=dict(alpha=1, clip_on=True, color="#bbb"), **pars
+            )
+
+            # title would show coordinate, lets do it neatly.
+            ax.set_title("")
+            txt = ""
+            txt += r"$h={h}$".format(h=h)
+            txt += "\n"
+            txt += r"$\sigma={sigma}$".format(sigma=sigma)
+            ax.text(
+                0.95,
+                0.95,
+                txt,
+                transform=ax.transAxes,
+                ha="right",
+                va="top",
+                fontweight="bold",
+                color="#666",
+                fontsize=6,
+            )
+
+            ax.set_xlim(-0.1, 1.5)
+            ax.set_ylim(-1, 15)
+            ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
+            ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.5))
+            ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(15))
+            ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(5))
+            sns.despine(ax=ax, offset=0, trim=True)
+            ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1))
+            ax.get_figure().tight_layout()
+            if row != 2 or col != 0:
+                clr = "#aaa"
+                ax.tick_params(
+                    axis="both",
+                    which="both",
+                    colors=clr,
+                    labelleft=False,
+                    labelbottom=False,
+                )
+                ax.spines["bottom"].set_color(clr)
+                ax.spines["left"].set_color(clr)
+                ax.xaxis.label.set_color(clr)
+                # we kinda do not want to show any labels,
+                # independent of the global settings
+                ax.set_xlabel("")
+                ax.set_ylabel("")
+
+    ax.get_figure().savefig(
+        f"{p_fo}/meso_noise_and_input_flowfields_combined.pdf",
+        dpi=300,
+    )
+
+
 def fig_supplementary():
     """
-    wrapper to produce the panels of most supplementary figures.
+    wrapper to produce various panels of supplementary figures.
     """
     sm_exp_trialwise_observables(prefix=f"{p_fo}/exp_layouts_sticks")
     nhst_pairwise_for_trials(
         observables=[
             # "Mean Correlation",
             # "Mean IBI",
-            "Mean Fraction", # this is the event size
+            "Mean Fraction",  # this is the event size
             "Functional Complexity",
             # "Mean Core delays",
             # "Mean Rate",
@@ -991,7 +1131,7 @@ def fig_supplementary():
         observables=[
             # "Mean Correlation",
             # "Mean IBI",
-            "Mean Fraction", # this is the event size
+            "Mean Fraction",  # this is the event size
             "Functional Complexity",
             # "Mean Core delays",
             # "Mean Rate",
@@ -1001,14 +1141,8 @@ def fig_supplementary():
         layouts=["1b", "3b", "merged"],
     )
 
-
     sm_exp_bicuculline()
-    fig_3(
-        pd_path="./dat/sim_partial_out_20/k=5.hdf5",
-        raw_paths=[
-            "./dat/sim_partial_out_20/k=5.hdf5",
-        ],
-    )
+
     sim_degrees_sampled(-1)
     sim_degrees_sampled(1)
     sim_degrees_sampled(5)
@@ -1162,7 +1296,6 @@ def sm_exp_trialwise_observables(
             pass
 
 
-
 def sm_exp_bicuculline():
     """
     violins and sticks for blocked inhibition
@@ -1174,7 +1307,7 @@ def sm_exp_bicuculline():
         draw_error_bars=False,
         hide_labels=False,
         layouts=["Bicuculline_1b"],
-        conditions=["spon_Bic_20uM", "stim_Bic_20uM"],
+        conditions=dict(Bicuculline_1b=["spon_Bic_20uM", "stim_Bic_20uM"]),
     )
     save_path = f"{p_fo}/exp_layouts_sticks_bic"
 
@@ -2164,9 +2297,7 @@ def exp_violins_for_layouts(remove_outlier_for_ibis=True, layouts=None, observab
         if show_title:
             ax.set_title(f"{layout}")
         ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.05))
-        ax.get_figure().savefig(
-            f"{p_fo}/exp_violins_core_delay_{layout}.pdf", dpi=300
-        )
+        ax.get_figure().savefig(f"{p_fo}/exp_violins_core_delay_{layout}.pdf", dpi=300)
 
     return ax
 
@@ -2356,6 +2487,13 @@ def sim_raster_plots(
             y_offset=0.05,
             markersize=1.5,
         )
+
+    # re-add labels if desired
+    if show_xlabel:
+        axes[2].set_xlabel("Time (s)")
+    if show_ylabel:
+        axes[0].set_ylabel("System\nrate (Hz)")
+        axes[2].set_ylabel("Module\nresources")
 
     bnb.hi5.close_hot()
 
@@ -3072,9 +3210,7 @@ def sim_violins_for_all_k(ax_width=4):
             apply_formatting(ax, ylim=False)
             ax.set_ylabel("Depletion rij")
             ax.set_xlabel(f"{k}")
-            ax.get_figure().savefig(
-                f"{p_fo}/sim_violins_depletion_rij_{k}.pdf", dpi=300
-            )
+            ax.get_figure().savefig(f"{p_fo}/sim_violins_depletion_rij_{k}.pdf", dpi=300)
         except:
             log.debug("depletion skipped")
 
@@ -3458,7 +3594,7 @@ def sim_degrees_sampled(k_inter=5, num_reps=50):
 
     if k_inter == -1:
         ax.set_xlim(0, 80)
-        cc.set_size(ax, w=3.0*8/5, h=2.5)
+        cc.set_size(ax, w=3.0 * 8 / 5, h=2.5)
     else:
         ax.set_xlim(0, 50)
         cc.set_size(ax, w=3.0, h=2.5)
@@ -3471,13 +3607,12 @@ def sim_degrees_sampled(k_inter=5, num_reps=50):
 # ------------------------------------------------------------------------------ #
 
 
-
-def meso_explore_multiple(
-    rep_path=f"{p_sim}/meso/raw_no_gates", out_path="{p_fo}/meso_gates_off"
+def meso_fig_5_without_gates(
+    rep_path=f"{p_sim}/meso/raw_no_gates", out_path=f"{p_fo}/meso_gates_off"
 ):
     """
+    Simply calls figure 5 with changed input / output paths.
     Run meso_launcher before and save to a custom folder.
-    Simply calls figure 5 with changed input / output paths
 
     Example
     ```
@@ -3503,18 +3638,21 @@ def meso_explore_multiple(
 
     fig_5(
         dset=dset,
+        out_path=out_path,
+    )
+
+    fig_5_snapshots(
         rep_path=rep_path,
         out_path=out_path,
         skip_snapshots=False,
         skip_cycles=False,
-        skip_observables=False,
         zoom_times=zoom_times,
     )
 
 
 def meso_obs_for_all_couplings(dset, obs, base_clr="#333", **kwargs):
     """
-    Wrapper tjat reproduces the plots of the microscopic plots ~ fig 4:
+    Wrapper that reproduces the plots of the microscopic plots ~ fig 4:
     Correlations and event size with error bars across realizations.
     Uses `meso_xr_with_errors`
 
@@ -3874,6 +4012,7 @@ def meso_activity_snapshot(
         axes[a_id].yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.5))
 
     for a_id in range(6):
+        # lets remote all labels by default
         axes[a_id].set_xlabel("")
         axes[a_id].set_ylabel("")
         try:
@@ -3891,7 +4030,8 @@ def meso_activity_snapshot(
         axes[a_id].yaxis.set_visible(False)
         sns.despine(ax=axes[a_id], left=True, bottom=True)
 
-    cc.detick(axis=axes[1].yaxis)
+    # remove ticks of the gating plot
+    axes[1].tick_params(axis="y", which="both", left=False, labelleft=False)
     sns.despine(ax=axes[1], left=True, bottom=True)
     sns.despine(ax=axes[0], left=False, bottom=True, trim=False)
 
@@ -3913,23 +4053,36 @@ def meso_activity_snapshot(
                 clip_on=False,
             )
 
+    # re-add labels if desired
+    if show_xlabel:
+        axes[2].set_xlabel("Time")
+    if show_ylabel:
+        axes[0].set_ylabel("Rate")
+        axes[1].set_ylabel("Gate")
+        axes[2].set_ylabel("Resources")
+
     bnb.hi5.close_hot()
 
     return fig
 
 
-def meso_explore_single(
+def meso_explore(
     activity_snapshot=True,
     resource_cycle=True,
-    flow_field=True,
     cycle_kwargs=dict(),
     ax=None,
     **kwargs,
 ):
     """
-    Example
+    Helper to explore parameters of the mesoscopic model.
+    kwargs are passed to the model, see `/src/mesoscopic_model.py`.
+
+    Creates a temporary file of the run and optionally plots the snapshot and
+    resource cycles.
+
+    # Example
     ```
-    pp.meso_explore_single(
+    pp.meso_explore(
         simulation_time=5000,
         ext_str=0.01,
         w0=0.01,
@@ -3971,7 +4124,7 @@ def meso_explore_single(
         cycle_kwargs.setdefault("alpha", 0.4)
         cycle_kwargs.setdefault("zorder", 1)
         cycle_kwargs.setdefault("clip_on", True)
-        cycle_kwargs.setdefault("color", "C3")
+        cycle_kwargs.setdefault("color", "black")
         ax = meso_resource_cycle(
             path,
             ax=ax,
@@ -3994,120 +4147,25 @@ def meso_explore_single(
     return ret
 
 
-def sm_meso_noise_and_input_flowfields():
-
-    cmap, norm = meso_stationary_points()
-
-    total_width = 10.5
-    fig = plt.figure(figsize=[(total_width) / 2.54, (total_width * 0.67) / 2.54])
-    axes = []
-    gs = fig.add_gridspec(
-        nrows=3,
-        ncols=3,
-        width_ratios=[1.0] * 3,
-        height_ratios=[1.0] * 3,
-        wspace=0.1,
-        hspace=0.1,
-        left=0.15,
-        right=0.99,
-        top=0.95,
-        bottom=0.15,
-    )
-
-    axes = [[] for _ in range(3)]
-    #
-    # gridspec starts counting in top left corner
-    # high noise top, low noise bottom
-    for sdx, sigma in enumerate([0.025, 0.1, 0.2]):
-        row = sdx
-        # low input left, high input right
-        for hdx, h in enumerate([0.0, 0.1, 0.2]):
-            col = hdx
-
-            ax = fig.add_subplot(gs[row, col])
-            axes[row].append(ax)
-
-            pars = {
-                "simulation_time": 5000,
-                "ext_str": h,
-                "w0": 0.0,
-                "sigma": sigma,
-                "gating_mechanism": False,
-                "rseed": sdx * 103 + hdx,
-            }
-
-            meso_explore_single(
-                activity_snapshot=False,
-                ax=ax,
-                cycle_kwargs=dict(
-                    color=cmap(norm(h)),
-                    alpha=0.6,
-                ),
-                **pars,
-            )
-
-            pars.pop("simulation_time")
-            mh.plot_flow_field(
-                ax=ax, plot_kwargs=dict(alpha=1, clip_on=True, color="#bbb"), **pars
-            )
-
-            txt = ""
-            txt += r"$h={h}$".format(h=h)
-            txt += "\n"
-            txt += r"$\sigma={sigma}$".format(sigma=sigma)
-            ax.text(
-                0.95,
-                0.95,
-                txt,
-                transform=ax.transAxes,
-                ha="right",
-                va="top",
-                fontweight="bold",
-                color="#666",
-                fontsize=6,
-            )
-
-            ax.set_xlim(-0.1, 1.5)
-            ax.set_ylim(-1, 15)
-            ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
-            ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.5))
-            ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(15))
-            ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(5))
-            sns.despine(ax=ax, offset=0, trim=True)
-            ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1))
-            ax.get_figure().tight_layout()
-            if row != 2 or col != 0:
-                clr = "#aaa"
-                ax.tick_params(
-                    axis="both",
-                    which="both",
-                    colors=clr,
-                    labelleft=False,
-                    labelbottom=False,
-                )
-                ax.spines["bottom"].set_color(clr)
-                ax.spines["left"].set_color(clr)
-                ax.xaxis.label.set_color(clr)
-
-    ax.get_figure().savefig(
-        f"{p_fo}/meso_noise_and_input_flowfields_combined.pdf",
-        dpi=300,
-    )
-
-
 def meso_stationary_points(input_range=None):
+    """
+    All-in-one wrapper to find stationary points for mesoscopic model.
+    Runs the model and saves the figure.
+
+    # Parameters
+    input_range : array of floats, h values
+    """
 
     if input_range is None:
         input_range = np.arange(0.0, 0.35, 0.0005)
 
     rates, rsrcs = mh.get_stationary_solutions(input_range=input_range)
 
+    # mark these guys with a larger, colored dot (to match the matrix of flow fields)
     special_input = [0.0, 0.1, 0.2]
-
     special_idx = [np.where(input_range == s)[0][0] for s in special_input]
 
-    # z values for color map, ty this to input
-
+    # z values for color map, tie this to input
     cmap = matplotlib.colors.LinearSegmentedColormap.from_list(
         "custom",
         [
@@ -4190,7 +4248,7 @@ def meso_stationary_points(input_range=None):
         cc.set_size(ax, 2.2, 1.5)
 
         ax.get_figure().savefig(
-            f"fig/paper/meso_stationary_points_{x_str}_{y_str}.pdf", dpi=300
+            f"{p_fo}/meso_stationary_points_{x_str}_{y_str}.pdf", dpi=300
         )
 
     return cmap, norm
@@ -4882,6 +4940,7 @@ def _set_size(ax, w, h=None):
         figh = float(h / 2.54) / (t - b)
         ax.figure.set_size_inches(figw, figh)
 
+
 # ------------------------------------------------------------------------------ #
 # statistical tests
 # ------------------------------------------------------------------------------ #
@@ -4955,7 +5014,6 @@ def nhst_pairwise_for_trials(observables, layouts=None):
             )
             table = table.append(row(layout, "pre-stim", p, n), ignore_index=True)
 
-
     # move the number of trials to the layout description
     table["layout"] = table["layout"] + " (N=" + table["N"].map(str) + " trials)"
     table = table.drop("N", axis=1)
@@ -4963,6 +5021,7 @@ def nhst_pairwise_for_trials(observables, layouts=None):
     table = table.set_index(["layout", "kind"])
 
     return table
+
 
 def nhst_joint_distributions(observables=["Fraction"], dfkind=None, layouts=None):
     """
@@ -5016,17 +5075,25 @@ def nhst_joint_distributions(observables=["Fraction"], dfkind=None, layouts=None
             # groups are indpenendent -> u_test
             if "k=" in layout:
                 # simulation, need other col vals
-                _mann_whitney_u_test(dfs[dfkind], col_vals=["0.0 Hz", "20.0 Hz"], **kwargs)
+                _mann_whitney_u_test(
+                    dfs[dfkind], col_vals=["0.0 Hz", "20.0 Hz"], **kwargs
+                )
             else:
                 _mann_whitney_u_test(dfs[dfkind], col_vals=["pre", "stim"], **kwargs)
                 _mann_whitney_u_test(dfs[dfkind], col_vals=["stim", "post"], **kwargs)
         elif dfkind == "rij":
             # groups are dependent  -> signed_rank
             if "k=" in layout:
-                _wilcoxon_signed_rank_test(dfs[dfkind], col_vals=["0.0 Hz", "20.0 Hz"], **kwargs)
+                _wilcoxon_signed_rank_test(
+                    dfs[dfkind], col_vals=["0.0 Hz", "20.0 Hz"], **kwargs
+                )
             else:
-                _wilcoxon_signed_rank_test(dfs[dfkind], col_vals=["pre", "stim"], **kwargs)
-                _wilcoxon_signed_rank_test(dfs[dfkind], col_vals=["stim", "post"], **kwargs)
+                _wilcoxon_signed_rank_test(
+                    dfs[dfkind], col_vals=["pre", "stim"], **kwargs
+                )
+                _wilcoxon_signed_rank_test(
+                    dfs[dfkind], col_vals=["stim", "post"], **kwargs
+                )
         else:
             raise NotImplementedError()
 
@@ -5293,6 +5360,7 @@ def _paired_sample_t_test(
         return p_values, num_samples
     return p_values
 
+
 def _filter_df_for_pairwise(df, filter_col, filter_vals, pairby_col, value_col):
     """
 
@@ -5350,7 +5418,6 @@ def _filter_df_for_pairwise(df, filter_col, filter_vals, pairby_col, value_col):
     res[pairby_col] = df1[pairby_col].values
 
     return res
-
 
 
 def _p_str(p_values, alternatives=None):
@@ -5431,16 +5498,16 @@ def bayesian_best_for_trials(observables, layouts=None):
                 filter_col="Condition",
                 filter_vals=filter_vals,
                 pairby_col="Trial",
-                value_col = obs,
+                value_col=obs,
             )
             num_trials = len(pair_dict["Trial"])
 
             # init, trials should be consistent across all observables
             if odx == 0:
                 rows = dict(
-                    layout=[layout]*3,
-                    kind=[kind]*3,
-                    N=[num_trials]*3,
+                    layout=[layout] * 3,
+                    kind=[kind] * 3,
+                    N=[num_trials] * 3,
                     stat=["hdi_3%", "hdi_97%", "pd"],
                 )
 
@@ -5450,8 +5517,8 @@ def bayesian_best_for_trials(observables, layouts=None):
                 pair_dict[filter_vals[1]],
                 # kwargs are passed to pymc.sample
                 progressbar=False,
-                tune = 2000,
-                draws = 2000,
+                tune=2000,
+                draws=2000,
             )
             summary = bayesian.az.summary(trace)
             rows[obs] = [
@@ -5473,10 +5540,16 @@ def bayesian_best_for_trials(observables, layouts=None):
             table = table.append(row(df, layout, ["pre", "post"]), ignore_index=True)
 
         elif layout == "KCl_1b":
-            table = table.append(row(df, layout, ["KCl_0mM", "KCl_2mM"], kind="pre-stim"), ignore_index=True)
+            table = table.append(
+                row(df, layout, ["KCl_0mM", "KCl_2mM"], kind="pre-stim"),
+                ignore_index=True,
+            )
 
         elif layout == "Bicuculline_1b":
-            table = table.append(row(df, layout, ["spon_Bic_20uM", "stim_Bic_20uM"], kind="pre-stim"), ignore_index=True)
+            table = table.append(
+                row(df, layout, ["spon_Bic_20uM", "stim_Bic_20uM"], kind="pre-stim"),
+                ignore_index=True,
+            )
 
     # move the number of trials to the layout description
     table["layout"] = table["layout"] + " (N=" + table["N"].map(str) + " trials)"
