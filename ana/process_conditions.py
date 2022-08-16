@@ -2,10 +2,13 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-10-25 17:28:21
-# @Last Modified: 2022-08-08 17:09:05
+# @Last Modified: 2022-08-16 13:05:02
 # ------------------------------------------------------------------------------ #
 # Analysis script that preprocesses experiments and creates dataframes to compare
 # across condtions. Plots and more detailed analysis are in `paper_plots.py`
+# * input files are globbed from the provided input directory using a
+# hardcoded wildcard, depending on the type, e.g.  `-t sim`, `-t exp`.
+# * output file names are given automatically, `-o` specifies the output directory.
 # ------------------------------------------------------------------------------ #
 
 import os
@@ -67,7 +70,7 @@ def main():
         "-t",
         dest="etype",
         required=True,
-        help="'exp', 'exp_chemical', 'exp_bic', 'sim_partial', 'sim_partial_no_inhib'",
+        help="'exp', 'exp_chemical', 'exp_bic', 'sim', 'sim_partial', 'sim_partial_no_inhib'",
     )
     parser.add_argument(
         "-i",
@@ -383,7 +386,7 @@ def main():
                     lambda row: np.log10(row["ISI"]), axis=1
                 )
 
-        # for the extra simulations we append the suffix.
+        # for the simulations we append a suffix because layotus `k=...` are not unique.
         if "sim" in args.etype:
             suffix = args.etype[3:]
         else:

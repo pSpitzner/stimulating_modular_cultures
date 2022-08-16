@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2022-08-08 12:55:17
+# @Last Modified: 2022-08-16 12:46:21
 # ------------------------------------------------------------------------------ #
 # Scans the provided directory for .hdf5 files and merges individual realizsation
 # into a single file, containing high-dimensional arrays.
@@ -37,14 +37,14 @@ from collections import OrderedDict
 from tqdm import tqdm
 from benedict import benedict
 
-# from addict import Dict
 
 log = logging.getLogger(__name__)
 warnings.filterwarnings("ignore")  # suppress numpy warnings
 
+
 import dask_helper as dh
 import ana_helper as ah
-import hi5 as h5
+from bitsandbobs import hi5 as h5
 
 # ------------------------------------------------------------------------------ #
 # settings
@@ -55,7 +55,6 @@ d_obs = OrderedDict()
 d_obs["jA"] = "/meta/dynamics_jA"
 d_obs["jG"] = "/meta/dynamics_jG"
 # d_obs["jM"] = "/meta/dynamics_jM"
-# d_obs["jE"] = "/meta/dynamics_jE"
 d_obs["rate"] = "/meta/dynamics_rate"
 d_obs["tD"] = "/meta/dynamics_tD"
 # d_obs["alpha"] = "/meta/topology_alpha"

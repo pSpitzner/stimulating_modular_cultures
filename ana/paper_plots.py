@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-11-08 17:51:24
-# @Last Modified: 2022-08-15 14:24:52
+# @Last Modified: 2022-08-16 13:35:33
 # ------------------------------------------------------------------------------ #
 #
 # How to read / work this monstrosity of a file?
@@ -816,6 +816,9 @@ def fig_5(
             - dark blue: 4 modules, ... light: 1 module
     - A sketch of the Resrouces vs Probability to disconnect.
 
+    Note: if `dset=None` and the default dset cannot be found
+    (`/dat/simulations/meso/processed/analysed.hdf5`),
+    it will take a while to run the analysis and create it.
     """
 
     # ------------------------------------------------------------------------------ #

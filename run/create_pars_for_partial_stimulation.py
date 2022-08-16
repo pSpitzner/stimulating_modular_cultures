@@ -1,9 +1,25 @@
+# ------------------------------------------------------------------------------ #
+# @Author:        F. Paul Spitzner
+# @Email:         paul.spitzner@ds.mpg.de
+# @Created:       2022-06-22 10:12:19
+# @Last Modified: 2022-08-16 11:35:33
+# ------------------------------------------------------------------------------ #
+# This creates a `parameter.tsv` where each line contains one parameter set,
+# which can be directly called from the command line (i.e. on a cluster).
+# * Here: parameters for stimulation of only two modules,
+# * output file names have the form
+#   `stim=02_k=5_jA=45.0_jG=0.0_jM=15.0_tD=20.0_rate=80.0_stimrate=0.0_rep=001.hdf5`
+#   where `stim=02` means that modules at positon 0 and 2 receive an additonal
+#   `stimrate` in addition the `rate` all modules receive.
+# ------------------------------------------------------------------------------ #
+
 import os
 import numpy as np
 from itertools import product
 
 # set directory to the location of this script file to use relative paths
 os.chdir(os.path.dirname(__file__))
+out_path = os.path.abspath(os.path.curdir + f"./../dat/simulations/lif/raw")
 
 # seed for rank 0, will increase per thread
 seed = 7_000
@@ -53,7 +69,7 @@ with open("./parameters.tsv", "w") as f_dyn:
         for stim_rate in l_stim_rate:
             f_base = f"k={k_inter:d}_jA={jA:.1f}_jG={jG:.1f}_jM={jM:.1f}_tD={tD:.1f}_rate={rate:.1f}_stimrate={stim_rate:.1f}_rep={rep:03d}.hdf5"
 
-            dyn_path = f"/scratch03.local/pspitzner/inhib02/dat/partial_stim_inhib_blocked/dyn/stim={mod}_{f_base}"
+            dyn_path = f"{out_path}/stim={mod}_{f_base}"
 
             if mod == "off":
                 stim_arg = ""

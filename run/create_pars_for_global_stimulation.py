@@ -1,15 +1,32 @@
+# ------------------------------------------------------------------------------ #
+# @Author:        F. Paul Spitzner
+# @Email:         paul.spitzner@ds.mpg.de
+# @Created:       2022-06-22 10:12:19
+# @Last Modified: 2022-08-16 13:15:02
+# ------------------------------------------------------------------------------ #
+# This creates a `parameter.tsv` where each line contains one parameter set,
+# which can be directly called from the command line (i.e. on a cluster).
+# * Here: parameters for stimulation to all modules
+# * output file names have the form
+#   `stim=off_k=-1_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=80.0_rep=001.hdf5`
+#   where `stim=off` means that no modules are targeted in addition to the base
+#   rate (80.)
+# * the sweep is done over increasing `rate= ...`
+# ------------------------------------------------------------------------------ #
+
 import os
 import numpy as np
 from itertools import product
 
 # set directory to the location of this script file to use relative paths
 os.chdir(os.path.dirname(__file__))
+out_path = os.path.abspath(os.path.curdir + f"./../dat/simulations/lif/raw")
 
 # seed for rank 0, will increase per thread
 seed = 6_000
 
 # parameters to scan, noise rate, ampa strength, and a few repetitons for statistics
-l_k_inter = np.array([-1])
+l_k_inter = np.array([-1, 1, 5, 10])
 l_mod = np.array(["off"])
 l_rep = np.arange(0, 50)
 l_jA = [45.0]
@@ -50,7 +67,7 @@ with open("./parameters.tsv", "w") as f_dyn:
         for rate in l_rate:
             f_base = f"k={k_inter:d}_jA={jA:.1f}_jG={jG:.1f}_jM={jM:.1f}_tD={tD:.1f}_rate={rate:.1f}_rep={rep:03d}.hdf5"
 
-            dyn_path = f"/scratch03.local/pspitzner/inhib02/dat/the_last_one/dyn/stim={mod}_{f_base}"
+            dyn_path = f"{out_path}/stim={mod}_{f_base}"
 
             if mod == "off":
                 stim_arg = ""

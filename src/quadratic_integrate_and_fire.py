@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2022-08-01 11:32:01
+# @Last Modified: 2022-08-16 12:09:00
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Loads topology from hdf5 and runs the simulations in brian.
@@ -108,50 +108,124 @@ record_state_dt = 25 * ms
 record_rates = False
 record_rates_freq = 50 * ms   # with which time resolution should rates be written to h5
 
+# fmt:on
 
 # ------------------------------------------------------------------------------ #
 # command line arguments
 # ------------------------------------------------------------------------------ #
 
-parser = argparse.ArgumentParser(description="Brian")
+parser = argparse.ArgumentParser(description="Simulate modular cultures in Brian")
 
-# parser.add_argument("-i",  dest="input_path",  help="input path",  metavar="FILE",  required=True)
-parser.add_argument("-o",  dest="output_path", help="output path", metavar="FILE")
-parser.add_argument("-jA", dest="jA",          help="in mV",       default=jA / mV,     type=float)
-parser.add_argument("-jG", dest="jG",          help="in mV",       default=jG / mV,     type=float)
-parser.add_argument("-jM", dest="jM",          help="in mV",       default=jM / mV,     type=float)
-parser.add_argument("-jE", dest="jE",          help="in mV",       default=jE / mV,     type=float)
-parser.add_argument("-r",  dest="r",           help="in Hz",       default=rate / Hz,   type=float)
-parser.add_argument("-tD", dest="tD",          help="in seconds",  default=tD / second, type=float)
-parser.add_argument("-s",  dest="seed",        help="rng",         default=117,         type=int)
-parser.add_argument("-k", dest="k_inter",      help="bridging axons",  default=5,       type=int)
-parser.add_argument("-d",
-    dest="sim_duration",   help="in seconds",  default=20 * 60, type=float)
+parser.add_argument("-o", dest="output_path", help="output path", metavar="FILE")
+parser.add_argument(
+    "-jA",
+    dest="jA",
+    help="AMPA current strength, in mV",
+    default=jA / mV,
+    metavar=jA / mV,
+    type=float,
+)
+parser.add_argument(
+    "-jG",
+    dest="jG",
+    help="GABA current strength, in mV",
+    default=jG / mV,
+    metavar=jG / mV,
+    type=float,
+)
+parser.add_argument(
+    "-jM",
+    dest="jM",
+    help="Minis (noise amplitude), in mV",
+    default=jM / mV,
+    metavar=jM / mV,
+    type=float,
+)
+parser.add_argument(
+    "-r",
+    dest="r",
+    help="Poisson rate (minis), all neurons, in Hz",
+    default=rate / Hz,
+    metavar=rate / Hz,
+    type=float,
+)
+parser.add_argument(
+    "-tD",
+    dest="tD",
+    help="Characteristic recovery time, in seconds",
+    default=tD / second,
+    metavar=tD / second,
+    type=float,
+)
+parser.add_argument("-s", dest="seed", help="RNG seed", default=42, metavar=42, type=int)
+parser.add_argument(
+    "-k", dest="k_inter", help="Number of bridging axons", default=5, metavar=5, type=int
+)
+parser.add_argument(
+    "-d",
+    dest="sim_duration",
+    help="Recording duration, in seconds",
+    default=20 * 60,
+    metavar=20 * 60,
+    type=float,
+)
 
-parser.add_argument("-equil", "--equilibrate",
-    dest="equil_duration", help="in seconds",  default= 2 * 60, type=float)
+parser.add_argument(
+    "-equil",
+    "--equilibrate",
+    dest="equil_duration",
+    help="Equilibration duration, in seconds",
+    default=2 * 60,
+    metavar=2 * 60,
+    type=float,
+)
 
-parser.add_argument("-stim",
-    dest="stimulation_type", default="off", type=str,
-    help="if/how to stimulate: 'off', 'poisson'",)
+parser.add_argument(
+    "-stim",
+    dest="stimulation_type",
+    default="off",
+    metavar="off",
+    type=str,
+    help="if/how to stimulate: 'off', 'poisson'",
+)
 
-parser.add_argument("-stim_rate",  dest="stimulation_rate",
-    help="additional rate upon stim, in Hz", default=20, type=float)
+parser.add_argument(
+    "-stim_rate",
+    dest="stimulation_rate",
+    help="additional rate in stimulated mods, in Hz",
+    default=20,
+    metavar=20,
+    type=float,
+)
 
-parser.add_argument("-mod",
-    dest="stimulation_module", default='0', type=str,
-    help="modules to stimulate, e.g. `0`, or `02` for multiple",)
+parser.add_argument(
+    "-mod",
+    dest="stimulation_module",
+    default="0",
+    metavar="0",
+    type=str,
+    help="modules to stimulate, e.g. `0`, or `02` for multiple",
+)
 
 # we may want to give neurons that bridge two modules a smaller synaptic weight [0, 1]
-parser.add_argument("--bridge_weight",
-    dest="bridge_weight",  default= 1.0, type=float,
-    help="synaptic weight of bridge neurons [0, 1]")
+parser.add_argument(
+    "--bridge_weight",
+    dest="bridge_weight",
+    default=1.0,
+    metavar=1.0,
+    type=float,
+    help="synaptic weight of bridge neurons [0, 1]",
+)
 
-parser.add_argument("--inhibition_fraction",
-    dest="inhibition_fraction",  default= 0.2, type=float,
-    help="how many neurons should be inhibitory")
+parser.add_argument(
+    "--inhibition_fraction",
+    dest="inhibition_fraction",
+    default=0.2,
+    metavar=0.2,
+    type=float,
+    help="fraction of neurons that should be inhibitory",
+)
 
-# fmt:on
 args = parser.parse_args()
 
 # RNG
@@ -162,7 +236,6 @@ topo.set_seed(args.seed)
 jA = args.jA * mV
 jM = args.jM * mV
 jG = args.jG * mV
-jE = args.jE * mV
 tD = args.tD * second
 rate = args.r * Hz
 args.equil_duration *= second
@@ -178,7 +251,6 @@ log.info("k_inter:          %s", args.k_inter)
 log.info("jA:               %s", jA)
 log.info("jM:               %s", jM)
 log.info("jG:               %s", jG)
-log.info("jE:               %s", jE)
 log.info("tD:               %s", tD)
 log.info("noise rate:       %s", rate)
 log.info("duration:         %s", args.sim_duration)
@@ -402,9 +474,6 @@ h5_desc["meta.dynamics_jG"] = "GABA current strength, in mV"
 
 h5_data["meta.dynamics_jM"] = jM / mV
 h5_desc["meta.dynamics_jM"] = "shot noise (minis) strength, in mV"
-
-h5_data["meta.dynamics_jE"] = jE / mV
-h5_desc["meta.dynamics_jE"] = "constant current strength from optogenetic simtulation, in mV"
 
 h5_data["meta.dynamics_tD"] = tD / second
 h5_desc["meta.dynamics_tD"] = "characteristic decay time, in seconds"
