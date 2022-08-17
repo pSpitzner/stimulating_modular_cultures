@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2022-08-17 13:17:09
+# @Last Modified: 2022-08-17 16:04:03
 # ------------------------------------------------------------------------------ #
 # Scans the provided (wildcarded) filenames and merges individual realizsation
 # into a single file, containing high-dimensional arrays.
@@ -40,12 +40,14 @@ from collections import OrderedDict
 from tqdm import tqdm
 from benedict import benedict
 
+from contextlib import nullcontext, ExitStack
+from dask_jobqueue import SGECluster
+from dask.distributed import Client, SSHCluster, LocalCluster, as_completed
 
+logging.basicConfig(level=logging.INFO, format="%(levelname)-8s [%(name)s] %(message)s")
 log = logging.getLogger(__name__)
 warnings.filterwarnings("ignore")  # suppress numpy warnings
 
-
-import dask_helper as dh
 import ana_helper as ah
 from bitsandbobs import hi5 as h5
 
@@ -65,6 +67,7 @@ d_obs["k_inter"] = "/meta/topology_k_inter"
 # d_obs["stim_rate"] = "/meta/dynamics_stimulation_rate"
 # d_obs["k_frac"] = "/meta/dynamics_k_frac"
 
+# these can be set via command line arguments, see `parse_args()`
 threshold_factor = 2.5 / 100
 smoothing_width = 20 / 1000
 time_bin_size_for_rij = 500 / 1000
@@ -428,7 +431,6 @@ def ana_for_single_rep(candidate=None):
         C = np.nan
     res["sys_participating_fraction_complexity"] = C
 
-
     # How many spikes were fired in a burst. this is normalized per contributing neuron
     try:
         C = np.nanmean(h5f["ana.bursts.system_level.num_spikes_in_bursts"])
@@ -475,13 +477,14 @@ def ana_for_single_rep(candidate=None):
 
     # What is the amount of resources at the time of bursts starting?
     # first dim modules, second dim times, nans if not part of burst
-    resources = ah.find_module_resources_at_burst_begin(h5f, write_to_h5f=False, return_res=True)
+    resources = ah.find_module_resources_at_burst_begin(
+        h5f, write_to_h5f=False, return_res=True
+    )
     # this is about module-level resource cycles, so we want to treat all modules
     # as the ensemble -> flat list and then std and mean
     resources = resources.flatten()
     res["sys_mean_resources_at_burst_beg"] = np.nanmean(resources)
     res["sys_std_resources_at_burst_beg"] = np.nanstd(resources)
-
 
     # ------------------------------------------------------------------------------ #
     # Topology, out degrees for each neuron, sorted whether neuron is bridging or not
@@ -493,12 +496,12 @@ def ana_for_single_rep(candidate=None):
         b_ids = np.array([], dtype="int")
     nb_ids = np.isin(h5f["ana.neuron_ids"], b_ids, invert=True)
 
-    bin_edges = np.arange(0, 161) - 0.5 # no self-cupling was allowed
-    hist, _ =  np.histogram(h5f["data.neuron_k_out"][nb_ids], bins=bin_edges)
+    bin_edges = np.arange(0, 161) - 0.5  # no self-cupling was allowed
+    hist, _ = np.histogram(h5f["data.neuron_k_out"][nb_ids], bins=bin_edges)
     res["vec_sys_hbins_kout_no_bridge"] = bin_edges
     res["vec_sys_hvals_kout_no_bridge"] = hist
 
-    hist, _ =  np.histogram(h5f["data.neuron_k_out"][b_ids], bins=bin_edges)
+    hist, _ = np.histogram(h5f["data.neuron_k_out"][b_ids], bins=bin_edges)
     res["vec_sys_hbins_kout_yes_bridge"] = bin_edges
     res["vec_sys_hvals_kout_yes_bridge"] = hist
 
@@ -513,67 +516,15 @@ def ana_for_single_rep(candidate=None):
 
 
 # ------------------------------------------------------------------------------ #
-# Script arguments
-# ------------------------------------------------------------------------------ #
-
-
-def parse_arguments():
-
-    # we use global variables for the threshold so we dont have to pass them
-    # through a bunch of calls. not neat but yay, scientific coding.
-    global threshold_factor
-    global smoothing_width
-
-    parser = argparse.ArgumentParser(description="Merge Multidm")
-    parser.add_argument(
-        "-i",
-        dest="input_path",
-        required=True,
-        help="input path with *.hdf5 files",
-        metavar="FILE",
-    )
-    parser.add_argument(
-        "-o", dest="output_path", help="output path", metavar="FILE", required=True
-    )
-    parser.add_argument(
-        "-c",
-        "--cores",
-        dest="num_cores",
-        help="number of dask cores",
-        default=256,
-        type=int,
-    )
-    parser.add_argument(
-        "-t",
-        dest="threshold_factor",
-        help="% of peak height to use for thresholding of burst detection",
-        default=threshold_factor,
-        type=float,
-    )
-    parser.add_argument(
-        "-s",
-        dest="smoothing_width",
-        help="% of peak height to use for thresholding of burst detection",
-        default=smoothing_width,
-        type=float,
-    )
-
-    args = parser.parse_args()
-    threshold_factor = args.threshold_factor
-    smoothing_width = args.smoothing_width
-
-    log.info(args)
-
-    return args
-
-
-# ------------------------------------------------------------------------------ #
 # main
 # ------------------------------------------------------------------------------ #
 futures = None
 
 
-def main(args):
+def main(args, dask_client):
+    """
+    This relies on some global dask variables to be initialized.
+    """
 
     # if a directory is provided as input, merge individual hdf5 files down
     if os.path.isdir(args.input_path):
@@ -604,11 +555,11 @@ def main(args):
     f = functools.partial(check_candidate, d_obs=d_obs)
 
     # dispatch, reading in parallel may be faster
-    futures = dh.client.map(f, candidates)
+    futures = dask_client.map(f, candidates)
 
     # gather
     l_valid = []
-    for future in tqdm(dh.as_completed(futures), total=len(futures)):
+    for future in tqdm(as_completed(futures), total=len(futures)):
         res, candidate = future.result()
         if res is None:
             log.warning(f"file seems invalid: {candidate}")
@@ -668,7 +619,7 @@ def main(args):
     f = functools.partial(analyse_candidate, d_axes=d_axes, d_obs=d_obs)
 
     # dispatch
-    futures = dh.client.map(f, candidates)
+    futures = dask_client.map(f, candidates)
 
     # for some analysis, we need repetitions to be indexed consistently
     # but we have to find them from filename since I usually do not save rep to meta
@@ -679,7 +630,7 @@ def main(args):
         reps_from_files = False
 
     # gather
-    for future in tqdm(dh.as_completed(futures), total=len(futures)):
+    for future in tqdm(as_completed(futures), total=len(futures)):
         index, rep, res = future.result()
 
         if reps_from_files:
@@ -768,6 +719,57 @@ def main(args):
 # helper
 # ------------------------------------------------------------------------------ #
 
+
+def parse_arguments():
+
+    # we use global variables for the threshold so we dont have to pass them
+    # through a bunch of calls. not neat but yay, scientific coding.
+    global threshold_factor
+    global smoothing_width
+
+    parser = argparse.ArgumentParser(description="Merge Multidm")
+    parser.add_argument(
+        "-i",
+        dest="input_path",
+        required=True,
+        help="input path with *.hdf5 files",
+        metavar="FILE",
+    )
+    parser.add_argument(
+        "-o", dest="output_path", help="output path", metavar="FILE", required=True
+    )
+    parser.add_argument(
+        "-c",
+        "--cores",
+        dest="num_cores",
+        help="number of dask cores",
+        default=4,
+        type=int,
+    )
+    parser.add_argument(
+        "-t",
+        dest="threshold_factor",
+        help="% of peak height to use for thresholding of burst detection",
+        default=threshold_factor,
+        type=float,
+    )
+    parser.add_argument(
+        "-s",
+        dest="smoothing_width",
+        help="% of peak height to use for thresholding of burst detection",
+        default=smoothing_width,
+        type=float,
+    )
+
+    args = parser.parse_args()
+    threshold_factor = args.threshold_factor
+    smoothing_width = args.smoothing_width
+
+    log.info(args)
+
+    return args
+
+
 # Find the repetition from the file name
 def find_rep(candidate):
     search = re.search("((rep=*)|(_r=*))(\d+)", candidate, re.IGNORECASE)
@@ -827,5 +829,32 @@ def full_path(path):
 
 if __name__ == "__main__":
     args = parse_arguments()
-    dh.init_dask(args.num_cores)
-    res_ndim, d_obs, d_axes = main(args)
+
+    with ExitStack() as stack:
+        # init dask using a context manager to ensure proper clenaup
+        # when using remote compute
+        dask_cluster = stack.enter_context(
+            # rudabeh
+            # TODO: remove this before release
+            # SGECluster(
+            #     cores=32,
+            #     memory="192GB",
+            #     processes=16,
+            #     job_extra=["-pe mvapich2-zal 32"],
+            #     log_directory="/scratch01.local/pspitzner/dask/logs",
+            #     local_directory="/scratch01.local/pspitzner/dask/scratch",
+            #     interface="ib0",
+            #     walltime='02:30:00',
+            #     extra=[
+            #         '--preload \'import sys; sys.path.append("./ana/"); sys.path.append("/home/pspitzner/code/pyhelpers/");\''
+            #     ],
+            # )
+
+            # local cluster
+            LocalCluster(local_directory=f"{tempfile.gettempdir()}/dask/")
+        )
+        dask_cluster.scale(cores=args.num_cores)
+
+        dask_client = stack.enter_context(Client(dask_cluster))
+
+        res_ndim, d_obs, d_axes = main(args, dask_client)
