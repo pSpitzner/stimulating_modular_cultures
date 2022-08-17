@@ -2,12 +2,15 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2022-08-16 12:46:21
+# @Last Modified: 2022-08-17 13:17:09
 # ------------------------------------------------------------------------------ #
-# Scans the provided directory for .hdf5 files and merges individual realizsation
+# Scans the provided (wildcarded) filenames and merges individual realizsation
 # into a single file, containing high-dimensional arrays.
 # How the coordinates at which results from every input file are placed in the
 # output are specified in the `d_obs` dictionary, below.
+#
+# Calls analysis routines from `ana/ana_helper.py` on each realization and places
+# them at the right coordinate in parameter space.
 #
 # Essentially, we construct an xarray.Dataset. But when I wrote this, I did not
 # know about xarrays so this is a poormans version. The resulting file can be
@@ -67,14 +70,45 @@ smoothing_width = 20 / 1000
 time_bin_size_for_rij = 500 / 1000
 remove_null_sequences = False
 
-# functions for analysis. candidate is the file path (e.g. to a hdf5 file)
-# need to return a dict where the key becomes the hdf5 data set name
-# and a scalar entry as the value
-# todo: add description
-def all_in_one(candidate=None):
+
+def ana_for_single_rep(candidate=None):
+    """
+    This function is called for each realization (potentially in parallel, using dask)
+    and performs the complete barrage of analysis.
+
+    # Parameters
+    candidate : str or None
+        file path to the hdf5 file, or None to get the expected structure.
+
+    # Returns
+    res : dict
+        Every key becomes a dataset in the hdf5 file.
+        The dict maps
+        - key -> scalar or
+        - key -> 1d array if the key starts with `vec_`
+        - key -> shape if `candidate` was None. This is only needed because
+            we have to init our data storage. Then again, it gives a nice overview
+            of whats coming later.
+
+    Note on naming convention:
+        - `vec_` for 1d arrays, mostly relevant for histograms
+        - `sys_` for observables that are calcualted for the whole system
+            (e.g. Modularity is a system-wide porperty, `sys_modularity`)
+        - `mod_` for observables that are calculated on the module level, but may
+            span multiple modules (e.g. The number of bursts spanning 1, ..., 4 modules,
+            `mod_num_b_1`)
+        - `any_` when we want to be agnostic about how many or which module were involved,
+            but still measured the obseravble on the module-level (e.g. how many
+            module-level bursts took place, `any_num_b`)
+
+    However, this is only a rough rule of thumb. As usual, things develop and these
+    categories could always be applied.
+
+    """
     if candidate is None:
         res = dict()
-        # scalars
+        # scalars, there are some comments on each near the implementation. ctrl+f, ftw.
+        res["sys_modularity"] = 1
         res["any_num_b"] = 1
         res["mod_num_b_0"] = 1
         res["mod_num_b_1"] = 1
@@ -119,13 +153,13 @@ def all_in_one(candidate=None):
         res["sys_orderpar_dist_high_end"] = 1
         res["sys_orderpar_dist_median"] = 1
         res["sys_orderpar_dist_max"] = 1
-        res["sys_modularity"] = 1
         res["sys_mean_resources_at_burst_beg"] = 1
         res["sys_std_resources_at_burst_beg"] = 1
         res["mod_mean_correlation"] = 1
         res["mod_median_correlation"] = 1
 
         # histograms, use "vec" prefix to indicate that higher dimensional data
+        # hvals are the histogram values, hbins the bins ... obvio
         res["vec_sys_hbins_participating_fraction"] = 21
         res["vec_sys_hvals_participating_fraction"] = 20
         res["vec_sys_hbins_correlation_coefficients"] = 21
@@ -142,54 +176,71 @@ def all_in_one(candidate=None):
         res["vec_sys_hbins_kout_yes_bridge"] = 161
         res["vec_sys_hvals_kout_yes_bridge"] = 160
 
-
-        # correlation coefficients, within
-        # for mod in [0, 1, 2, 3]:
-        #     # 40 neurons per module, count pairs only once, exclude 20 self-to-self
-        #     # 40^2 / 2 - 20
-        #     res[f"vec_rij_within_{mod}"] = 780
-
-        # # correlation coefficients, across
-        # for pair in itertools.combinations("0123", 2):
-        #     # here just 40^2, since in different modules
-        #     res[f"vec_rij_across_{pair[0]}_{pair[1]}"] = 1600
-
         return res
 
     res = dict()
 
-    # load and process
+    # ------------------------------------------------------------------------------ #
+    # load and prepare
+    # ------------------------------------------------------------------------------ #
+    # Note that the `ah.whatever_functions` __often (not always)__ modify h5f in place,
+    # adding the results into the subdirectory "ana".
+    # ------------------------------------------------------------------------------ #
+
     h5f = ah.prepare_file(
         candidate,
+        # load everything to RAM directly
         hot=False,
+        # we skip loading the matrix, as it slows things down and we often do not need it.
         skip=["connectivity_matrix"]
         # skip=["connectivity_matrix", "connectivity_matrix_sparse"]
     )
 
-    # modularity
+    # ------------------------------------------------------------------------------ #
+    # modularity index Q
+    # uses the Louvain algorithm in networkx nx.algorithms.community.modularity
+    # and we know modules are the communities.
+    # ------------------------------------------------------------------------------ #
     try:
         res["sys_modularity"] = ah.find_modularity(h5f)
     except Exception as e:
         log.exception(candidate)
         res["sys_modularity"] = np.nan
 
-    # rates
+    # ------------------------------------------------------------------------------ #
+    # Firing rates
+    # calculated on system and module level (selecting corresponding neurons)
+    # by putting a gaussian on every spike time (kernel convolution).
+    #
+    # We also detect module sequences (in which order did modules activate)
+    # currently, we say a module "activates" when at least 20% of its neurons
+    # fired at least one spike.
+    # ------------------------------------------------------------------------------ #
     ah.find_rates(h5f, bs_large=smoothing_width)
     threshold = threshold_factor * np.nanmax(h5f["ana.rates.system_level"])
+    res["sys_rate_threshold"] = threshold
 
-    # this also finds module sequences, currently when at least 20% of module neurons
-    # fired at least one spike.
+    # a burst starts/stops when the rate exceeds/drops below rate_threshold
+    # and two consecutive bursts are merged when less than `merge_threshold` seconds apart
     ah.find_system_bursts_from_global_rate(
         h5f, rate_threshold=threshold, merge_threshold=0.1
     )
-    # ah.find_bursts_from_rates(h5f, rate_threshold=5.0)
+
+    # detection is not flawless. it may happen that a (system) burst is detected
+    # but no module alone fulfilled the 20% neurons "activation" requirement.
     if remove_null_sequences:
         ah.remove_bursts_with_sequence_length_null(h5f)
+
+    # inter burst intervals
     ah.find_ibis(h5f)
 
-    # number of bursts and duration
-    res["sys_rate_threshold"] = threshold
+    # ------------------------------------------------------------------------------ #
+    # Bursts, Sequences, Burst durations
+    # ------------------------------------------------------------------------------ #
+
+    # general bursts, indep of number involved modules
     res["any_num_b"] = len(h5f["ana.bursts.system_level.beg_times"])
+    # bursts where 0, 1, ... 4 modules were involved
     res["mod_num_b_0"] = len(
         [x for x in h5f["ana.bursts.system_level.module_sequences"] if len(x) == 0]
     )
@@ -205,21 +256,25 @@ def all_in_one(candidate=None):
     res["mod_num_b_4"] = len(
         [x for x in h5f["ana.bursts.system_level.module_sequences"] if len(x) == 4]
     )
+    # coefficient of variation and mean of the system-wide firing rate
     res["sys_rate_cv"] = h5f["ana.rates.cv.system_level"]
     res["sys_mean_rate"] = np.nanmean(h5f["ana.rates.system_level"])
 
+    # sequences of module activations and burst duration
     slen = np.array([len(x) for x in h5f["ana.bursts.system_level.module_sequences"]])
     blen = np.array(h5f["ana.bursts.system_level.end_times"]) - np.array(
         h5f["ana.bursts.system_level.beg_times"]
     )
+    # mean burst duration, independent of the number of involved modules
     res["sys_blen"] = np.nanmean(blen)
+    # burst duration for bursts involving 0, 1, ... 4 modules
     res["mod_blen_0"] = np.nanmean(blen[np.where(slen == 0)[0]])
     res["mod_blen_1"] = np.nanmean(blen[np.where(slen == 1)[0]])
     res["mod_blen_2"] = np.nanmean(blen[np.where(slen == 2)[0]])
     res["mod_blen_3"] = np.nanmean(blen[np.where(slen == 3)[0]])
     res["mod_blen_4"] = np.nanmean(blen[np.where(slen == 4)[0]])
 
-    # ibis
+    # inter burst intervals
     try:
         res["sys_mean_any_ibis"] = np.nanmean(h5f["ana.ibi.system_level.any_module"])
         res["sys_median_any_ibis"] = np.nanmedian(h5f["ana.ibi.system_level.any_module"])
@@ -235,6 +290,11 @@ def all_in_one(candidate=None):
         log.debug(e)
 
     try:
+        # core delay is a cool concept we came up with.
+        # each modules firing rate roughly looks like a gaussian when the module bursts.
+        # burst "cores" are the time points of the peak of this gaussian.
+        # the "core delays" are the times between cores of different modules
+        #    ... if > 1 mod involved
         ah.find_burst_core_delays(h5f)
         res["sys_mean_core_delay"] = np.nanmean(
             h5f["ana.bursts.system_level.core_delays_mean"]
@@ -242,11 +302,20 @@ def all_in_one(candidate=None):
     except Exception as e:
         log.error(e)
 
-    # correlation coefficients
+    # ------------------------------------------------------------------------------ #
+    # Correlation coefficients
+    # ------------------------------------------------------------------------------ #
     try:
+        # correlation between firing rates of different neurons
+        # for the rij between pairs of neurons, we use time-binning.
+        # this avoids the spurious correlations a sliding gaussian kernel would introduce.
+        # Note: we also do this in the experimental analysis, but at a (larger) bin-size
+        # that makes sense for the (slower) time resolution of Fluorescence data.
         rij_matrix = ah.find_rij(
             h5f, which="neurons", time_bin_size=time_bin_size_for_rij
         )
+        # correlation between the resource variables of different neurons
+        # (uses h5f["data.state_vars_D"] at the native rate of the simulation-recording)
         rij_depletion_matrix = ah.find_rij(h5f, which="depletion")
         np.fill_diagonal(rij_matrix, np.nan)
         np.fill_diagonal(rij_depletion_matrix, np.nan)
@@ -258,8 +327,9 @@ def all_in_one(candidate=None):
     res["sys_mean_depletion_correlation"] = np.nanmean(rij_depletion_matrix)
     res["sys_median_depletion_correlation"] = np.nanmedian(rij_depletion_matrix)
 
-    # we are not using those any more
-    # correlation coefficients, across
+    # correlations for different pairings
+    # we are not showing those any more,
+    # this is just in case I have to dig them back out during revisions
     # for mod in [0, 1, 2, 3]:
     #     try:
     #         res[f"vec_rij_within_{mod}"] = ah.find_rij_pairs(
@@ -279,7 +349,11 @@ def all_in_one(candidate=None):
     #         log.exception(e)
     #         res[f"vec_rij_across_{pair[0]}_{pair[1]}"] = np.ones(1600) * np.nan
 
-    # functional complexity
+    # ------------------------------------------------------------------------------ #
+    # Functional Complexity
+    # this is closely related to the correlation coefficients, sharing bins etc.
+    # ------------------------------------------------------------------------------ #
+
     bw = 1.0 / 20
     bins = np.arange(0, 1 + 0.1 * bw, bw)
     res["vec_sys_hbins_correlation_coefficients"] = bins.copy()
@@ -291,6 +365,7 @@ def all_in_one(candidate=None):
             h5f, rij=rij_matrix, return_res=True, write_to_h5f=False, bins=bins
         )
         # this is not the place to do this, but ok
+        # FC needs the rij as above, so we save time by computing only once.
         rij_hist, _ = np.histogram(rij_matrix.flatten(), bins=bins)
         rij_depletion_hist, _ = np.histogram(rij_depletion_matrix.flatten(), bins=bins)
     except Exception as e:
@@ -303,7 +378,9 @@ def all_in_one(candidate=None):
     res["vec_sys_hvals_correlation_coefficients"] = rij_hist.copy()
     res["vec_sys_hvals_depletion_correlation_coefficients"] = rij_depletion_hist.copy()
 
-    # module level observables
+    # module level correlations.
+    # Above we considered rij between pairs of neurons. here we take module-level
+    # firing rates.
     try:
         rij_mod_level = ah.find_rij(h5f, which="modules")
         C, rij_mod_level = ah.find_functional_complexity(
@@ -322,7 +399,13 @@ def all_in_one(candidate=None):
         res["mod_mean_correlation"] = np.nan
         res["mod_median_correlation"] = np.nan
 
-    # participating fraction
+    # ------------------------------------------------------------------------------ #
+    # Event size
+    # This is the fraction of neurons (in the whole system) involved in a
+    # (bursting) event. I started off simply calling it "fraction",
+    # and refactoring might break a lot of code.
+    # ------------------------------------------------------------------------------ #
+
     try:
         ah.find_participating_fraction_in_bursts(h5f)
         fracs = h5f["ana.bursts.system_level.participating_fraction"]
@@ -335,6 +418,8 @@ def all_in_one(candidate=None):
     res["sys_median_participating_fraction"] = np.nanmedian(fracs)
     res["vec_sys_hvals_participating_fraction"] = rij_hist.copy()
 
+    # this is the same as above but instead of using rij histograms (functional complxt.)
+    # we use histograms of the fraction
     try:
         fractions = h5f["ana.bursts.system_level.participating_fraction"]
         C = ah._functional_complexity(np.array(fractions), num_bins=20)
@@ -343,6 +428,8 @@ def all_in_one(candidate=None):
         C = np.nan
     res["sys_participating_fraction_complexity"] = C
 
+
+    # How many spikes were fired in a burst. this is normalized per contributing neuron
     try:
         C = np.nanmean(h5f["ana.bursts.system_level.num_spikes_in_bursts"])
     except Exception as e:
@@ -357,12 +444,23 @@ def all_in_one(candidate=None):
         C = np.nan
     res["mod_num_spikes_in_bursts_1"] = C
 
-    # order parameters
+    # Before setteling on charge-discharge cycles,
+    # we tried to come up with order parameters to describe the dynamics of the resources.
+    # Here a few candidates
+    # - "fano_neuron": fano factor for every neuron, then average across neurons
+    # - "fano_population": fano factor of the population resources (avg neurons first)
+    # - "baseline_neuron": max resources found per neuron
+    # - "baseline_population": max resources on population average
+    # - "dist ... " : the distribution of resource values (histogram across time)
+    #                 and different percentiles.
     ops = ah.find_resource_order_parameters(h5f)
     res["sys_orderpar_fano_neuron"] = ops["fano_neuron"]
     res["sys_orderpar_fano_population"] = ops["fano_population"]
     res["sys_orderpar_baseline_neuron"] = ops["baseline_neuron"]
     res["sys_orderpar_baseline_population"] = ops["baseline_population"]
+
+    res["vec_sys_hbins_resource_dist"] = ops["dist_edges"]
+    res["vec_sys_hvals_resource_dist"] = ops["dist_hist"]
 
     res["sys_orderpar_dist_low_end"] = ops["dist_low_end"]
     res["sys_orderpar_dist_low_mid"] = ops["dist_low_mid"]
@@ -371,10 +469,12 @@ def all_in_one(candidate=None):
     res["sys_orderpar_dist_median"] = ops["dist_median"]
     res["sys_orderpar_dist_max"] = ops["dist_max"]
 
-    res["vec_sys_hbins_resource_dist"] = ops["dist_edges"]
-    res["vec_sys_hvals_resource_dist"] = ops["dist_hist"]
+    # ------------------------------------------------------------------------------ #
+    # Resources
+    # ------------------------------------------------------------------------------ #
 
-    # res at bursts start, first dim modules, second dim times, nans if not part of burst
+    # What is the amount of resources at the time of bursts starting?
+    # first dim modules, second dim times, nans if not part of burst
     resources = ah.find_module_resources_at_burst_begin(h5f, write_to_h5f=False, return_res=True)
     # this is about module-level resource cycles, so we want to treat all modules
     # as the ensemble -> flat list and then std and mean
@@ -384,7 +484,7 @@ def all_in_one(candidate=None):
 
 
     # ------------------------------------------------------------------------------ #
-    # out degrees
+    # Topology, out degrees for each neuron, sorted whether neuron is bridging or not
     # ------------------------------------------------------------------------------ #
     try:
         b_ids = h5f["data.neuron_bridge_ids"][:]
@@ -407,16 +507,20 @@ def all_in_one(candidate=None):
 
     return res
 
+    # ------------------------------------------------------------------------------ #
+    # End of analysis
+    # ------------------------------------------------------------------------------ #
+
 
 # ------------------------------------------------------------------------------ #
-# arguments
+# Script arguments
 # ------------------------------------------------------------------------------ #
 
 
 def parse_arguments():
 
     # we use global variables for the threshold so we dont have to pass them
-    # through a bunch of calls. not neat.
+    # through a bunch of calls. not neat but yay, scientific coding.
     global threshold_factor
     global smoothing_width
 
@@ -515,23 +619,6 @@ def main(args):
                 if val not in d_axes[obs]:
                     d_axes[obs].append(val)
 
-    # for candidate in tqdm(candidates):
-    #     # todo parallelize this
-    #     try:
-    #         for obs in d_obs:
-    #             temp = h5.load(candidate, d_obs[obs], silent=True)
-    #             try:
-    #                 # sometimes we find nested arrays
-    #                 if len(temp == 1):
-    #                     temp = temp[0]
-    #             except:
-    #                 pass
-    #             if temp not in d_axes[obs]:
-    #                 d_axes[obs].append(temp)
-    #         l_valid.append(candidate)
-    #     except Exception as e:
-    #         log.error(f"incompatible file: {candidate}")
-
     # sort axes and count unique axes entries
     axes_size = 1
     axes_shape = ()
@@ -568,7 +655,7 @@ def main(args):
     log.info(f"Analysing:")
     res_ndim = dict()
     # dict of key -> needed space
-    res_dict = all_in_one(None)
+    res_dict = ana_for_single_rep(None)
     for key in res_dict.keys():
         # keep repetitions always as the last axes for scalars,
         # but for vectors (inconsistent length across observables), keep data-dim last
@@ -702,7 +789,7 @@ def analyse_candidate(candidate, d_axes, d_obs):
 
         # psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024
 
-    res = all_in_one(candidate)
+    res = ana_for_single_rep(candidate)
     rep = find_rep(candidate)
     try:
         rep = int(rep)

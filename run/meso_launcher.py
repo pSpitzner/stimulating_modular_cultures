@@ -12,19 +12,32 @@ sys.path.append(f"{os.path.dirname(os.path.realpath(__file__))}/../src/")
 import mesoscopic_model as mm
 from tqdm import tqdm
 
-# Set RNG seed and configure output folders
+
 rng_start_seed = 55436434
-n_trajectories = 15
-output_folder = "./dat/simulations/meso/raw_long_ts"
+n_trajectories = 15 # number of repetitons per parameter combination
 
 gating_mechanism = True
+simulation_time = 1000
+output_folder = "./dat/simulations/meso/raw_long_ts"
 
-# Parameters we will use for the simulations. For each coupling span, all external inputs will be evaluated.
-# Each simulation can have a different length if needed.
+# ------------------------------------------------------------------------------ #
+# Note on file naming convention:
+# - Some file paths in the the ana/paper_plots.py are hardcoded
+#   If you want the reproduce the paper plots 1:1
+# - first, add `_no_gates` ot output_folder when disabling the gating mechanism
+# - second, add `_long_ts` to output_folder to use a longer simulation time, e.g.
+# ------------------------------------------------------------------------------ #
+# gating_mechanism = False
+# output_folder = "./dat/simulations/meso/raw_no_gates_long_ts"
+# simulation_time = 10000
+# ------------------------------------------------------------------------------ #
+
+
+# Combinations of coupling and external inputs.
+# We create a folder per coupling and a file per input step.
 # coupling_span = np.array([0.0, 0.01, 0.02, 0.05, 0.1, 1.0, 5.0])
 coupling_span = np.array([0.0, 0.025, 0.04, 0.1, 5.0])
 external_inputs = np.arange(0, 0.31, 0.025)
-simulation_time = 1000
 
 
 def main():

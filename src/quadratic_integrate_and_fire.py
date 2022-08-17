@@ -2,10 +2,11 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2022-08-16 12:09:00
+# @Last Modified: 2022-08-16 19:35:27
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
-# Loads topology from hdf5 and runs the simulations in brian.
+# Creates a connectivity matrix matching the modular cultures (see `topology.py`)
+# and runs the simulations in brian.
 # ------------------------------------------------------------------------------ #
 
 import argparse
@@ -22,7 +23,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)-8s [%(name)s] %(mes
 log = logging.getLogger(__name__)
 
 import topology as topo
-import hi5 as h5
+from bitsandbobs import hi5 as h5
 
 # we want to run this on a cluster, assign a custom cache directory to each thread
 # putting this into a user-directory that gets backed-up turns out to be a bad idea.
@@ -37,7 +38,6 @@ prefs.logging.console_log_level = "INFO"
 # prefs.logging.std_redirection = False
 # import distutils.log
 # distutils.log.set_verbosity(2)
-
 
 # we want enforce simulation with c
 prefs.codegen.target = "cython"
@@ -100,8 +100,8 @@ record_state_vars = ["D"]
 record_state_idxs = True # [0, 1, 2, 3]
 record_state_idxs = np.arange(0, 160)
 
-# use 0.5ms for the highres simulations and to do nice rate-resource cycles
-# bot 25ms were the default to save disk space
+# save state variables in steps of 25ms (the default) to save disk space
+# use 0.5ms for the highres simulations needed for nice rate-resource cycles
 record_state_dt = 25 * ms
 
 # whether to record population rates
@@ -269,10 +269,6 @@ if args.stimulation_type != "off":
 # topology
 # ------------------------------------------------------------------------------ #
 
-# assert os.path.isfile(args.input_path), "Specify the right input path"
-# num_n, a_ij_sparse, mod_ids = topo._load_topology(args.input_path)
-# bridge_ids = topo._load_bridging_neurons(args.input_path)
-
 if args.k_inter == -1:
     tp = topo.MergedTopology()
     bridge_ids = np.array([], dtype="int")
@@ -319,7 +315,6 @@ G = NeuronGroup(
 
 # treat minis as spikes, add directly to current
 # for homogeneous rates, this is faster. here, N=1 is the input per neuron
-# maybe exclude the bridging neurons, when looking at `1x1_projected` topology
 mini_g = PoissonInput(target=G, target_var="IA", N=1, rate=rate, weight=jM)
 
 # optionally, make a fraction of neurons inhibitiory.
@@ -348,7 +343,7 @@ if len(bridge_ids) > 0:
     G_bridge.j *= args.bridge_weight
 
 if not np.all(G.j != 0):
-    log.warn(
+    log.warning(
         "Some synapse strenght `j` were zero after initialization. This should only"
         " happen if you manually set some `j` to zero!"
     )
@@ -358,6 +353,7 @@ if not np.all(G.j != 0):
 # model, synapses
 # ------------------------------------------------------------------------------ #
 
+# We treat inhibitory and excitatory currents separately, so we need separete synapses.
 S_exc = Synapses(
     source=G_exc,
     target=G,
@@ -506,6 +502,8 @@ h5_desc["data.neuron_excitatory_ids"] = "List of neuron ids that were set to be 
 # simulation results
 # ------------------------------------------------------------------------------ #
 
+# I save the spike times as a nan-padded 2d array with shape (num_neurons, max_num_spikes)
+# but also in what people might expect, a 2-col list (neuron_id, spike_time)
 def convert_brian_spikes_to_pauls(spks_m):
     trains = spks_m.spike_trains()
     num_n = len(trains)  # monitor may be defined on a subgroup
@@ -528,7 +526,7 @@ def convert_brian_spikes_to_pauls(spks_m):
     return spiketimes, spiketimes_as_list.T
 
 try:
-    # normal spikes, no stim in two different formats
+    # normal spikes, no stim, in two different formats
     spks, spks_as_list = convert_brian_spikes_to_pauls(spks_m)
 
     h5_data["data.spiketimes"] = spks

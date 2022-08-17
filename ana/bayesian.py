@@ -9,8 +9,6 @@ import bokeh.plotting as bkp
 import pymc as pm
 import xarray as xr
 import arviz as az
-import theano
-import theano.tensor as tt
 import pandas as pd
 
 rng = np.random.default_rng(seed=42)
@@ -88,32 +86,6 @@ def best_paired(y1, y2, **kwargs):
 
     https://github.com/mikemeredith/BEST/blob/main/R/BESTmcmc.R
     https://github.com/rasmusab/bayesian_first_aid/blob/d80c0fded797cff623a5ec42fb2ad8ffbec8b441/R/bayes_t_test.R#L383
-
-    paired_samples_t_model_string <- "model {
-        for(i in 1:length(pair_diff)) {
-            pair_diff[i] ~ dt( mu_diff , tau_diff , nu )  student t
-            # every sample of the difference comes from student t?
-        }
-        diff_pred ~ dt( mu_diff , tau_diff , nu )
-        # student dt
-
-        eff_size <- (mu_diff - comp_mu) / sigma_diff
-        # comp mu is probably the null hypothesis -> no change: 0
-
-        mu_diff ~ dnorm( mean_mu , precision_mu )
-        # normal distributed mu_differences?
-
-
-        tau_diff <- 1/pow( sigma_diff , 2 )
-        # precision of t
-
-        sigma_diff ~ dunif( sigma_low , sigma_high )
-
-
-        # A trick to get an exponentially distributed prior on nu that starts at 1.
-        nu <- nuMinusOne + 1
-        nuMinusOne ~ dexp(1/29)
-        }"
     """
 
     mu_ref = 0

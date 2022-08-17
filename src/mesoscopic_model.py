@@ -97,36 +97,27 @@ def simulate_model(simulation_time, **kwargs):
     # Parameters:
     simulation_time: float
         Duration of the simulation in arbitrary units. use 1000 as a starting point
-
     gating_mechanism  : bool, optional
         Control whether the gating mechanism is used (default: True).
         If False, gates are not updated and activity can pass at all times.
-
     max_rsrc : float, optional
         Maximum amount of synaptic resources.
-
     tau_charge : float, optional
         Timescale of synaptical resource charging
     tau_discharge : float, optional
         Timescale of synaptical resource discharge
-
     tau_rate : float, optional
         Timescale of firing rate (activity) going to zero (exponential decay)
-
     sigma : float, optional
-        Strenght of background noise fluctuations
-
+        Strength of background noise fluctuations
     w0 : float, optional
         Coupling strenght between different nodes
-
     tau_disconnect : float, optional
         Timescale of gate becoming inactive, thus not letting activity go through
     tau_connect : float, optional
         Timescale of gate recovery
-
     ext_str : float, optional
         Stimulation strength
-
     k_inpt : float, optional
         Knee of the input sigmoid
     thrs_inpt: float, optional
@@ -135,24 +126,24 @@ def simulate_model(simulation_time, **kwargs):
     gain_inpt : float, optional
         Gain that multiplies the result of the sigmoidal function,
         thus increasing the effect of the input
-
     thrs_gate : float, optional
-        Threshold of activity needed in order to be able to affect the gate. Levels of activity below cannot inactivate a gate.
+        Threshold of activity needed in order to be able to affect the gate. Levels
+        of activity below cannot inactivate a gate.
     k_gate : float, optional
         Knee of the gate's response sigmoid
-
     dt : float, optional
         Timestep of the Euler integrator (default=0.01)
-
     rseed : int, optional
         Use a custom random seed to ensure reproducitibility.
         If None (default), will use whatever Numpy selects
 
     # Returns
-
-    time_axis : 1d array, time stemps for all other timeseries
-    activity : 2d array, timeseries of module rate. Shape: (n_module, n_timepoints)
-    resources : 2d array, timeseries of module resources. Shape: (n_module, n_timepoints)
+    time_axis : 1d array,
+        time stamps for all other timeseries
+    activity : 2d array,
+        timeseries of module rate. Shape: (n_module, n_timepoints)
+    resources : 2d array,
+        timeseries of module resources. Shape: (n_module, n_timepoints)
     """
     pars = default_pars.copy()
     for key, value in kwargs.items():

@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-11-08 17:51:24
-# @Last Modified: 2022-08-16 13:35:33
+# @Last Modified: 2022-08-17 11:59:48
 # ------------------------------------------------------------------------------ #
 #
 # How to read / work this monstrosity of a file?
@@ -1102,126 +1102,7 @@ def fig_sm_meso_noise_and_input_flowfields():
     )
 
 
-def fig_supplementary():
-    """
-    wrapper to produce various panels of supplementary figures.
-    """
-    sm_exp_trialwise_observables(prefix=f"{p_fo}/exp_layouts_sticks")
-    nhst_pairwise_for_trials(
-        observables=[
-            # "Mean Correlation",
-            # "Mean IBI",
-            "Mean Fraction",  # this is the event size
-            "Functional Complexity",
-            # "Mean Core delays",
-            # "Mean Rate",
-            # "Median IBI",
-            # "Median Core delays",
-        ],
-        layouts=["1b", "3b", "merged"],
-    )
-
-    sm_exp_trialwise_observables(
-        prefix=f"{p_fo}/exp_layouts_sticks_only_chem",
-        layouts=["KCl_1b"],
-        conditions=dict(
-            KCl_1b=["KCl_0mM", "KCl_2mM"],
-            # this is a hack, conditions are passed through to the stick plotter
-            draw_error_bars=False,
-        ),
-    )
-    nhst_pairwise_for_trials(
-        observables=[
-            # "Mean Correlation",
-            # "Mean IBI",
-            "Mean Fraction",  # this is the event size
-            "Functional Complexity",
-            # "Mean Core delays",
-            # "Mean Rate",
-            # "Median IBI",
-            # "Median Core delays",
-        ],
-        layouts=["1b", "3b", "merged"],
-    )
-
-    sm_exp_bicuculline()
-
-    sim_degrees_sampled(-1)
-    sim_degrees_sampled(1)
-    sim_degrees_sampled(5)
-    sim_degrees_sampled(10)
-
-
-def tables(output_folder):
-    """
-    Wrapper to create (and save) tables of our plotted values and error bars
-    * `trials`:  trialwise observables (Fig 1)
-    * `rij`:     neuron-pair correlations (Fig 2, 3)
-    * `violins`: pooled violins (Fig 2)
-    """
-
-    funcs = dict(
-        trials=table_for_trials,
-        rij=table_for_rij,
-        violins=table_for_violins,
-    )
-
-    res = dict()
-
-    for key in funcs.keys():
-        func = funcs[key]
-        df = func()
-        # add units as labels of some columns
-        try:
-            # we want core delay in miliseconds
-            df["Core delays (ms)"] = df["Core delays"].apply(lambda x: x * 1000)
-            df = df.drop("Core delays", axis=1)
-        except:
-            pass
-        try:
-            df["Inter-event-interval (seconds)"] = df["Inter-event-interval"]
-            df = df.drop("Inter-event-interval", axis=1)
-        except:
-            pass
-
-        # reorder columns
-        cols = df.columns.to_list()
-        for col in [
-            "Event size",
-            "Correlation Coefficient",
-            "Functional Complexity",
-            "Inter-event-interval (seconds)",
-            "Core delays (ms)",
-        ]:
-            try:
-                df.insert(len(cols) - 1, col, df.pop(col))
-            except:
-                pass
-
-        df.to_excel(f"{output_folder}/data_{key}.xlsx", engine="openpyxl")
-
-        # add the number of trials of the trial data frame to the layout description
-        if func == table_for_trials:
-            df = df.reset_index()
-            df["layout"] = df["layout"] + " ($N=" + df["trials"].map(str) + "$ trials)"
-            df = df.drop("trials", axis=1)
-            df = df.set_index(["layout", "condition", "kind"])
-
-        df.to_latex(
-            f"{output_folder}/data_{key}.tex",
-            na_rep="",
-            bold_rows=False,
-            multirow=True,
-            multicolumn=True,
-            float_format="{:2.2f}".format,
-        )
-
-        res[key] = df
-
-    return res
-
-
-def sm_exp_trialwise_observables(
+def fig_sm_exp_trialwise_observables(
     prefix=None, layouts=None, conditions=None, draw_error_bars=True
 ):
     """
@@ -1299,7 +1180,7 @@ def sm_exp_trialwise_observables(
             pass
 
 
-def sm_exp_bicuculline():
+def fig_sm_exp_bicuculline():
     """
     violins and sticks for blocked inhibition
     """
@@ -1351,6 +1232,125 @@ def sm_exp_bicuculline():
         ],
         layouts=["Bicuculline_1b"],
     )
+
+
+def fig_supplementary():
+    """
+    wrapper to produce various panels of supplementary figures.
+    """
+    fig_sm_exp_trialwise_observables(prefix=f"{p_fo}/exp_layouts_sticks")
+    nhst_pairwise_for_trials(
+        observables=[
+            # "Mean Correlation",
+            # "Mean IBI",
+            "Mean Fraction",  # this is the event size
+            "Functional Complexity",
+            # "Mean Core delays",
+            # "Mean Rate",
+            # "Median IBI",
+            # "Median Core delays",
+        ],
+        layouts=["1b", "3b", "merged"],
+    )
+
+    fig_sm_exp_trialwise_observables(
+        prefix=f"{p_fo}/exp_layouts_sticks_only_chem",
+        layouts=["KCl_1b"],
+        conditions=dict(
+            KCl_1b=["KCl_0mM", "KCl_2mM"],
+            # this is a hack, conditions are passed through to the stick plotter
+            draw_error_bars=False,
+        ),
+    )
+    nhst_pairwise_for_trials(
+        observables=[
+            # "Mean Correlation",
+            # "Mean IBI",
+            "Mean Fraction",  # this is the event size
+            "Functional Complexity",
+            # "Mean Core delays",
+            # "Mean Rate",
+            # "Median IBI",
+            # "Median Core delays",
+        ],
+        layouts=["1b", "3b", "merged"],
+    )
+
+    fig_sm_exp_bicuculline()
+
+    sim_degrees_sampled(-1)
+    sim_degrees_sampled(1)
+    sim_degrees_sampled(5)
+    sim_degrees_sampled(10)
+
+
+def tables(output_folder):
+    """
+    Wrapper to create (and save) tables of our plotted values and error bars
+    * `trials`:  trialwise observables (Fig 1)
+    * `rij`:     neuron-pair correlations (Fig 2, 3)
+    * `violins`: pooled violins (Fig 2)
+    """
+
+    funcs = dict(
+        trials=table_for_trials,
+        rij=table_for_rij,
+        violins=table_for_violins,
+    )
+
+    res = dict()
+
+    for key in funcs.keys():
+        func = funcs[key]
+        df = func()
+        # add units as labels of some columns
+        try:
+            # we want core delay in miliseconds
+            df["Core delays (ms)"] = df["Core delays"].apply(lambda x: x * 1000)
+            df = df.drop("Core delays", axis=1)
+        except:
+            pass
+        try:
+            df["Inter-event-interval (seconds)"] = df["Inter-event-interval"]
+            df = df.drop("Inter-event-interval", axis=1)
+        except:
+            pass
+
+        # reorder columns
+        cols = df.columns.to_list()
+        for col in [
+            "Event size",
+            "Correlation Coefficient",
+            "Functional Complexity",
+            "Inter-event-interval (seconds)",
+            "Core delays (ms)",
+        ]:
+            try:
+                df.insert(len(cols) - 1, col, df.pop(col))
+            except:
+                pass
+
+        df.to_excel(f"{output_folder}/data_{key}.xlsx", engine="openpyxl")
+
+        # add the number of trials of the trial data frame to the layout description
+        if func == table_for_trials:
+            df = df.reset_index()
+            df["layout"] = df["layout"] + " ($N=" + df["trials"].map(str) + "$ trials)"
+            df = df.drop("trials", axis=1)
+            df = df.set_index(["layout", "condition", "kind"])
+
+        df.to_latex(
+            f"{output_folder}/data_{key}.tex",
+            na_rep="",
+            bold_rows=False,
+            multirow=True,
+            multicolumn=True,
+            float_format="{:2.2f}".format,
+        )
+
+        res[key] = df
+
+    return res
 
 
 def sm_exp_number_of_cells():
@@ -5462,11 +5462,11 @@ def bayesian_best_for_trials(observables, layouts=None):
     Bayesian estimation supersedes the t-test.
     http://doi.apa.org/getdoi.cfm?doi=10.1037/a0029146
 
-    Uses pymc to get bayesian highest density intervals (HDI) for the mean difference
+    Uses pymc to get bayesian highest density intervals (HDI) for the mean of differences
     between two conditions, and the Probability of Direction (PD), see also
     https://doi.org/10.3389/fpsyg.2019.02767
 
-    Takes around ~10 minutes to run.
+    Takes around ~3 minutes per observable.
 
     # Parameters
     observables : list of strings,
@@ -5476,6 +5476,9 @@ def bayesian_best_for_trials(observables, layouts=None):
 
     import bayesian
     from itertools import product
+
+    # lets be reproducible
+    np.random.seed(42)
 
     # observables = ["Mean Fraction", "Mean Correlation", "Functional Complexity"]
     assert isinstance(observables, list)
@@ -5505,15 +5508,6 @@ def bayesian_best_for_trials(observables, layouts=None):
             )
             num_trials = len(pair_dict["Trial"])
 
-            # init, trials should be consistent across all observables
-            if odx == 0:
-                rows = dict(
-                    layout=[layout] * 3,
-                    kind=[kind] * 3,
-                    N=[num_trials] * 3,
-                    stat=["hdi_3%", "hdi_97%", "pd"],
-                )
-
             # bayesian HDI for each pairwise sample
             trace = bayesian.best_paired(
                 pair_dict[filter_vals[0]],
@@ -5524,10 +5518,27 @@ def bayesian_best_for_trials(observables, layouts=None):
                 draws=2000,
             )
             summary = bayesian.az.summary(trace)
+            # probability of direction
+            prob_d = bayesian.probability_of_direction(trace.posterior["mean_of_diffs"])
+            # relate to nhst p-value (https://en.wikipedia.org/wiki/Probability_of_direction)
+            # be agnostic about the direction of effect -> corresponds to two-side tests
+            p_val = 2 * (prob_d if prob_d < 0.5 else 1 - prob_d)
+
+            # init, trials should be consistent across all observables
+            if odx == 0:
+                stat = ["hdi_3%", "hdi_97%", "pd", "p"]
+                rows = dict(
+                    layout=[layout] * len(stat),
+                    kind=[kind] * len(stat),
+                    N=[num_trials] * len(stat),
+                    stat=stat,
+                )
+
             rows[obs] = [
                 summary["hdi_3%"]["mean_of_diffs"],
                 summary["hdi_97%"]["mean_of_diffs"],
-                bayesian.probability_of_direction(trace.posterior["mean_of_diffs"]),
+                prob_d,
+                p_val,
             ]
 
         # return dataframe consisting of the rows

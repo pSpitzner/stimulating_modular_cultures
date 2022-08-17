@@ -1,4 +1,9 @@
-# run: conda env create --file environment.yml
+# to create the environment
+# >>> conda env create --file environment.yml
+# to register the kernel for jupyter lab:
+# >>> source activate myenv
+# >>> python -m ipykernel install --user --name modular_cultures --display-name "modular_cultures"
+
 name: modular_cultures
 channels:
   - conda-forge
@@ -24,9 +29,9 @@ dependencies:
   - ipython
   - jupyter
   - jupyterlab
-  # - pymc
+  - pymc
   # - theano-pymc
-  # - arviz
+  - arviz
   - pip
   - pip:
     - ipy_dict_hierarchy
