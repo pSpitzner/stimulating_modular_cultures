@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2022-08-02 13:19:33
+# @Last Modified: 2022-08-17 15:21:28
 # ------------------------------------------------------------------------------ #
 # Here we collect all functions for importing and analyzing the data.
 # A central idea is that for every simulated/experimental trial, we have a
@@ -13,8 +13,6 @@
 # structure to disk.
 # This way, plot functions etc. can rely on the structure of the dictionary,
 # and we only have to pass a single argument to later functions.
-#
-# TODO: link to an overview of common items in the h5f structure
 # ------------------------------------------------------------------------------ #
 
 

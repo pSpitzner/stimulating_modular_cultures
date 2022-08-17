@@ -24,6 +24,7 @@ import matplotlib.pyplot as plt
 
 # Cluster detection, very useful for avalanches
 from scipy.ndimage import measurements
+
 # nullclines
 from scipy.optimize import fsolve
 from scipy.integrate import odeint
@@ -47,7 +48,6 @@ warnings.filterwarnings("ignore")  # suppress numpy warnings
 # ------------------------------------------------------------------------------ #
 
 
-# ps: this was `read_csv_and_format`
 def prepare_file(file_path):
     """
     Reads a csv or hdf5 and formats a Benedict with our data format
@@ -62,7 +62,8 @@ def prepare_file(file_path):
     # Create a dictionary and store the names of DF columns
     h5f = benedict()
 
-    # try meta data
+    # try meta data. should be included in all files created with the latest version
+    # of the meso model
     try:
         h5f["meta.coupling"] = bnb.hi5.load(file_path, "/meta/coupling")
         h5f["meta.noise"] = bnb.hi5.load(file_path, "/meta/noise")
@@ -75,15 +76,14 @@ def prepare_file(file_path):
     # the dataframe
     h5f["data.gate_history"] = bnb.hi5.load(file_path, "/data/gate_history")
 
-    # to get many of pauls analysis working, we can pretend every module has
-    # only one neuron
+    # to get many of pauls analysis (ana_helper) working,
+    # we can pretend every module has only one neuron
     h5f["data.neuron_module_id"] = np.arange(4)
     h5f["ana.mods"] = [f"mod_{m}" for m in range(0, 4)]
     h5f["ana.mod_ids"] = np.arange(4)
     h5f["ana.neuron_ids"] = np.arange(4)
 
     # keep a copy of the original pandas data frame
-    # ps: to simplify, I removed the dict_argument everywhere since we did not use it.
     h5f[f"data.raw_df"] = df
 
     # Re-copy in correct format to use Paul's helper functions for analysis
