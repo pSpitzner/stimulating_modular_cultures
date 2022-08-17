@@ -2,10 +2,9 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-01-24 13:43:39
-# @Last Modified: 2022-06-01 10:45:25
+# @Last Modified: 2022-08-17 16:18:16
 # ------------------------------------------------------------------------------- #
-# Create a movie of the network for a given time range and visualize
-# firing neurons. Saves to mp4.
+# Classed needed to create a movie of the network.
 # ------------------------------------------------------------------------------- #
 
 import os
@@ -17,6 +16,10 @@ import colors as cc
 import logging
 
 # fmt:off
+logging.basicConfig(
+    format="%(asctime)s | %(levelname)-8s | %(name)-12s | %(message)s",
+    datefmt="%y-%m-%d %H:%M",
+)
 log = logging.getLogger(__name__)
 log.setLevel("INFO")
 

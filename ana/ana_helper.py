@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2022-08-17 15:21:28
+# @Last Modified: 2022-08-17 16:16:45
 # ------------------------------------------------------------------------------ #
 # Here we collect all functions for importing and analyzing the data.
 # A central idea is that for every simulated/experimental trial, we have a
@@ -37,8 +37,12 @@ from itertools import permutations
 import logging
 import warnings
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)-8s [%(name)s] %(message)s")
+logging.basicConfig(
+    format="%(asctime)s | %(levelname)-8s | %(name)-12s | %(message)s",
+    datefmt="%y-%m-%d %H:%M",
+)
 log = logging.getLogger(__name__)
+log.setLevel("WARNING")
 warnings.filterwarnings("ignore")  # suppress numpy warnings
 
 

@@ -1,3 +1,13 @@
+# ------------------------------------------------------------------------------ #
+# @Author:        F. Paul Spitzner
+# @Email:         paul.spitzner@ds.mpg.de
+# @Created:       2022-06-22 10:12:19
+# @Last Modified: 2022-08-17 16:22:33
+# ------------------------------------------------------------------------------ #
+# This guy uses movie_business.py to create movies from hdf5 files.
+# tweak main() and run from console.
+# ------------------------------------------------------------------------------ #
+
 import numpy as np
 import plot_helper as ph
 import ana_helper as ah
@@ -6,6 +16,10 @@ import re
 import glob
 import logging
 
+logging.basicConfig(
+    format="%(asctime)s | %(levelname)-8s | %(name)-12s | %(message)s",
+    datefmt="%y-%m-%d %H:%M",
+)
 log = logging.getLogger(__name__)
 log.setLevel("INFO")
 

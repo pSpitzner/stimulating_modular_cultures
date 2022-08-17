@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2022-08-17 16:04:03
+# @Last Modified: 2022-08-17 16:11:17
 # ------------------------------------------------------------------------------ #
 # Scans the provided (wildcarded) filenames and merges individual realizsation
 # into a single file, containing high-dimensional arrays.
@@ -44,8 +44,12 @@ from contextlib import nullcontext, ExitStack
 from dask_jobqueue import SGECluster
 from dask.distributed import Client, SSHCluster, LocalCluster, as_completed
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)-8s [%(name)s] %(message)s")
+logging.basicConfig(
+    format="%(asctime)s | %(levelname)-8s | %(name)-12s | %(message)s",
+    datefmt="%y-%m-%d %H:%M",
+)
 log = logging.getLogger(__name__)
+log.setLevel("INFO")
 warnings.filterwarnings("ignore")  # suppress numpy warnings
 
 import ana_helper as ah
