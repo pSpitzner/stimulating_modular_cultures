@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2022-06-22 10:12:19
-# @Last Modified: 2022-08-16 13:15:02
+# @Last Modified: 2022-08-18 13:54:48
 # ------------------------------------------------------------------------------ #
 # This creates a `parameter.tsv` where each line contains one parameter set,
 # which can be directly called from the command line (i.e. on a cluster).
@@ -20,7 +20,8 @@ from itertools import product
 
 # set directory to the location of this script file to use relative paths
 os.chdir(os.path.dirname(__file__))
-out_path = os.path.abspath(os.path.curdir + f"./../dat/simulations/lif/raw")
+out_path = os.path.abspath(os.path.curdir + f"./dat/simulations/lif/raw")
+print(f"simulation results will go to {out_path}")
 
 # seed for rank 0, will increase per thread
 seed = 6_000
@@ -50,7 +51,7 @@ count_dynamic = 0
 count_topo = 0
 with open("./parameters.tsv", "w") as f_dyn:
     # set the cli arguments
-    f_dyn.write("# commands to run dynamics on existing topology\n")
+    f_dyn.write("# commands to run, one line per realization\n")
 
     for args in arg_list:
         k_inter = args[0]

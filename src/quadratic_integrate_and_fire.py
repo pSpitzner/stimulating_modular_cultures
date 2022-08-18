@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2022-08-16 19:35:27
+# @Last Modified: 2022-08-18 12:57:36
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Creates a connectivity matrix matching the modular cultures (see `topology.py`)
@@ -101,7 +101,7 @@ record_state_idxs = True # [0, 1, 2, 3]
 record_state_idxs = np.arange(0, 160)
 
 # save state variables in steps of 25ms (the default) to save disk space
-# use 0.5ms for the highres simulations needed for nice rate-resource cycles
+# use 0.5 for the highres simulations needed for nice rate-resource cycles
 record_state_dt = 25 * ms
 
 # whether to record population rates
@@ -226,6 +226,18 @@ parser.add_argument(
     help="fraction of neurons that should be inhibitory",
 )
 
+parser.add_argument(
+    "--record-state-dt",
+    dest="record_state_dt",
+    default=record_state_dt / ms,
+    metavar=record_state_dt / ms,
+    type=float,
+    help=(
+        "time step for recording state variables, in ms. use 0.5ms to get smooth"
+        " resource-rate cycles"
+    ),
+)
+
 args = parser.parse_args()
 
 # RNG
@@ -238,13 +250,13 @@ jM = args.jM * mV
 jG = args.jG * mV
 tD = args.tD * second
 rate = args.r * Hz
+record_state_dt = args.record_state_dt * ms
 args.equil_duration *= second
 args.sim_duration *= second
 args.stimulation_module = [int(i) for i in args.stimulation_module]
 args.stimulation_rate *= Hz
 
 print(f'#{"":#^75}#\n#{"running dynamics in brian":^75}#\n#{"":#^75}#')
-# log.info("input topology:   %s", args.input_path)
 log.info("output path:      %s", args.output_path)
 log.info("seed:             %s", args.seed)
 log.info("k_inter:          %s", args.k_inter)
@@ -256,6 +268,7 @@ log.info("noise rate:       %s", rate)
 log.info("duration:         %s", args.sim_duration)
 log.info("equilibration:    %s", args.equil_duration)
 log.info("recording states: %s", record_state)
+log.info("  with time step: %s", record_state_dt)
 log.info("recording rates:  %s", record_rates)
 log.info("bridge weight:    %s", args.bridge_weight)
 log.info("inhibition:       %s (fraction of all neurons)", args.inhibition_fraction)
