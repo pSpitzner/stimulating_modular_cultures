@@ -23,11 +23,11 @@ The repo is structured into folders as follows:
 
 - [`run/`](run) contains helpers to run the simulations from `src` on a cluster, and to create parameter combinations / sweeps that can be computed in serial.
 
-- [`ana/](ana) contains all post-processing. Frontmost:
+- [`ana/`](ana) contains all post-processing. Frontmost:
     - [`paper_plots.py`](ana/paper_plots.py) is the high-level wrapper that creates our figures.
     - [`process_conditions.py`](ana/process_conditions.py) analyses the raw spiking data from either experiments or simulations to create before-after comparisons
     - [`ndim_merge.py`](ana/ndim_merge.py) analyses simulation data, sweeping different input strength.
     - [`ana_helper.py`](ana/ana_helper.py) contains all the low-level analysis functions that operate on spike times, importers of simulation and experimental data and much more.
-        * All analysis work on a nested dictionary, mostly  called `h5f`. Each `h5f` corresponds to one trial, and we attach all analysis results to this dict.
-        * The idea is that later functions (such as plotting) can use previous results. Note that this is done live, and that although we "add" to the `h5f`, nothing is written to disk.
+        * All analysis work on a nested dictionary, mostly  called `h5f`. Each of those corresponds to one trial, and we attach all analysis results to this dict.
+        * The idea is that later functions (such as plotting) can use previous results. Note that this is done live, and that although we "add" to the dictionaries, nothing is written to disk.
     - [`plot_helper.py`](ana/plot_helper.py) provides various functions that take such a `h5f` dict and plot some aspect of it with consistent styling. Examples include timeseries, rasters, and distributions.
