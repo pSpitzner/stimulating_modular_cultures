@@ -2,9 +2,28 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-05 10:37:47
-# @Last Modified: 2022-07-14 12:29:04
+# @Last Modified: 2022-08-18 12:39:17
 # ------------------------------------------------------------------------------ #
-# Helper to load the topology from hdf5
+# Helper classes to simulate axonal growth described in
+# Orlandi et al. 2013, DOI: 10.1038/nphys2686
+# with additional constraints to confine axons and optionally,
+# create modular topologies.
+#
+# Example
+# ```python
+# # check what is avaiable in terms of parameters
+# MergedTopology().get_parameters()
+#
+# # default is 160 neurons
+# tp = MergedTopology(par_N=100)
+#
+# tp = ModularTopology(par_k_inter=5)
+# bridge_ids = tp.neuron_bridge_ids
+# num_n = tp.par_N
+# a_ij_sparse = tp.aij_sparse
+# mod_ids = tp.neuron_module_ids
+# h5_data, h5_desc = tp.get_everything_as_nested_dict(return_descriptions=True)
+# ```
 # ------------------------------------------------------------------------------ #
 
 import os
