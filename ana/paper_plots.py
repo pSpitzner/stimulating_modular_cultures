@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-11-08 17:51:24
-# @Last Modified: 2022-08-17 16:10:12
+# @Last Modified: 2022-08-17 16:40:09
 # ------------------------------------------------------------------------------ #
 #
 # How to read / work this monstrosity of a file?
@@ -918,9 +918,10 @@ def fig_5_snapshots(
     r = 0  # repetition
     # for c in dset["coupling"].to_numpy():
     for c in [0.1, 0.025]:
-        for n in [1, 2, 4, 6, 7]:
+        # for ndx in [1, 2, 4, 6, 7]:
+        for n in [0.025, 0.05, 0.1, 0.15, 0.175]:
 
-            input_file = f"{rep_path}/coup{c:0.2f}-{r:d}/noise{n}.hdf5"
+            input_file = f"{rep_path}/coup{c:0.3f}-{r:d}/noise_{n:0.3f}.hdf5"
             if not os.path.exists(input_file):
                 log.error(f"File not found {input_file}")
                 continue

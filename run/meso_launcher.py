@@ -17,8 +17,8 @@ rng_start_seed = 55436434
 n_trajectories = 15 # number of repetitons per parameter combination
 
 gating_mechanism = True
-simulation_time = 1000
-output_folder = "./dat/simulations/meso/raw_long_ts"
+simulation_time = 1_000
+output_folder = "./dat/simulations/meso/raw"
 
 # ------------------------------------------------------------------------------ #
 # Note on file naming convention:
@@ -29,7 +29,7 @@ output_folder = "./dat/simulations/meso/raw_long_ts"
 # ------------------------------------------------------------------------------ #
 # gating_mechanism = False
 # output_folder = "./dat/simulations/meso/raw_no_gates_long_ts"
-# simulation_time = 10000
+# simulation_time = 10_000
 # ------------------------------------------------------------------------------ #
 
 
@@ -50,7 +50,9 @@ def main():
     for rep in tqdm(range(n_trajectories), desc="repetitions", leave=True):
         for c in tqdm(coupling_span, desc="coupling", leave=False):
             # one folder for every coupling
-            coupling_folder = f"{output_folder}coup{c:.2f}-{rep:d}"
+            coupling_folder = f"{output_folder}/coup{c:0.3f}-{rep:d}"
+            # yes, the .2f precision turned out to be insufficient for the cpl values
+            # but we load the value from metadata, not file name.
             os.makedirs(coupling_folder, exist_ok=True)
 
             # Loop over different external inputs,
@@ -61,7 +63,8 @@ def main():
                 leave=False,
             ):
                 mm.simulate_and_save(
-                    output_filename=f"{coupling_folder}/noise{j}",
+                    # output_filename=f"{coupling_folder}/noise{j}",
+                    output_filename=f"{coupling_folder}/noise_{h:0.3f}",
                     simulation_time=simulation_time,
                     ext_str=h,
                     w0=c,
@@ -72,6 +75,7 @@ def main():
                         noise=h,
                         rep=rep,
                         gating_mechanism=gating_mechanism,
+                        seed = rng_start_seed + rep * 41533,
                     ),
                 )
 
