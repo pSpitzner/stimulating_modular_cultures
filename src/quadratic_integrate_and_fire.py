@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2022-08-18 12:57:36
+# @Last Modified: 2022-08-22 15:27:47
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Creates a connectivity matrix matching the modular cultures (see `topology.py`)
@@ -65,6 +65,7 @@ uIncr =  50 * mV   # after-spike increment of recovery variable u
 
 # synapse
 tD =  20 * second  # characteristic recovery time, between 0.5 and 20 seconds
+                   # Note: in the manuscript we renamed synaptic resources from D to R
 tA =  10 * ms      # decay time of post-synaptic current (AMPA current decay time)
 jA =  45 * mV      # AMPA current strength, between 10 - 50 mV
                    # 170.612 value in javiers neurondyn
@@ -77,7 +78,15 @@ beta = 0.8         # D = beta*D after spike, to reduce efficacy, beta < 1
 rate = 80 * Hz     # rate for the poisson input (shot-noise), between 10 - 50 Hz
 jM   = 15 * mV     # shot noise (minis) strength, between 10 - 50 mV
                    # (sum of minis arriving at target neuron)
-jS = 300 * mV * mV * ms * ms  # white noise strength, via xi = dt**.5 * randn()
+sigV = sqrt(0.06) * mV # amplitude of white noise membrane fluctuations
+# Note: for 0.06^0.5 mV, membrane fluctuations are virtually zero.
+# I made a mistake when converting the notation from the original paper,
+# using a much lower noise amplitude.
+# Since we focused on the noise through minis, its fine that we here use a lower sigV
+# than the reference (where minis were not varied as a control parameter).
+#
+# Converting from javiers: sigma = sqrt(j / (2*tau**2)) = sqrt(300 / 2 / 50 / 50)
+# Set sigV ~= 1.73 to get noise levels comparable to javiers paper.
 
 # ------------------------------------------------------------------------------ #
 # simulation parameters
@@ -300,20 +309,19 @@ mod_ids = tp.neuron_module_ids
 G = NeuronGroup(
     N=num_n,
     model="""
-        dv/dt = ( k*(v-vRef)*(v-vThr) -u +IA -IG +Istim     # [6] soma potential
-                  +xi*(jS/tV)**0.5      )/tV   : volt       # white noise term
-        dIA/dt = -IA/tA                        : volt       # [9, 10]
-        dIG/dt = -IG/tG                        : volt       # [9, 10]
-        du/dt = ( b*(v-vRef) -u )/tU           : volt       # [7] recovery variable
-        dD/dt = ( 1-D)/tD                      : 1          # [11] recovery to one
+        dv/dt = ( k*(v-vRef)*(v-vThr) -u +IA -IG            # [1] soma potential
+                  +xi*sigV*(2.0*tV)**0.5)/tV   : volt       # white noise term
+        du/dt = ( b*(v-vRef) -u )/tU           : volt       # [2] recovery variable
+        dIA/dt = -IA/tA                        : volt       # [4]
+        dIG/dt = -IG/tG                        : volt       # [5]
+        dD/dt = ( 1-D)/tD                      : 1          # [6] recovery to one
         j     : volt (constant)                             # neuron specific synaptic weight
-        Istim : volt (constant)
     """,
     threshold="v > vPeak",
     reset="""
-        v = vReset       # [8]
-        u = u + uIncr    # [8]
-        D = D * beta     # [11] delta-function term on spike
+        v = vReset       # [3]
+        u = u + uIncr    # [3]
+        D = D * beta     # [7]
     """,
     method="euler",
     dt=defaultclock.dt,
@@ -371,14 +379,14 @@ S_exc = Synapses(
     source=G_exc,
     target=G,
     on_pre="""
-        IA_post += D_pre * j_pre    # [10]
+        IA_post += D_pre * j_pre    # [8]
     """,
 )
 S_inh = Synapses(
     source=G_inh,
     target=G,
     on_pre="""
-        IG_post += D_pre * j_pre    # [10]
+        IG_post += D_pre * j_pre    # [8]
     """,
 )
 
