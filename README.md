@@ -1,16 +1,21 @@
 # Stimulating Modular Cultures
 
 
+
+## Data
+
+Raw data, preprocessed recordings and rendered movies can be downloaded [here](https://gin.g-node.org/pspitzner/stimulating_modular_cultures)
+
 ## Dependencies
 
-All dependencies should be setup automatically if you create a new conda environment from the repository directory.
+All dependencies should be installed automatically if you create a new conda environment from the repository directory.
 ```bash
 conda env create --file environment.yml
 conda activate modular_cultures
 ```
 
 ## Getting started
-We provide [interactive notebooks](notebooks) which serve as a good starting point, they showcase the models a bit and link which parts of the code led to which plot.
+We provide [interactive notebooks](notebooks) which serve as a good starting point, they showcase the models and link which parts of the code lead to which plot.
 
 
 ## Code structure
