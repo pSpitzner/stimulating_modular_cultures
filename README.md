@@ -1,6 +1,23 @@
 # Stimulating Modular Cultures
 
+## Preprint
 
+[https://arxiv.org/abs/2205.10563](https://arxiv.org/abs/2205.10563)
+
+```
+@misc{yamamoto_modular_2022,
+  title = {Modular Architecture Facilitates Noise-Driven Control of Synchrony in Neuronal Networks},
+  author = {Yamamoto, Hideaki and Spitzner, F. Paul and Takemuro, Taiki and Buend{\'i}a, Victor and Morante, Carla and Konno, Tomohiro and Sato, Shigeo and {Hirano-Iwata}, Ayumi and Priesemann, Viola and Mu{\~n}oz, Miguel A. and Zierenberg, Johannes and Soriano, Jordi},
+  year = {2022},
+  eprint = {2205.10563},
+  eprinttype = {arxiv},
+  primaryclass = {q-bio},
+  institution = {{arXiv}},
+  doi = {10.48550/arXiv.2205.10563},
+  url = {http://arxiv.org/abs/2205.10563},
+  archiveprefix = {arXiv},
+}
+```
 
 ## Data
 
