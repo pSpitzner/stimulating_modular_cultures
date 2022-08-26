@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-11-08 17:51:24
-# @Last Modified: 2022-08-17 16:40:09
+# @Last Modified: 2022-08-23 12:02:39
 # ------------------------------------------------------------------------------ #
 #
 # How to read / work this monstrosity of a file?
@@ -51,10 +51,10 @@ from benedict import benedict
 import bitsandbobs as bnb
 from bitsandbobs import plt as cc
 
-from . import plot_helper as ph
-from . import ana_helper as ah
-from . import ndim_helper as nh
-from . import meso_helper as mh
+import plot_helper as ph
+import ana_helper as ah
+import ndim_helper as nh
+import meso_helper as mh
 
 
 logging.basicConfig(
