@@ -1,3 +1,5 @@
+dat.nosync/*
+dat
 dat/*
 mov/*
 exe/*
@@ -15,3 +17,4 @@ __pycache__
 *.png
 .nfs*
 .ipynb_checkpoints
+.vscode
