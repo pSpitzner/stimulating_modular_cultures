@@ -2,9 +2,9 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2022-08-17 16:16:20
+# @Last Modified: 2022-09-27 11:04:16
 # ------------------------------------------------------------------------------ #
-# All the plotting is in here.
+# All the lower-level plotting is in here.
 #
 # What's a good level of abstraction?
 # * Basic routines that plot one thing or the other, directly from file.
@@ -105,10 +105,24 @@ def overview_topology(h5f, filenames=None, skip_graph=False):
 
     fig.tight_layout()
 
+
     return fig
 
 
 def overview_dynamic(h5f, filenames=None, threshold=None, states=True, skip=[]):
+    """
+    Plots an overview figure of dynamic aspects in `h5f`.
+
+    # Parameters
+    h5f : dict-like, loaded hi5 file
+    threshold : float or "max",
+        Floats are passed to ah.find_system_bursts_from_global_rate()
+        "max" to use a (hardcoded) threshold relative to the maximally found firing rate.
+    states: bool,
+        whether to plot state variables
+    skip: list of str,
+        panels not to plot. known keys are "raster", "rates", "burst", "init"
+    """
 
     # if we have recorded depletion, let's plot that, too
     depletion = False
@@ -453,6 +467,7 @@ def plot_system_rate(
 
     return ax
 
+
 def plot_gate_history(
     h5f, ax=None, apply_formatting=True, mark_burst_threshold=False, **kwargs
 ):
@@ -469,8 +484,6 @@ def plot_gate_history(
         fig, ax = plt.subplots()
     else:
         fig = ax.get_figure()
-
-
 
     num_time_steps = h5f["data.gate_history"].shape[-1]
     dt = h5f["ana.rates.dt"]
@@ -490,11 +503,11 @@ def plot_gate_history(
     # lets reshape the gate history so we have only the two actually existing gates:
     # old: [from, to, time] 4,4,t
     # new: [from, (target_one, target_two), time] 4,2,t
-    gate_history = np.ones(shape=(4,2,num_time_steps), dtype="int")*-1
+    gate_history = np.ones(shape=(4, 2, num_time_steps), dtype="int") * -1
     for m_id in h5f["ana.mod_ids"]:
         t1, t2 = np.where(w[m_id, :] == 1)[0]
-        gate_history[m_id,0,:] = h5f["data.gate_history"][m_id, t1, :]
-        gate_history[m_id,1,:] = h5f["data.gate_history"][m_id, t2, :]
+        gate_history[m_id, 0, :] = h5f["data.gate_history"][m_id, t1, :]
+        gate_history[m_id, 1, :] = h5f["data.gate_history"][m_id, t2, :]
 
     # lets hard code the y coordinates.
     total = 1.0
@@ -514,7 +527,7 @@ def plot_gate_history(
             # we want a continuous line, where the gate is active that
             # disappears when the gate closes.
             array[array == 0] = np.nan
-            ax.plot(time_axis, array*y_pos, **plot_kwargs)
+            ax.plot(time_axis, array * y_pos, **plot_kwargs)
             y_pos += dy
 
     if apply_formatting:
@@ -524,7 +537,6 @@ def plot_gate_history(
         fig.tight_layout()
 
     return ax
-
 
 
 def plot_state_variable(h5f, ax=None, apply_formatting=True, variable="D", **kwargs):
@@ -560,7 +572,7 @@ def plot_state_variable(h5f, ax=None, apply_formatting=True, variable="D", **kwa
         # mean across neurons
         x = h5f[f"data.state_vars_time"][:]
         y = np.nanmean(stat_vals[selects, :], axis=0)
-        ax.plot(x,y,**kwargs)
+        ax.plot(x, y, **kwargs)
         if np.any(y > 1):
             geqo = True
         if np.any(y < 0):
@@ -1011,12 +1023,7 @@ def plot_resources_vs_activity(
 
         # we need matching time steps. unfortunately, i have not always saved
         # the dt of the state vars, so this is a bit fishy.
-        stride = int(
-            np.round(
-                h5f["ana.adaptation.dt"]
-                / h5f["ana.rates.dt"]
-            )
-        )
+        stride = int(np.round(h5f["ana.adaptation.dt"] / h5f["ana.rates.dt"]))
         log.debug(f"strides for rate vs adaptation: {stride}")
         assert (
             len(mod_rate) == len(mod_adapt) * stride
@@ -1067,8 +1074,6 @@ def plot_resources_vs_activity(
             ax.get_figure().tight_layout()
 
     return ax
-
-
 
 
 # ------------------------------------------------------------------------------ #

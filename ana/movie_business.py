@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-01-24 13:43:39
-# @Last Modified: 2022-08-17 16:18:16
+# @Last Modified: 2022-09-01 11:46:47
 # ------------------------------------------------------------------------------- #
 # Classed needed to create a movie of the network.
 # ------------------------------------------------------------------------------- #
@@ -29,12 +29,22 @@ import matplotlib.colors as mcolors
 from matplotlib.collections import LineCollection
 from matplotlib.animation import FFMpegWriter
 
-plt.style.use("dark_background")
+from bitsandbobs.plt import alpha_to_solid_on_bg
+
+# theme_bg = "black"
+theme_bg = "white"
+if theme_bg == "black":
+    plt.style.use("dark_background")
+    # use custom colors to match the paper
+    matplotlib.rcParams["axes.prop_cycle"] = matplotlib.cycler("color", [
+        "#5886be", "#f3a093", "#53d8c9", "#f9c192", "#f2da9c",
+    ])
+else:
+    plt.style.use("default")
+    matplotlib.rcParams["axes.prop_cycle"] = matplotlib.cycler("color", [
+        "#233954", "#ea5e48", "#1e7d72", "#f49546", "#e8bf58",
+    ])
 plt.ioff()
-# use custom colors to match the paper
-matplotlib.rcParams["axes.prop_cycle"] = matplotlib.cycler("color", [
-    "#5886be", "#f3a093", "#53d8c9", "#f9c192", "#f2da9c", # light
-])
 matplotlib.rcParams["figure.dpi"] = 300
 # fmt:on
 
@@ -71,7 +81,11 @@ class MovieWriter(object):
         kwargs = kwargs.copy()
         kwargs.setdefault(
             "metadata",
-            dict(title="Noise-driven control of synchrony", artist="Matplotlib", comment="Yikes! Spikes!"),
+            dict(
+                title="Noise-driven control of synchrony",
+                artist="Matplotlib",
+                comment="Yikes! Spikes!",
+            ),
         )
 
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -97,6 +111,7 @@ class MovieWriter(object):
     def render(self):
         assert len(self.renderers) > 0, "Dont forget to add renderers"
         fig = self.renderers[0].ax.get_figure()
+        fig.patch.set_facecolor(theme_bg)
         with self.writer.saving(fig=fig, outfile=self.output_path, dpi=300):
             log.info(f"Rendering {self.movie_duration:.0f} seconds at {self.fps} fps")
 
@@ -381,18 +396,35 @@ class TopologyRenderer(object):
     This guy provides the helpers to plot soma and axons and lets them light
     up on spikes. the glow fades with a customizable duration (in time units of)
     the experiment
+
+    # Parameters
+    color : str
+        used for foreground elements
+    background : str
+        canvas.
     """
 
     def __init__(
-        self, input_path, ax=None, decay_time=10.0, canvas_clr="black", show_time=False
+        self,
+        input_path,
+        ax=None,
+        decay_time=10.0,
+        title_color="white",
+        neuron_color=None,
+        background="black",
+        show_time=False,
     ):
 
         self.input_path = input_path
 
         # some styling options
-        self.canvas_clr = canvas_clr
-        self.title_clr = "white"
-        self.neuron_clr = "white"
+        self.background = background
+        self.title_clr = title_color
+        if neuron_color is None:
+            self.neuron_color = alpha_to_solid_on_bg("#bbb", 0.1, bg=background)
+            log.info(f"Using default neuron color {self.neuron_color}")
+        else:
+            self.neuron_clr = neuron_color
 
         # try to color neurons differently, according to modules
         mod_ids = h5.load(self.input_path, "/data/neuron_module_id")
@@ -430,7 +462,14 @@ class TopologyRenderer(object):
         else:
             self.ax = ax
             self.fig = ax.get_figure()
-        self.init_background()
+        self.init_background(
+            # axon_edge = (1.0, 1.0, 1.0, 0.1),
+            # soma_edge = (1.0, 1.0, 1.0, 0.1),
+            # soma_face = (1.0, 1.0, 1.0, 0.1),
+            axon_edge = self.neuron_color,
+            soma_edge = self.neuron_color,
+            soma_face = self.neuron_color,
+        )
 
         log.info(f"Created TopologyRenderer for {input_path}")
         try:
@@ -438,25 +477,20 @@ class TopologyRenderer(object):
         except:
             log.warning("No spikes found in the data")
 
-    def init_background(
-        self,
-        axon_edge=(1.0, 1.0, 1.0, 0.1),
-        soma_edge=(1.0, 1.0, 1.0, 0.1),
-        soma_face=(1.0, 1.0, 1.0, 0.1),
-    ):
+    def init_background(self, axon_edge, soma_edge, soma_face):
         """
         This changes the style of the figure element, associated with ax.
         """
         # default colors, spikes will drawn over this. its nice to have them solid, cast alpha
-        axon_edge = _rgba_to_rgb(axon_edge, self.canvas_clr)
-        soma_edge = _rgba_to_rgb(soma_edge, self.canvas_clr)
-        soma_face = _rgba_to_rgb(soma_face, self.canvas_clr)
+        axon_edge = _rgba_to_rgb(axon_edge, self.background)
+        soma_edge = _rgba_to_rgb(soma_edge, self.background)
+        soma_face = _rgba_to_rgb(soma_face, self.background)
 
         ax = self.ax
         fig = self.fig
 
         # ax.set_title(f"{args.title}", fontsize=16, color=title_clr)
-        ax.set_facecolor(self.canvas_clr)
+        ax.set_facecolor(self.background)
         ax.set_axis_off()
         ax.set_aspect(1)
 
@@ -588,6 +622,7 @@ class TopologyRenderer(object):
 
 def _rgba_to_rgb(c, bg="white"):
     bg = mcolors.to_rgb(bg)
+    c = mcolors.to_rgba(c)
     alpha = c[-1]
 
     res = (

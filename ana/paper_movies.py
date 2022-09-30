@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2022-06-22 10:12:19
-# @Last Modified: 2022-08-17 16:22:33
+# @Last Modified: 2022-09-01 11:47:07
 # ------------------------------------------------------------------------------ #
 # This guy uses movie_business.py to create movies from hdf5 files.
 # tweak main() and run from console.
@@ -25,10 +25,15 @@ log.setLevel("INFO")
 
 # import those last, so that the matpllotlb rc params are not overwritten
 # they are tweaked for movies, dark background, agg backened, etc
+import movie_business
 from movie_business import matplotlib, plt
 from movie_business import MovieWriter
 from movie_business import FadingLineRenderer, MovingWindowRenderer, TextRenderer
 from movie_business import TopologyRenderer
+
+# go to movie_business and change the theme_bg color there, to work as expected
+clr_bg = movie_business.theme_bg
+clr_fg = "white" if clr_bg == "black" else "black"
 
 
 def main():
@@ -126,7 +131,6 @@ def make_a_movie(
     # ------------------------------------------------------------------------------ #
 
     fig = plt.figure(figsize=(1920 / 300, 800 / 300), dpi=300)
-    fig.patch.set_facecolor("black")
     gs = fig.add_gridspec(
         nrows=2,
         ncols=4,
@@ -146,7 +150,12 @@ def make_a_movie(
     # ------------------------------------------------------------------------------ #
 
     ax = fig.add_subplot(gs[:, 0])
-    tpr = TopologyRenderer(input_path=input_path, ax=ax)
+    tpr = TopologyRenderer(
+        input_path=input_path,
+        ax=ax,
+        background=clr_bg,
+        title_color=clr_fg,
+    )
     tpr.decay_time = decay_time
 
     ax.set_xlim(-40, 640)
@@ -167,7 +176,7 @@ def make_a_movie(
     ah.find_rates(h5f)
 
     ph.plot_module_rates(h5f=h5f, ax=ax, alpha=0.5)
-    ph.plot_system_rate(h5f=h5f, ax=ax, color="white")
+    ph.plot_system_rate(h5f=h5f, ax=ax, color=clr_fg)
     ax.get_legend().set_visible(False)
     ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(30.0))
     ax.xaxis.set_minor_locator(matplotlib.ticker.NullLocator())
@@ -200,7 +209,7 @@ def make_a_movie(
     axis_to_data = ax.transAxes + ax.transData.inverted()
     ti_y_pos = -0.0
     ti_y_pos = axis_to_data.transform([1, ti_y_pos])[1]
-    ti = ax.plot([0], [ti_y_pos], marker="^", markersize=3, color="white", clip_on=False)[
+    ti = ax.plot([0], [ti_y_pos], marker="^", markersize=3, color=clr_fg, clip_on=False)[
         0
     ]
 
@@ -251,6 +260,7 @@ def make_a_movie(
             x=x_sets,
             y=y_sets,
             colors=colors,
+            background=clr_bg,
             dt=dt,
             ax=ax,
             tbeg=writer.tbeg,
@@ -300,7 +310,7 @@ def make_a_movie(
     axis_to_data = ax.transAxes + ax.transData.inverted()
     ti_y_pos = -0.05
     ti_y_pos = axis_to_data.transform([1, ti_y_pos])[1]
-    ti = ax.plot([0], [ti_y_pos], marker="^", markersize=3, color="white", clip_on=False)[
+    ti = ax.plot([0], [ti_y_pos], marker="^", markersize=3, color=clr_fg, clip_on=False)[
         0
     ]
 
@@ -338,8 +348,8 @@ def make_a_movie(
 
 
 def comparison_simulation(
-    input_top = "./dat/the_last_one/dyn/highres_stim=off_k=5_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=80.0_rep=001.hdf5",
-    input_bot = "./dat/the_last_one/dyn/highres_stim=off_k=5_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=90.0_rep=001.hdf5",
+    input_top="./dat/simulations/lif/raw/highres_stim=off_k=5_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=80.0_rep=001.hdf5",
+    input_bot="./dat/simulations/lif/raw/highres_stim=off_k=5_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=90.0_rep=001.hdf5",
     output_path="./mov/simulation_test.mp4",
     title=None,
     show_time=False,
@@ -368,7 +378,7 @@ def comparison_simulation(
     # ------------------------------------------------------------------------------ #
 
     fig = plt.figure(figsize=(1920 / 300, 1080 / 300), dpi=300)
-    fig.patch.set_facecolor("black")
+    # fig.patch.set_facecolor("black")
     gs = fig.add_gridspec(
         nrows=2,
         ncols=4,
@@ -393,7 +403,12 @@ def comparison_simulation(
         # ------------------------------------------------------------------------------ #
 
         ax = fig.add_subplot(gs[row, 0])
-        tpr = TopologyRenderer(input_path=input_path, ax=ax)
+        tpr = TopologyRenderer(
+            input_path=input_path,
+            ax=ax,
+            background=clr_bg,
+            title_color=clr_fg,
+        )
         tpr.decay_time = decay_time
 
         ax.set_xlim(-40, 640)
@@ -437,6 +452,7 @@ def comparison_simulation(
                 x=x_sets,
                 y=y_sets,
                 colors=colors,
+                background=clr_bg,
                 dt=dt,
                 ax=ax,
                 tbeg=writer.tbeg,
@@ -475,9 +491,9 @@ def comparison_simulation(
         ax.set_ylabel("")
 
         # if row == 0:
-            # sns.despine(ax=ax, right=True, top=True, left=True, bottom=True)
-            # ax.xaxis.set_visible(False)
-            # ax.tick_params(left=False, labelleft=False)
+        # sns.despine(ax=ax, right=True, top=True, left=True, bottom=True)
+        # ax.xaxis.set_visible(False)
+        # ax.tick_params(left=False, labelleft=False)
         # else:
         sns.despine(ax=ax, right=True, top=True, left=True, bottom=True, offset=1)
         ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(30.0))
@@ -488,9 +504,9 @@ def comparison_simulation(
         axis_to_data = ax.transAxes + ax.transData.inverted()
         ti_y_pos = -0.05
         ti_y_pos = axis_to_data.transform([1, ti_y_pos])[1]
-        ti = ax.plot([0], [ti_y_pos], marker="^", markersize=3, color="white", clip_on=False)[
-            0
-        ]
+        ti = ax.plot(
+            [0], [ti_y_pos], marker="^", markersize=3, color=clr_fg, clip_on=False
+        )[0]
 
         writer.renderers.append(
             MovingWindowRenderer(
@@ -511,9 +527,18 @@ def comparison_simulation(
     # fig.text(0.83, 0.435, "Firing\nRates (Hz)", fontsize=8, ha="right")
     # fig.text(0.83, 0.915, "Firing\nRates (Hz)", fontsize=8, ha="right")
 
-    fig.text(0.04, 0.72, "Base Input", fontweight="bold", fontsize=8, ha="center", rotation=90)
-    fig.text(0.04, 0.18, "Increased Input", fontweight="bold", fontsize=8, ha="center", rotation=90)
-
+    # fig.text(
+    #     0.04, 0.72, "Base Input", fontweight="bold", fontsize=8, ha="center", rotation=90
+    # )
+    # fig.text(
+    #     0.04,
+    #     0.18,
+    #     "Increased Input",
+    #     fontweight="bold",
+    #     fontsize=8,
+    #     ha="center",
+    #     rotation=90,
+    # )
 
     if title is not None:
         fig.text(0.19, 0.95, title, fontsize=8, ha="center", va="top")
@@ -529,6 +554,7 @@ def comparison_simulation(
         fig.savefig(f'{output_path.replace(".mp4", ".png")}', dpi=300)
     else:
         writer.render()
+
 
 if __name__ == "__main__":
     main()
