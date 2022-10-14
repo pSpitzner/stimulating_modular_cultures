@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-05 10:37:47
-# @Last Modified: 2022-10-04 16:50:47
+# @Last Modified: 2022-10-14 15:26:54
 # ------------------------------------------------------------------------------ #
 # Helper classes to simulate axonal growth described in
 # Orlandi et al. 2013, DOI: 10.1038/nphys2686
@@ -158,9 +158,7 @@ class BaseTopology(object):
         for n_id in range(0, self.par_N):
             path = self.grow_axon(start=self.neuron_positions[n_id, :])
             axon_paths[n_id] = path
-            cids, seg_ids = self.connections_for_neuron(
-                n_id=n_id, axon_path=path
-            )
+            cids, seg_ids = self.connections_for_neuron(n_id=n_id, axon_path=path)
 
             argsorted = np.argsort(cids)
             aij_nested[n_id] = cids[argsorted]
@@ -376,6 +374,109 @@ class BaseTopology(object):
         return t_ids, connection_segments
 
 
+class OpenRoundTopology(BaseTopology):
+    """
+    This is where neurons are placed in a circle in the middle but axons can grow
+    unconstrained.
+    linear dish size par_L is the diameter of the circle
+    (Implementationwise, we change the function that checks the substrate after neurons
+    are placed)
+    """
+
+    def __init__(self, **kwargs):
+        self.set_default_parameters()
+        self.update_parameters(**kwargs)
+        # per default, we have a quadratic substrate of size par_L
+        self._substrate = np.array([[0, self.par_L], [0, self.par_L]])
+        self.init_topology()
+
+    def init_topology(self):
+
+        log.info("Open Round Topology")
+        for k, v in self.get_parameters().items():
+            log.info(f"{k}: {v}")
+
+        self.set_neuron_positions()
+
+        # it is convenient to have indices sorted by position
+        sort_idx = np.lexsort(
+            (
+                self.neuron_positions[:, 1],
+                self.neuron_positions[:, 0],
+            )
+        )
+        self.neuron_positions = self.neuron_positions[sort_idx]
+
+        # dendritic trees as circles
+        self.set_dendrite_radii()
+
+        # every source neuron has a list of target neuron ids
+        aij_nested = [np.array([], dtype="int")] * self.par_N
+        # which are the axon segments that made the connections? (ids)
+        segs_nested = [np.array([], dtype="int")] * self.par_N
+
+        # paths of all axons
+        axon_paths = [np.array([])] * self.par_N
+
+        # do not confine axons: set substrate to be the whole plane
+        self.is_within_substrate = lambda x, y, r=0: True
+
+        # grow axons and get connections for all neurons
+        for n_id in range(0, self.par_N):
+            path = self.grow_axon(start=self.neuron_positions[n_id, :])
+            axon_paths[n_id] = path
+            cids, seg_ids = self.connections_for_neuron(n_id=n_id, axon_path=path)
+
+            argsorted = np.argsort(cids)
+            aij_nested[n_id] = cids[argsorted]
+            segs_nested[n_id] = seg_ids[argsorted]
+
+        # save the details as attributes
+        self.axon_paths = axon_paths
+        # this has three columns
+        aij_sparse = _nested_lists_to_sparse(aij_nested, vals=segs_nested)
+        # vanilla sparse matrix has two columns
+        self.aij_sparse = aij_sparse[:, 0:2]
+        # save the third column separately
+        self.segs_sparse = aij_sparse[:, 2]
+        self.k_in, self.k_out = _get_degrees(aij_nested)
+
+    def is_within_substrate(self, x, y, r=0):
+        """
+        This check will only be used to place the neurons.
+        After that, we use a lambda that always returns true.
+        """
+        return _is_intersecting_circle(
+            [self.par_center_x, self.par_center_y], self.par_L / 2, x, y, r
+        )
+
+    def set_default_parameters(self):
+        super().set_default_parameters()
+        self.par_center_x = self.par_L / 2
+        self.par_center_y = self.par_L / 2
+
+    def update_parameters(self, **kwargs):
+        super().update_parameters(**kwargs)
+        self.par_center_x = self.par_L / 2
+        self.par_center_y = self.par_L / 2
+        if "par_center_x" in kwargs:
+            self.par_center_x = kwargs["par_center_x"]
+        if "par_center_y" in kwargs:
+            self.par_center_y = kwargs["par_center_y"]
+
+    def get_everything_as_nested_dict(self, return_descriptions=False):
+
+        h5_data, h5_desc = super().get_everything_as_nested_dict(return_descriptions=True)
+
+        h5_data["meta.topology"] = "orlandi open round topology"
+        h5_data["meta.topology_center_x"] = self.par_center_x
+        h5_data["meta.topology_center_y"] = self.par_center_y
+
+        if return_descriptions:
+            return h5_data, h5_desc
+        return h5_data
+
+
 class MergedTopology(BaseTopology):
     def __init__(self, **kwargs):
         """
@@ -388,6 +489,9 @@ class MergedTopology(BaseTopology):
         self.update_parameters(**kwargs)
         # per default, we have a quadratic substrate of size par_L
         self._substrate = np.array([[0, self.par_L], [0, self.par_L]])
+        log.info("Merged Topology")
+        for k, v in self.get_parameters().items():
+            log.info(f"{k}: {v}")
         self.init_topology()
 
         self.neuron_module_ids = np.zeros(self.par_N, dtype=int)
@@ -967,6 +1071,7 @@ def _are_intersecting_circles(ref_pos, ref_rad, x, y, r=0):
     y_ = ref_pos[:, 1]
     r_ = ref_rad[:]
     return np.square(x - x_) + np.square(y - y_) < np.square(r + r_)
+
 
 @jit(nopython=True, parallel=False, fastmath=True, cache=True)
 def _is_intersecting_circle(ref_pos, ref_rad, x, y, r=0):

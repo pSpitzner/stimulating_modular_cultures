@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2022-06-22 10:12:19
-# @Last Modified: 2022-09-01 11:47:07
+# @Last Modified: 2022-10-14 15:47:47
 # ------------------------------------------------------------------------------ #
 # This guy uses movie_business.py to create movies from hdf5 files.
 # tweak main() and run from console.
@@ -30,6 +30,7 @@ from movie_business import matplotlib, plt
 from movie_business import MovieWriter
 from movie_business import FadingLineRenderer, MovingWindowRenderer, TextRenderer
 from movie_business import TopologyRenderer
+from movie_business import CultureGrowthRenderer
 
 # go to movie_business and change the theme_bg color there, to work as expected
 clr_bg = movie_business.theme_bg
@@ -554,6 +555,58 @@ def comparison_simulation(
         fig.savefig(f'{output_path.replace(".mp4", ".png")}', dpi=300)
     else:
         writer.render()
+
+
+def axon_growth(
+    output_path="./mov/axon_growth.mp4",
+    movie_duration=28,
+    tbeg=0,
+    tend=841,
+):
+    """
+    This illustrates the growht of axons.
+    All the keyframing definition is implemented in the CultureGrowthRenderer
+    so here we only have to pass the frame `set_time()`
+
+    we have around maximal ~250 axons segments
+    we assume 1frame = 1sec experimental time
+
+    shown cultures has 500 neurons and a round dish of 5 mm diameter
+    """
+
+    import src.topology as topo
+
+    topo._set_seed(42)
+
+    # 500 neurons in a 5mm round dish
+    # h5f = topo.OpenRoundTopology(par_N=5000, par_L=10000).get_everything_as_nested_dict()
+    h5f = topo.MergedTopology(par_N=5000, par_L=12000).get_everything_as_nested_dict()
+    fig, ax = plt.subplots()
+    ax.set_xlim(1000, 11000)
+    ax.set_ylim(1000, 11000)
+    ax.set_aspect("equal")
+    ax.axis("off")
+    ax.set_clip_on(True)
+
+    # we may focus on neuron_id in 3419
+    # 8170 5255 to 5837 7036
+
+    # remove padding around the axis
+    fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
+
+    cr = CultureGrowthRenderer(h5f, ax=ax)
+    # cr.focus_single = n_id
+
+    writer = MovieWriter(
+        output_path=output_path,
+        movie_duration=movie_duration,
+        tbeg=tbeg,
+        tend=tend,
+    )
+    writer.renderers.append(cr)
+    writer.render()
+
+    return cr
 
 
 if __name__ == "__main__":

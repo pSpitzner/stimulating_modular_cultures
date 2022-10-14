@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-01-24 13:43:39
-# @Last Modified: 2022-09-01 11:46:47
+# @Last Modified: 2022-10-14 15:47:50
 # ------------------------------------------------------------------------------- #
 # Classed needed to create a movie of the network.
 # ------------------------------------------------------------------------------- #
@@ -11,8 +11,7 @@ import os
 import numpy as np
 from tqdm import tqdm
 import matplotlib
-import hi5 as h5
-import colors as cc
+import bitsandbobs as bnb
 import logging
 
 # fmt:off
@@ -25,14 +24,15 @@ log.setLevel("INFO")
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+plt.ioff()
 import matplotlib.colors as mcolors
 from matplotlib.collections import LineCollection
 from matplotlib.animation import FFMpegWriter
 
 from bitsandbobs.plt import alpha_to_solid_on_bg
 
-# theme_bg = "black"
-theme_bg = "white"
+theme_bg = "black"
+# theme_bg = "white"
 if theme_bg == "black":
     plt.style.use("dark_background")
     # use custom colors to match the paper
@@ -44,8 +44,9 @@ else:
     matplotlib.rcParams["axes.prop_cycle"] = matplotlib.cycler("color", [
         "#233954", "#ea5e48", "#1e7d72", "#f49546", "#e8bf58",
     ])
-plt.ioff()
 matplotlib.rcParams["figure.dpi"] = 300
+matplotlib.rcParams["lines.dash_capstyle"] = "round"
+matplotlib.rcParams["lines.solid_capstyle"] = "round"
 # fmt:on
 
 
@@ -205,9 +206,9 @@ class FadingLineRenderer(object):
 
         for clr in self.colors:
             if background == "transparent":
-                background = cc.to_rgb(clr)
+                background = bnb.plt.to_rgb(clr)
                 background += (0,)
-            cmap = cc.create_cmap(
+            cmap = bnb.plt.create_cmap(
                 start=background,
                 end=clr,
             )
@@ -427,7 +428,7 @@ class TopologyRenderer(object):
             self.neuron_clr = neuron_color
 
         # try to color neurons differently, according to modules
-        mod_ids = h5.load(self.input_path, "/data/neuron_module_id")
+        mod_ids = bnb.hi5.load(self.input_path, "/data/neuron_module_id")
         self.n_id_clr = []
 
         # neuron radius, um
@@ -441,13 +442,13 @@ class TopologyRenderer(object):
         self.time_unit = "s"
 
         # number of neurons
-        self.num_n = int(h5.load(self.input_path, "/meta/topology_num_neur"))
+        self.num_n = int(bnb.hi5.load(self.input_path, "/meta/topology_num_neur"))
 
         # keep a list of spiketimes for every neuron.
         self.spiketimes = []
         # load event times
         # two-column list of spiketimes. first col is neuron id, second col the spiketime.
-        spikes = h5.load(self.input_path, "/data/spiketimes_as_list")
+        spikes = bnb.hi5.load(self.input_path, "/data/spiketimes_as_list")
         # convert to something we can work with, list of arrays: [neuron][spiketimes]
         for n_id in range(self.num_n):
             idx = np.where(spikes[:, 0] == n_id)[0]
@@ -466,9 +467,9 @@ class TopologyRenderer(object):
             # axon_edge = (1.0, 1.0, 1.0, 0.1),
             # soma_edge = (1.0, 1.0, 1.0, 0.1),
             # soma_face = (1.0, 1.0, 1.0, 0.1),
-            axon_edge = self.neuron_color,
-            soma_edge = self.neuron_color,
-            soma_face = self.neuron_color,
+            axon_edge=self.neuron_color,
+            soma_edge=self.neuron_color,
+            soma_face=self.neuron_color,
         )
 
         log.info(f"Created TopologyRenderer for {input_path}")
@@ -502,10 +503,10 @@ class TopologyRenderer(object):
         # ------------------------------------------------------------------------------ #
 
         try:
-            seg_x = h5.load(
+            seg_x = bnb.hi5.load(
                 self.input_path, "/data/neuron_axon_segments_x", raise_ex=True
             )
-            seg_y = h5.load(
+            seg_y = bnb.hi5.load(
                 self.input_path, "/data/neuron_axon_segments_y", raise_ex=True
             )
             # overwrite padding 0 at the end
@@ -542,8 +543,8 @@ class TopologyRenderer(object):
         # soma
         # ------------------------------------------------------------------------------ #
 
-        pos_x = h5.load(self.input_path, "/data/neuron_pos_x")
-        pos_y = h5.load(self.input_path, "/data/neuron_pos_y")
+        pos_x = bnb.hi5.load(self.input_path, "/data/neuron_pos_x")
+        pos_y = bnb.hi5.load(self.input_path, "/data/neuron_pos_y")
 
         art_soma = []
         for i in range(len(pos_x)):
@@ -615,6 +616,291 @@ class TopologyRenderer(object):
             self.art_axons[n_id].set_color(ax_edge)
 
 
+class CultureGrowthRenderer(object):
+    def __init__(
+        self,
+        input_path,
+        ax=None,
+    ):
+        if isinstance(input_path, str):
+            self.h5f = bnb.hi5.recursive_load(input_path)
+        else:
+            self.h5f = input_path
+
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(8, 8))
+            self.ax = ax
+        else:
+            self.ax = ax
+
+        ax.set_aspect("equal")
+
+        # disable all the axis and ticks
+        # ax.axis("off")
+
+        self.num_neurons = len(self.h5f["data"]["neuron_pos_x"])
+        self.neurons = []
+        for n_id in range(0, self.num_neurons):
+            self.neurons.append(
+                SingleNeuronGrowth(
+                    self.h5f,
+                    n_id,
+                    base_color=mcolors.hsv_to_rgb((np.random.uniform(0, 1), 0.8, 0.8)),
+                    ax=self.ax,
+                )
+            )
+
+        # lets init a bezier curve that we can use for animation interpolation.
+        # its 1000 steps long (x) and goes from 0 to 1 (y)
+        _, self._bezier = _bezier(0, 1, 0, 1, 1001)
+
+    def smooth(self, x, beg=0, end=1):
+        """
+        smooth a value between beg and end, returning beg for x=0.0 and end for x=1.0
+        """
+        # get the index of the bezier curve
+        idx = int(np.clip(x, 0, 1) * 1000)
+        # get the value from the bezier curve
+        return beg + (end - beg) * self._bezier[idx]
+
+    def set_axon_alpha(self, alpha, n_id=None):
+        alpha = np.clip(alpha, 0, 1)
+        for neuron in self.neurons:
+            if n_id is None or neuron.n_id == n_id:
+                neuron.artists["axon"].set_alpha(alpha)
+
+    def set_connections_alpha(self, alpha, n_id=None):
+        alpha = np.clip(alpha, 0, 1)
+        for neuron in self.neurons:
+            if n_id is None or neuron.n_id == n_id:
+                for line in neuron.artists["connections"]:
+                    line.set_alpha(alpha)
+
+    def set_dendritic_tree_alpha(self, alpha, n_id=None):
+        alpha = np.clip(alpha, 0, 1)
+        for neuron in self.neurons:
+            if n_id is None or neuron.n_id == n_id:
+                circle = neuron.artists["dendritic_tree"]
+                base = neuron.base_color
+                inner = (*mcolors.to_rgb(base), neuron.dendrite_alpha_inner * alpha)
+                outer = (*mcolors.to_rgb(base), neuron.dendrite_alpha_outer * alpha)
+                circle.set_facecolor(inner)
+                circle.set_edgecolor(outer)
+
+    def set_soma_alpha(self, alpha, n_id=None):
+        alpha = np.clip(alpha, 0, 1)
+        for neuron in self.neurons:
+            if n_id is None or neuron.n_id == n_id:
+                neuron.artists["soma"].set_alpha(alpha)
+
+    def set_num_visible_segments(self, num_segs, n_id=None):
+        for neuron in self.neurons:
+            if n_id is None or neuron.n_id == n_id:
+                neuron.set_num_visible_segments(num_segs)
+
+    # ------------------------------------------------------------------------------ #
+    # here we implement our animation scripting
+    # ------------------------------------------------------------------------------ #
+    def set_time(self, time):
+        """
+        experimental time, does not have meaning here. arbitrary units,
+        lets call them frames.
+        make sure that the renderer passes integer-like time values
+        e.g. when movie_duration is 25, fps is 30 then set `tbeg=0` and `tend=751`
+        """
+        time = int(time)
+
+        # hide everything
+        if time == 0:
+            self.set_axon_alpha(0)
+            self.set_num_visible_segments(0)
+            self.set_connections_alpha(0)
+            self.set_dendritic_tree_alpha(0)
+            self.set_soma_alpha(0)
+
+        # get a smoothed out interpolation between 0 and 1 with ease-in ease-out effect.
+        sm = self.smooth
+
+        # make soma appear over 100 frames
+        if time <= 100:
+            # f is a "relative frame count" for this animation part
+            f = time - 0
+            self.set_soma_alpha(sm(f / 100))
+
+        # make dendritic tree appear over 100 frames
+        if time >= 100 and time <= 150:
+            f = time - 100
+            self.set_dendritic_tree_alpha(sm(f / 50))
+
+        # fade dendritic tree out a bit again
+        if time >= 150 and time <= 250:
+            f = time - 150
+            self.set_dendritic_tree_alpha(1 - 0.5 * sm(f / 100))
+
+        # let axons grow over 550 frames
+        if time == 250:
+            self.set_num_visible_segments(0)
+            self.set_axon_alpha(1)
+
+        if time >= 250 and time <= 600:
+            f = time - 250
+            self.set_num_visible_segments(int(f))
+
+        # fade axons out
+        if time >= 600 and time <= 750:
+            f = time - 600
+            self.set_axon_alpha(1 - sm(f / 150))
+
+        # also fade out whats left of the dendrites
+        if time >= 700 and time <= 775:
+            f = time - 700
+            self.set_dendritic_tree_alpha(0.5 - 0.5 * sm(f / 75))
+
+        # fade in connections
+        if time >= 625 and time <= 750:
+            f = time - 625
+            self.set_connections_alpha(sm(f / 125))
+
+        # go down to 0.05 alpha for connections, there the locality is visible
+        if time >= 750 and time <= 800:
+            f = time - 750
+            self.set_connections_alpha(1 - 0.95 * sm(f / 50))
+
+
+class SingleNeuronGrowth(object):
+    """
+    Illustrate the growth of a single neuron, one axon segment at a time
+    not a normal renderer, just a helper for the culture one
+
+    # Parameters
+    h5f : dict like
+        loaded from h5py.File
+    neuron_id : int
+        id of the neuron to show
+    base_color : str or tuple
+        color of the neuron, RGB only! Alpha are hardcoded in here
+    """
+
+    def __init__(self, h5f, neuron_id, base_color="white", ax=None):
+        """ """
+        self.h5f = h5f
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(8, 8))
+            self.ax = ax
+        else:
+            self.ax = ax
+
+        self.base_color = base_color
+        self.n_id = neuron_id
+        self.pos_x = h5f["data"]["neuron_pos_x"][self.n_id]
+        self.pos_y = h5f["data"]["neuron_pos_y"][self.n_id]
+        self.seg_x = np.hstack(
+            [[self.pos_x], h5f["data"]["neuron_axon_segments_x"][self.n_id]]
+        )
+        self.seg_y = np.hstack(
+            [[self.pos_y], h5f["data"]["neuron_axon_segments_y"][self.n_id]]
+        )
+        self.segs_shown = 0
+
+        # neuron radius, um
+        # self.rad_n = 7.5
+        self.rad_n = 20  # made them larger for this animation to be more visible
+        self.rad_dendrite = h5f["data"]["neuron_radius_dendritic_tree"][self.n_id]
+
+        # which connections will get created? sparse matrix: from -> to
+        aij_sparse = h5f["data"]["connectivity_matrix_sparse"]
+        # find the outgoing connections
+        idx = np.where(aij_sparse[:, 0] == self.n_id)[0]
+        self.target_ids = aij_sparse[idx, 1]
+        try:
+            # get the id of the axon segment that creates the connection to target neuron
+            # this was added later tot he file convention and might be missing
+            # because we insert an extra seg at the soma, we need to shift by 1
+            self.tar_seg_ids = h5f["data"]["connectivity_segments"][idx] + 1
+        except:
+            self.tar_seg_ids = np.ones_like(self.target_ids, dtype="int") * (
+                len(self.seg_x) - 1
+            )
+
+        # store the plot artists (lines etc) so we can modify them
+        self.artists = dict()
+
+        # ------------------------------------------------------------------------------ #
+        # soma
+        # ------------------------------------------------------------------------------ #
+
+        edge_color = "white" if theme_bg == "dark" else "black"
+
+        circle = plt.Circle((self.pos_x, self.pos_y), radius=self.rad_n, lw=0.5, zorder=4)
+        circle.set_facecolor(base_color)
+        circle.set_edgecolor(None)
+        circle.set_linewidth(0.0)
+        self.ax.add_artist(circle)
+        self.artists["soma"] = circle
+
+        # ------------------------------------------------------------------------------ #
+        # dendritic tree
+        # ------------------------------------------------------------------------------ #
+
+        circle = plt.Circle(
+            (self.pos_x, self.pos_y),
+            radius=self.rad_dendrite,
+            lw=2,
+            zorder=1,
+            linestyle="-",
+        )
+        self.dendrite_alpha_inner = 0.2
+        self.dendrite_alpha_outer = 0
+        circle.set_facecolor((*mcolors.to_rgb(base_color), self.dendrite_alpha_inner))
+        circle.set_edgecolor((*mcolors.to_rgb(base_color), self.dendrite_alpha_outer))
+        circle.set_linewidth(0.25)
+        self.ax.add_artist(circle)
+        self.artists["dendritic_tree"] = circle
+
+        # ------------------------------------------------------------------------------ #
+        # axon
+        # ------------------------------------------------------------------------------ #
+
+        self.artists["axon"] = self.ax.plot([], [], lw=0.5, zorder=3, color=base_color)[0]
+        # to update:
+        # ax.figure.canvas.draw()
+        # self.artists["axon"].set_data(xdata, ydata)
+
+        # ------------------------------------------------------------------------------ #
+        # connections, soma to soma
+        # ------------------------------------------------------------------------------ #
+        self.artists["connections"] = []
+        for i, (tar_id, tar_seg_id) in enumerate(zip(self.target_ids, self.tar_seg_ids)):
+            # get the position of the target neuron
+            tar_pos_x = h5f["data"]["neuron_pos_x"][tar_id]
+            tar_pos_y = h5f["data"]["neuron_pos_y"][tar_id]
+
+            # get the position of the axon segment that creates the connection
+            # we might want to show a flash or something here
+            seg_pos_x = self.seg_x[tar_seg_id]
+            seg_pos_y = self.seg_y[tar_seg_id]
+
+            # plot the connection
+            line = self.ax.plot(
+                [self.pos_x, tar_pos_x],
+                [self.pos_y, tar_pos_y],
+                lw=0.7,
+                zorder=2,
+                color=base_color,
+            )[0]
+            self.artists["connections"].append(line)
+
+    def set_num_visible_segments(self, num_segs):
+        """
+        set the number of axon segments to show
+        """
+        try:
+            self.seg_x[num_segs]
+        except:
+            num_segs = len(self.seg_x)
+        self.artists["axon"].set_data(self.seg_x[0:num_segs], self.seg_y[0:num_segs])
+
+
 # ------------------------------------------------------------------------------ #
 # helper
 # ------------------------------------------------------------------------------ #
@@ -631,3 +917,17 @@ def _rgba_to_rgb(c, bg="white"):
         (1 - alpha) * bg[2] + alpha * c[2],
     )
     return res
+
+
+def _bezier(y_beg, y_end, x_beg, x_end, n_steps=None):
+    """
+    poormans bezier for slow-fast-slow animations.
+    create a smooth interpolation curve beteen two points.
+    linspace x and cos y, then interpolate the y values
+    """
+    if n_steps is None:
+        n_steps = x_end - x_beg + 1
+    x = np.linspace(x_beg, x_end, n_steps)
+    y = -0.5 * np.cos(np.linspace(0, np.pi, n_steps)) + 0.5
+    y = y_beg + (y_end - y_beg) * y
+    return x, y
