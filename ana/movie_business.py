@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-01-24 13:43:39
-# @Last Modified: 2022-10-14 15:47:50
+# @Last Modified: 2022-10-15 12:28:03
 # ------------------------------------------------------------------------------- #
 # Classed needed to create a movie of the network.
 # ------------------------------------------------------------------------------- #
@@ -31,8 +31,8 @@ from matplotlib.animation import FFMpegWriter
 
 from bitsandbobs.plt import alpha_to_solid_on_bg
 
-theme_bg = "black"
-# theme_bg = "white"
+# theme_bg = "black"
+theme_bg = "white"
 if theme_bg == "black":
     plt.style.use("dark_background")
     # use custom colors to match the paper
@@ -634,6 +634,9 @@ class CultureGrowthRenderer(object):
             self.ax = ax
 
         ax.set_aspect("equal")
+        # if we overwrite this to a number, the animations below will be tweaked to
+        # focus the specified neuron id
+        self.focus_id = None
 
         # disable all the axis and ticks
         # ax.axis("off")
@@ -716,7 +719,7 @@ class CultureGrowthRenderer(object):
             self.set_num_visible_segments(0)
             self.set_connections_alpha(0)
             self.set_dendritic_tree_alpha(0)
-            self.set_soma_alpha(0)
+            self.set_soma_alpha(1)
 
         # get a smoothed out interpolation between 0 and 1 with ease-in ease-out effect.
         sm = self.smooth
@@ -737,19 +740,26 @@ class CultureGrowthRenderer(object):
             f = time - 150
             self.set_dendritic_tree_alpha(1 - 0.5 * sm(f / 100))
 
+        # if we have a focus neuron, we fade the remaining soma a bit
+        if self.focus_id is not None and time >= 150 and time <= 250:
+            f = time - 150
+            self.set_soma_alpha(1 - 0.3 * sm(f / 100))
+
         # let axons grow over 550 frames
         if time == 250:
             self.set_num_visible_segments(0)
-            self.set_axon_alpha(1)
+            # by passing a n_id to the set_... functions, we only alter the given id.
+            # Otherwise, everything if focus_single is None
+            self.set_axon_alpha(1, n_id=self.focus_id)
 
         if time >= 250 and time <= 600:
             f = time - 250
-            self.set_num_visible_segments(int(f))
+            self.set_num_visible_segments(int(f), n_id=self.focus_id)
 
         # fade axons out
         if time >= 600 and time <= 750:
             f = time - 600
-            self.set_axon_alpha(1 - sm(f / 150))
+            self.set_axon_alpha(1 - sm(f / 150), n_id=self.focus_id)
 
         # also fade out whats left of the dendrites
         if time >= 700 and time <= 775:
@@ -759,12 +769,13 @@ class CultureGrowthRenderer(object):
         # fade in connections
         if time >= 625 and time <= 750:
             f = time - 625
-            self.set_connections_alpha(sm(f / 125))
+            self.set_connections_alpha(sm(f / 125), n_id=self.focus_id)
 
         # go down to 0.05 alpha for connections, there the locality is visible
         if time >= 750 and time <= 800:
             f = time - 750
-            self.set_connections_alpha(1 - 0.95 * sm(f / 50))
+            if self.focus_id is None:
+                self.set_connections_alpha(1 - 0.9 * sm(f / 50))
 
 
 class SingleNeuronGrowth(object):

@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2022-06-22 10:12:19
-# @Last Modified: 2022-10-14 15:47:47
+# @Last Modified: 2022-10-15 12:25:52
 # ------------------------------------------------------------------------------ #
 # This guy uses movie_business.py to create movies from hdf5 files.
 # tweak main() and run from console.
@@ -73,6 +73,10 @@ def main():
                 tend=610,
                 movie_duration=60,
             )
+
+    # axon growth
+    axon_growth(output_path="./mov/axon_growth.mp4", focus_single=False)
+    axon_growth(output_path="./mov/axon_growth_zoom.mp4", focus_single=True)
 
 
 def make_a_movie(
@@ -562,16 +566,18 @@ def axon_growth(
     movie_duration=28,
     tbeg=0,
     tend=841,
+    focus_single = False,
 ):
     """
     This illustrates the growht of axons.
     All the keyframing definition is implemented in the CultureGrowthRenderer
     so here we only have to pass the frame `set_time()`
 
-    we have around maximal ~250 axons segments
-    we assume 1frame = 1sec experimental time
+    No need to tweak parameters, execute and enjoy.
+    (well, maybe `focus_single` if you want the zoom in)
 
-    shown cultures has 500 neurons and a round dish of 5 mm diameter
+    we have around maximal ~250 axons segments
+    we assume 1frame = 1 unit experimental time
     """
 
     import src.topology as topo
@@ -581,21 +587,24 @@ def axon_growth(
     # 500 neurons in a 5mm round dish
     # h5f = topo.OpenRoundTopology(par_N=5000, par_L=10000).get_everything_as_nested_dict()
     h5f = topo.MergedTopology(par_N=5000, par_L=12000).get_everything_as_nested_dict()
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(800 / 300, 800 / 300), dpi=300)
     ax.set_xlim(1000, 11000)
     ax.set_ylim(1000, 11000)
     ax.set_aspect("equal")
     ax.axis("off")
     ax.set_clip_on(True)
-
-    # we may focus on neuron_id in 3419
-    # 8170 5255 to 5837 7036
-
-    # remove padding around the axis
-    fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
+    fig.subplots_adjust(left=0, right=1, bottom=0, top=1) # remove padding around axis
 
     cr = CultureGrowthRenderer(h5f, ax=ax)
-    # cr.focus_single = n_id
+
+    # we may want to focus on neuron_id 3419
+    if focus_single:
+        cr.focus_id = 3419
+        # 582
+        # 1134
+        # 8170 5255 to 5837 7036
+        ax.set_xlim(5700, 8200)
+        ax.set_ylim(4850, 7350)
 
     writer = MovieWriter(
         output_path=output_path,
