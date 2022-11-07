@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-05 10:37:47
-# @Last Modified: 2022-10-14 15:26:54
+# @Last Modified: 2022-11-07 17:25:11
 # ------------------------------------------------------------------------------ #
 # Helper classes to simulate axonal growth described in
 # Orlandi et al. 2013, DOI: 10.1038/nphys2686
@@ -478,7 +478,7 @@ class OpenRoundTopology(BaseTopology):
 
 
 class MergedTopology(BaseTopology):
-    def __init__(self, **kwargs):
+    def __init__(self, assign_submodules=False, **kwargs):
         """
         The Base topology already largely does the job.
         Make sure to have right system size and set artificial "module ids"
@@ -494,7 +494,26 @@ class MergedTopology(BaseTopology):
             log.info(f"{k}: {v}")
         self.init_topology()
 
-        self.neuron_module_ids = np.zeros(self.par_N, dtype=int)
+        if assign_submodules:
+            log.info("Assigning sub modules from neuron positions")
+            # approximate module ids from position
+            # we might need this to stimulate part of the merged culture
+            # 0 lower left, 1 upper left, 2 lower right, 3 upper right
+            self.neuron_module_ids = np.ones(self.par_N, dtype=int) * -1
+            lim = 200
+            for nid in range(0, self.par_N):
+                x = self.neuron_positions[nid, 0]
+                y = self.neuron_positions[nid, 1]
+                if x < lim and y < lim:
+                    self.neuron_module_ids[nid] = 0
+                elif x < lim and y >= lim:
+                    self.neuron_module_ids[nid] = 1
+                elif x >= lim and y < lim:
+                    self.neuron_module_ids[nid] = 2
+                elif x >= lim and y >= lim:
+                    self.neuron_module_ids[nid] = 3
+        else:
+            self.neuron_module_ids = np.zeros(self.par_N, dtype=int)
 
     def set_default_parameters(self):
         super().set_default_parameters()

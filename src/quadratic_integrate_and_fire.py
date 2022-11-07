@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2022-11-07 10:08:51
+# @Last Modified: 2022-11-07 17:36:22
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Creates a connectivity matrix matching the modular cultures (see `topology.py`)
@@ -294,7 +294,7 @@ if args.stimulation_type != "off":
 # ------------------------------------------------------------------------------ #
 
 if args.k_inter == -1:
-    tp = topo.MergedTopology()
+    tp = topo.MergedTopology(assign_submodules=True)
     bridge_ids = np.array([], dtype="int")
 else:
     tp = topo.ModularTopology(par_k_inter=args.k_inter)
@@ -493,6 +493,9 @@ h5_desc["meta.dynamics_jG"] = "GABA current strength, in mV"
 
 h5_data["meta.dynamics_jM"] = jM / mV
 h5_desc["meta.dynamics_jM"] = "shot noise (minis) strength, in mV"
+
+h5_data["meta.dynamics_sigV"] = sigV / mV
+h5_desc["meta.dynamics_sigV"] = "amplitude of white noise membrane fluctuations, in mV"
 
 h5_data["meta.dynamics_tD"] = tD / second
 h5_desc["meta.dynamics_tD"] = "characteristic decay time, in seconds"

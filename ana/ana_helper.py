@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2022-08-17 16:16:45
+# @Last Modified: 2022-11-07 17:52:01
 # ------------------------------------------------------------------------------ #
 # Here we collect all functions for importing and analyzing the data.
 # A central idea is that for every simulated/experimental trial, we have a
@@ -42,7 +42,7 @@ logging.basicConfig(
     datefmt="%y-%m-%d %H:%M",
 )
 log = logging.getLogger(__name__)
-log.setLevel("WARNING")
+log.setLevel("INFO")
 warnings.filterwarnings("ignore")  # suppress numpy warnings
 
 
@@ -126,7 +126,8 @@ def prepare_file(
                          only contain the recorded ones.
     """
 
-    log.debug("Preparing File")
+    log.debug("Preparing File:")
+    log.debug(f"{h5f}")
 
     if isinstance(h5f, str):
         h5f = h5.recursive_load(h5f, hot=hot, skip=skip, dtype=benedict)
@@ -146,6 +147,7 @@ def prepare_file(
         mod_ids = h5f["data.neuron_module_id"][:]
         mods = np.sort(np.unique(mod_ids))
         if len(mods) == 1:
+            log.debug("Only one module, no sorting needed")
             raise NotImplementedError  # avoid resorting.
         temp = np.argsort(mod_ids)
         for n_id in range(0, num_n):
