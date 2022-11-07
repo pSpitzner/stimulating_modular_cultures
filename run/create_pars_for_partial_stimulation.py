@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2022-06-22 10:12:19
-# @Last Modified: 2022-08-18 13:54:20
+# @Last Modified: 2022-11-07 16:56:08
 # ------------------------------------------------------------------------------ #
 # This creates a `parameter.tsv` where each line contains one parameter set,
 # which can be directly called from the command line (i.e. on a cluster).
@@ -26,12 +26,13 @@ print(f"simulation results will go to {out_path}")
 seed = 7_000
 
 # parameters to scan, noise rate, ampa strength, and a few repetitons for statistics
-l_k_inter = np.array([5])
+l_k_inter = np.array([-1, 1, 5, 10])
 l_mod = np.array(["02"])
 l_rep = np.arange(0, 50)
 l_jA = [45.0]
 # as a control, check without inhibition
-l_jG = [0, 50.0]
+# l_jG = [0, 50.0]
+l_jG = [50.0]
 l_jM = [15.0]
 l_tD = [20.0]
 rate = 80
@@ -80,7 +81,7 @@ with open("./parameters.tsv", "w") as f_dyn:
             f_dyn.write(
                 # dynamic command
                 f"python ./src/quadratic_integrate_and_fire.py "
-                + f"-o {dyn_path} "
+                + f'-o "{dyn_path}" '
                 + f"-k {k_inter} "
                 + f"-d 1800 -equil 300 -s {seed:d} "
                 + f"--bridge_weight {bridge_weight} "
