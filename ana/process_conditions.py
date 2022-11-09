@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-10-25 17:28:21
-# @Last Modified: 2022-08-16 13:05:02
+# @Last Modified: 2022-11-09 13:10:09
 # ------------------------------------------------------------------------------ #
 # Analysis script that preprocesses experiments and creates dataframes to compare
 # across condtions. Plots and more detailed analysis are in `paper_plots.py`
@@ -109,7 +109,11 @@ def main():
         # for the case where we only stimulate 2 modules instead of uniform
         # noise to all, we need a bit more tweaking below
         conditions["k=5"] = ["0.0", "20.0"]
+        conditions["k=1"] = ["0.0", "20.0"]
+        conditions["k=10"] = ["0.0", "20.0"]
+        conditions["k=-1"] = ["0.0", "20.0"]
     elif args.etype == "sim_partial_no_inhib":
+        # this is the control for blocked inhibition, we only did that for k=5
         conditions["k=5"] = ["0.0", "20.0"]
     else:
         raise KeyError("type should be 'exp', 'exp_chemical' or 'sim_partial'")
