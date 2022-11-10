@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2022-11-07 17:36:22
+# @Last Modified: 2022-11-10 17:01:21
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Creates a connectivity matrix matching the modular cultures (see `topology.py`)
@@ -297,7 +297,7 @@ if args.k_inter == -1:
     tp = topo.MergedTopology(assign_submodules=True)
     bridge_ids = np.array([], dtype="int")
 else:
-    tp = topo.ModularTopology(par_k_inter=args.k_inter)
+    tp = topo.ModularTopology(par_k_inter=args.k_inter, par_alpha=0.03)
     bridge_ids = tp.neuron_bridge_ids
 num_n = tp.par_N
 a_ij_sparse = tp.aij_sparse
