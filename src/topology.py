@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-05 10:37:47
-# @Last Modified: 2022-11-07 17:25:11
+# @Last Modified: 2022-11-10 17:10:52
 # ------------------------------------------------------------------------------ #
 # Helper classes to simulate axonal growth described in
 # Orlandi et al. 2013, DOI: 10.1038/nphys2686
@@ -84,6 +84,9 @@ class BaseTopology(object):
         self.update_parameters(**kwargs)
         # per default, we have a quadratic substrate of size par_L
         self._substrate = np.array([[0, self.par_L], [0, self.par_L]])
+        log.info("Base Topology")
+        for k, v in self.get_parameters().items():
+            log.info(f"{k}: {v}")
         self.init_topology()
 
     def set_default_parameters(self):
@@ -388,6 +391,9 @@ class OpenRoundTopology(BaseTopology):
         self.update_parameters(**kwargs)
         # per default, we have a quadratic substrate of size par_L
         self._substrate = np.array([[0, self.par_L], [0, self.par_L]])
+        log.info("OpenRound Topology")
+        for k, v in self.get_parameters().items():
+            log.info(f"{k}: {v}")
         self.init_topology()
 
     def init_topology(self):
@@ -541,6 +547,9 @@ class ModularTopology(BaseTopology):
         self.set_default_parameters()
         self.update_parameters(**kwargs)
         self.set_default_modules()
+        log.info("Modular Topology")
+        for k, v in self.get_parameters().items():
+            log.info(f"{k}: {v}")
         self.init_topology()
 
     def set_default_parameters(self):
