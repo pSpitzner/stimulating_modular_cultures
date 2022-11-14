@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-10-25 17:28:21
-# @Last Modified: 2022-11-14 16:59:43
+# @Last Modified: 2022-11-14 17:33:42
 # ------------------------------------------------------------------------------ #
 # Analysis script that preprocesses experiments and creates dataframes to compare
 # across condtions. Plots and more detailed analysis are in `paper_plots.py`
@@ -19,6 +19,7 @@ import warnings
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import enlighten
 
 logging.basicConfig(
     format="%(asctime)s | %(levelname)-8s | %(name)-12s | %(message)s",
@@ -128,7 +129,12 @@ def main():
     log.info(f"Reading from {args.input_base}")
     log.info(f"Writing to {output_path}")
 
+    pbar_manager = enlighten.get_manager()
+    pbar_layouts = pbar_manager.counter(total=len(conditions))
+
     for layout in conditions.keys():
+        pbar_layouts.update(desc=f"Layout {layout}")
+
         dataframes = dict()
         for key in ["bursts", "isis", "rij", "rij_paired", "trials"]:
             dataframes[key] = []
@@ -136,7 +142,10 @@ def main():
             # we collect the correlation coefficients of synaptic resources for sim
             dataframes["drij"] = []
 
+        pbar_conditions = pbar_manager.counter(total=len(conditions[layout]))
         for cdx, condition in enumerate(conditions[layout]):
+            pbar_conditions.update(desc=f"Condition {condition}")
+
             # depending on the type of experiment, we have different naming conventions
             # where wildcards '*' should be completed
             if "exp" in args.etype:
@@ -154,17 +163,22 @@ def main():
                     f"{args.input_base}/stim=02_{layout}_jA=45.0_jG=0.0_jM=15.0_tD=20.0_rate=80.0_stimrate={condition}_rep=*.hdf5"
                 )
 
-            log.info(f"found {len(input_paths)} files for {layout} {condition}")
+            log.debug(f"found {len(input_paths)} files for {layout} {condition}")
 
             # trials / realizations
+            pbar_trials = pbar_manager.counter(total=len(input_paths), desc="Files")
             for path in input_paths:
+                pbar_trials.update(desc=f"File {path}")
+                import time
+                time.sleep(20)
+
                 trial = os.path.basename(path)
                 if "sim" in args.etype:
                     trial = trial.split("rep=")[-1].split(".")[0]
 
-                log.info("------------")
-                log.info(f"{args.etype} {layout} {condition} {trial}")
-                log.info("------------")
+                # log.debug("------------")
+                log.debug(f"{args.etype} {layout} {condition} {trial}")
+                # log.debug("------------")
 
                 # for the dataframes, we need to tidy up some labels
                 if "exp" in args.etype:
