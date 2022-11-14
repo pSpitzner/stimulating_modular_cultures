@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2022-06-22 10:12:19
-# @Last Modified: 2022-11-10 17:01:55
+# @Last Modified: 2022-11-14 14:49:31
 # ------------------------------------------------------------------------------ #
 # This creates a `parameter.tsv` where each line contains one parameter set,
 # which can be directly called from the command line (i.e. on a cluster).
@@ -26,7 +26,7 @@ print(f"simulation results will go to {out_path}")
 seed = 7_000
 
 # parameters to scan, noise rate, ampa strength, and a few repetitons for statistics
-l_k_inter = np.array([1, 5, 10, 20])
+l_k_inter = np.array([-1, 0, 1, 3, 5, 10, 20])
 l_mod = np.array(["02"])
 l_rep = np.arange(0, 20)
 l_jA = [45.0]

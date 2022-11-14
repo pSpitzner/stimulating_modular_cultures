@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2022-11-10 17:01:21
+# @Last Modified: 2022-11-14 14:43:43
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Creates a connectivity matrix matching the modular cultures (see `topology.py`)
@@ -293,11 +293,28 @@ if args.stimulation_type != "off":
 # topology
 # ------------------------------------------------------------------------------ #
 
+# I _measured_ those with an iteration process to get k~30.
+alphas = dict()
+alphas[-1] = 0.00824
+alphas[0] = 0.0275
+alphas[1] = 0.02641
+alphas[3] = 0.02521
+alphas[5] = 0.02437
+alphas[10] = 0.0225
+alphas[20] = 0.02021
+if args.k_inter in alphas.keys():
+
+    alpha = alphas[args.k_inter]
+    log.info(f"for k={args.k_inter}, using {alpha=} to get an in-degree of ~30.")
+else:
+    alpha = 0.0125
+    log.warning(f"Not setting cusotm alpha, using default {alpha}")
+
 if args.k_inter == -1:
-    tp = topo.MergedTopology(assign_submodules=True)
+    tp = topo.MergedTopology(assign_submodules=True, par_alpha=alpha)
     bridge_ids = np.array([], dtype="int")
 else:
-    tp = topo.ModularTopology(par_k_inter=args.k_inter, par_alpha=0.03)
+    tp = topo.ModularTopology(par_k_inter=args.k_inter, par_alpha=alpha)
     bridge_ids = tp.neuron_bridge_ids
 num_n = tp.par_N
 a_ij_sparse = tp.aij_sparse
