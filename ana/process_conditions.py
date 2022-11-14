@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-10-25 17:28:21
-# @Last Modified: 2022-11-14 17:53:12
+# @Last Modified: 2022-11-14 18:04:25
 # ------------------------------------------------------------------------------ #
 # Analysis script that preprocesses experiments and creates dataframes to compare
 # across condtions. Plots and more detailed analysis are in `paper_plots.py`
@@ -129,11 +129,11 @@ def main():
     log.info(f"Reading from {args.input_base}")
     log.info(f"Writing to {output_path}")
 
-    pbar_manager = enlighten.get_manager()
-    pbar_layouts = pbar_manager.counter(total=len(conditions), desc="Layouts")
+    stat_mgr = enlighten.get_manager()
+    sbar = stat_mgr.status_bar()
+    pbar_0 = stat_mgr.counter(total=len(conditions), desc="Layouts")
 
-    for layout in conditions.keys():
-        pbar_layouts.update(desc=f"Layout {layout}")
+    for layout in pbar_0(conditions.keys()):
 
         dataframes = dict()
         for key in ["bursts", "isis", "rij", "rij_paired", "trials"]:
@@ -142,9 +142,8 @@ def main():
             # we collect the correlation coefficients of synaptic resources for sim
             dataframes["drij"] = []
 
-        pbar_conditions = pbar_manager.counter(total=len(conditions[layout]), desc="Conditions")
-        for cdx, condition in enumerate(conditions[layout]):
-            pbar_conditions.update()
+        pbar_1 = stat_mgr.counter(total=len(conditions[layout]), desc="Conditions")
+        for cdx, condition in pbar_1(enumerate(conditions[layout])):
 
             # depending on the type of experiment, we have different naming conventions
             # where wildcards '*' should be completed
@@ -166,19 +165,17 @@ def main():
             log.info(f"found {len(input_paths)} files for {layout} {condition}")
 
             # trials / realizations
-            pbar_trials = pbar_manager.counter(total=len(input_paths), desc="Files")
-            sbar_trials = pbar_manager.status_bar()
-            for path in input_paths:
-                pbar_trials.update()
+            pbar_2 = stat_mgr.counter(total=len(input_paths), desc="Files")
+            for path in pbar_2(input_paths):
 
                 trial = os.path.basename(path)
                 if "sim" in args.etype:
                     trial = trial.split("rep=")[-1].split(".")[0]
 
-                # log.info("------------")
+                log.info("------------")
                 log.info(f"{args.etype} {layout} {condition} {trial}")
-                sbar_trials.message(f"{args.etype} {layout} {condition} {trial}")
-                # log.info("------------")
+                sbar.update(f"{args.etype} {layout} {condition} {trial}")
+                log.info("------------")
 
                 # for the dataframes, we need to tidy up some labels
                 if "exp" in args.etype:
