@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-10-25 17:28:21
-# @Last Modified: 2022-11-10 15:06:05
+# @Last Modified: 2022-11-14 16:59:43
 # ------------------------------------------------------------------------------ #
 # Analysis script that preprocesses experiments and creates dataframes to compare
 # across condtions. Plots and more detailed analysis are in `paper_plots.py`
@@ -108,8 +108,10 @@ def main():
     elif args.etype == "sim_partial":
         # for the case where we only stimulate 2 modules instead of uniform
         # noise to all, we need a bit more tweaking below
-        conditions["k=5"] = ["0.0", "20.0"]
+        conditions["k=0"] = ["0.0", "20.0"]
         conditions["k=1"] = ["0.0", "20.0"]
+        conditions["k=3"] = ["0.0", "20.0"]
+        conditions["k=5"] = ["0.0", "20.0"]
         conditions["k=10"] = ["0.0", "20.0"]
         conditions["k=20"] = ["0.0", "20.0"]
         conditions["k=-1"] = ["0.0", "20.0"]
