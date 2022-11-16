@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2022-06-22 10:12:19
-# @Last Modified: 2022-11-07 16:54:28
+# @Last Modified: 2022-11-16 13:29:30
 # ------------------------------------------------------------------------------ #
 # This creates a `parameter.tsv` where each line contains one parameter set,
 # which can be directly called from the command line (i.e. on a cluster).
@@ -20,14 +20,14 @@ from itertools import product
 
 # set directory to the location of this script file to use relative paths
 os.chdir(os.path.dirname(__file__))
-out_path = os.path.abspath(os.path.curdir + f"./dat/simulations/lif/raw")
+out_path = os.path.abspath("/scratch01.local/pspitzner/revision_1/simulations/lif/raw_alpha")
 print(f"simulation results will go to {out_path}")
 
 # seed for rank 0, will increase per thread
 seed = 6_000
 
 # parameters to scan, noise rate, ampa strength, and a few repetitons for statistics
-l_k_inter = np.array([-1, 1, 5, 10])
+l_k_inter = np.array([-1, 0, 1, 3, 5, 10, 20])
 l_mod = np.array(["off"])
 l_rep = np.arange(0, 50)
 l_jA = [45.0]
@@ -78,7 +78,7 @@ with open("./parameters.tsv", "w") as f_dyn:
             f_dyn.write(
                 # dynamic command
                 f"python ./src/quadratic_integrate_and_fire.py "
-                + f'-o "{dyn_path}" '
+                + f'-o {dyn_path} '
                 + f"-k {k_inter} "
                 + f"-d 1800 -equil 300 -s {seed:d} "
                 + f"--bridge_weight {bridge_weight} "
