@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-10-25 17:28:21
-# @Last Modified: 2022-11-14 18:04:25
+# @Last Modified: 2022-11-14 19:13:45
 # ------------------------------------------------------------------------------ #
 # Analysis script that preprocesses experiments and creates dataframes to compare
 # across condtions. Plots and more detailed analysis are in `paper_plots.py`
@@ -19,7 +19,9 @@ import warnings
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import enlighten
+# import enlighten
+from tqdm.auto import tqdm
+from tqdm.contrib.logging import logging_redirect_tqdm
 
 logging.basicConfig(
     format="%(asctime)s | %(levelname)-8s | %(name)-12s | %(message)s",
@@ -129,11 +131,7 @@ def main():
     log.info(f"Reading from {args.input_base}")
     log.info(f"Writing to {output_path}")
 
-    stat_mgr = enlighten.get_manager()
-    sbar = stat_mgr.status_bar()
-    pbar_0 = stat_mgr.counter(total=len(conditions), desc="Layouts")
-
-    for layout in pbar_0(conditions.keys()):
+    for layout in tqdm(conditions.keys(), desc="Layouts"):
 
         dataframes = dict()
         for key in ["bursts", "isis", "rij", "rij_paired", "trials"]:
@@ -142,8 +140,7 @@ def main():
             # we collect the correlation coefficients of synaptic resources for sim
             dataframes["drij"] = []
 
-        pbar_1 = stat_mgr.counter(total=len(conditions[layout]), desc="Conditions")
-        for cdx, condition in pbar_1(enumerate(conditions[layout])):
+        for cdx, condition in enumerate(tqdm(conditions[layout], leave=False, desc="Conditions")):
 
             # depending on the type of experiment, we have different naming conventions
             # where wildcards '*' should be completed
@@ -162,11 +159,11 @@ def main():
                     f"{args.input_base}/stim=02_{layout}_jA=45.0_jG=0.0_jM=15.0_tD=20.0_rate=80.0_stimrate={condition}_rep=*.hdf5"
                 )
 
-            log.info(f"found {len(input_paths)} files for {layout} {condition}")
+            log.debug(f"found {len(input_paths)} files for {layout} {condition}")
 
             # trials / realizations
-            pbar_2 = stat_mgr.counter(total=len(input_paths), desc="Files")
-            for path in pbar_2(input_paths):
+            pbar = tqdm(input_paths, desc="Files", leave=False)
+            for path in pbar:
 
                 trial = os.path.basename(path)
                 if "sim" in args.etype:
@@ -174,7 +171,7 @@ def main():
 
                 log.info("------------")
                 log.info(f"{args.etype} {layout} {condition} {trial}")
-                sbar.update(f"{args.etype} {layout} {condition} {trial}")
+                pbar.set_description(f"{args.etype} {layout} {condition} {trial}")
                 log.info("------------")
 
                 # for the dataframes, we need to tidy up some labels
@@ -454,4 +451,5 @@ def dict_of_dfs_to_hdf5(df_dict, df_path):
 
 
 if __name__ == "__main__":
-    main()
+    with logging_redirect_tqdm():
+        main()
