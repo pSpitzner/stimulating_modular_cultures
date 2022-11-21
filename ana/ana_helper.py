@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2022-11-07 17:52:01
+# @Last Modified: 2022-11-21 14:06:16
 # ------------------------------------------------------------------------------ #
 # Here we collect all functions for importing and analyzing the data.
 # A central idea is that for every simulated/experimental trial, we have a
@@ -1405,6 +1405,10 @@ def find_modularity(h5f):
 
     Communities are our modules so we can skip the community detection through e.g.
     louvain partitioning `networkx.algorithms.community.louvain_communities`
+
+    "strictly less than 1, and takes positive values if there are more edges between
+    vertices of the same type than we would expect by chance,
+    and negative ones if there are less"
     """
 
     if "ana.networkx.communities" not in h5f.keypaths():
