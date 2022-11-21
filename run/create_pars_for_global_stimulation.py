@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2022-06-22 10:12:19
-# @Last Modified: 2022-11-16 13:29:30
+# @Last Modified: 2022-11-21 13:24:27
 # ------------------------------------------------------------------------------ #
 # This creates a `parameter.tsv` where each line contains one parameter set,
 # which can be directly called from the command line (i.e. on a cluster).
@@ -27,6 +27,7 @@ print(f"simulation results will go to {out_path}")
 seed = 6_000
 
 # parameters to scan, noise rate, ampa strength, and a few repetitons for statistics
+kin=15
 l_k_inter = np.array([-1, 0, 1, 3, 5, 10, 20])
 l_mod = np.array(["off"])
 l_rep = np.arange(0, 50)
@@ -66,7 +67,7 @@ with open("./parameters.tsv", "w") as f_dyn:
 
         # same seeds for all rates so that topo matches
         for rate in l_rate:
-            f_base = f"k={k_inter:d}_jA={jA:.1f}_jG={jG:.1f}_jM={jM:.1f}_tD={tD:.1f}_rate={rate:.1f}_rep={rep:03d}.hdf5"
+            f_base = f"k={k_inter:d}_kin={kin:02d}_jA={jA:.1f}_jG={jG:.1f}_jM={jM:.1f}_tD={tD:.1f}_rate={rate:.1f}_rep={rep:03d}.hdf5"
 
             dyn_path = f"{out_path}/stim={mod}_{f_base}"
 
