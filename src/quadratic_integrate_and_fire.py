@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2022-11-21 11:52:28
+# @Last Modified: 2022-11-21 13:32:06
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Creates a connectivity matrix matching the modular cultures (see `topology.py`)
@@ -319,7 +319,7 @@ alphas[20] = 0.007201
 
 if args.k_inter in alphas.keys():
     alpha = alphas[args.k_inter]
-    log.info(f"for k={args.k_inter}, using {alpha=} to get an in-degree of ~30.")
+    log.info(f"for k={args.k_inter}, using {alpha=} to get an in-degree of ~{k_in}.")
 else:
     alpha = 0.0125
     k_in = -1
