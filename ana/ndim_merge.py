@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2022-11-17 15:40:27
+# @Last Modified: 2022-11-21 11:43:34
 # ------------------------------------------------------------------------------ #
 # Scans the provided (wildcarded) filenames and merges individual realizsation
 # into a single file, containing high-dimensional arrays.
@@ -68,6 +68,7 @@ d_obs["rate"] = "/meta/dynamics_rate"
 d_obs["tD"] = "/meta/dynamics_tD"
 # d_obs["alpha"] = "/meta/topology_alpha"
 d_obs["k_inter"] = "/meta/topology_k_inter"
+d_obs["k_in"] = "/meta/topology_k_in"
 # d_obs["stim_rate"] = "/meta/dynamics_stimulation_rate"
 # d_obs["k_frac"] = "/meta/dynamics_k_frac"
 

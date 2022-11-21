@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2022-11-14 14:43:43
+# @Last Modified: 2022-11-21 11:52:28
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Creates a connectivity matrix matching the modular cultures (see `topology.py`)
@@ -293,21 +293,36 @@ if args.stimulation_type != "off":
 # topology
 # ------------------------------------------------------------------------------ #
 
-# I _measured_ those with an iteration process to get k~30.
 alphas = dict()
-alphas[-1] = 0.00824
-alphas[0] = 0.0275
-alphas[1] = 0.02641
-alphas[3] = 0.02521
-alphas[5] = 0.02437
-alphas[10] = 0.0225
-alphas[20] = 0.02021
-if args.k_inter in alphas.keys():
+# now this is not the number of bridges,
+# 'k_in' is the number of incoming connections, per neuron.
+k_in = -1 # -1 means unconstrained, we save this to metadata below
 
+# I _measured_ those with an iteration process to get k_in~30.
+# k_in = 30
+# alphas[-1] = 0.00824
+# alphas[0] = 0.0275
+# alphas[1] = 0.02641
+# alphas[3] = 0.02521
+# alphas[5] = 0.02437
+# alphas[10] = 0.0225
+# alphas[20] = 0.02021
+
+k_in = 15
+alphas[-1] = 0.00373
+alphas[0] = 0.007448
+alphas[1] = 0.007448
+alphas[3] = 0.007344
+alphas[5] = 0.007305
+alphas[10] = 0.007266
+alphas[20] = 0.007201
+
+if args.k_inter in alphas.keys():
     alpha = alphas[args.k_inter]
     log.info(f"for k={args.k_inter}, using {alpha=} to get an in-degree of ~30.")
 else:
     alpha = 0.0125
+    k_in = -1
     log.warning(f"Not setting cusotm alpha, using default {alpha}")
 
 if args.k_inter == -1:
@@ -531,6 +546,9 @@ h5_desc["meta.dynamics_equilibration_duration"] = "in seconds"
 
 h5_data["meta.dynamics_bridge_weight"] = args.bridge_weight
 h5_desc["meta.dynamics_bridge_weight"] = "synaptic weight of bridging neurons. get applied as a factor to outgoing synaptic currents."
+
+h5_data["meta.topology_k_in"] = k_in
+h5_desc["meta.topology_k_in"] = "desired in-degree for which alpha was optimized"
 
 h5_data["data.neuron_g"] = G.j[t2b]
 h5_desc["data.neuron_g"] = "synaptic weight that was ultimately used for each neuron in the dynamic simulation"

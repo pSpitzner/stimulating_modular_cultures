@@ -27,7 +27,7 @@ with logging_redirect_tqdm():
         # open file
         f = h5py.File(file, "a")
         # create dset
-        f.create_dataset("/meta/topology_k_in", data='~30')
+        f.create_dataset("/meta/topology_k_in", data=30)
         # close file
         f.close()
 
