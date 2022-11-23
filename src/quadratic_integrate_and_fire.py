@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2022-11-21 13:32:06
+# @Last Modified: 2022-11-23 16:25:47
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Creates a connectivity matrix matching the modular cultures (see `topology.py`)
@@ -173,6 +173,14 @@ parser.add_argument(
     "-k", dest="k_inter", help="Number of bridging axons", default=5, metavar=5, type=int
 )
 parser.add_argument(
+    "-kin",
+    dest="k_in",
+    help="Number of incoming connections per Neuron",
+    default=30,
+    metavar=30,
+    type=int,
+)
+parser.add_argument(
     "-d",
     dest="sim_duration",
     help="Recording duration, in seconds",
@@ -271,6 +279,7 @@ print(f'#{"":#^75}#\n#{"running dynamics in brian":^75}#\n#{"":#^75}#')
 log.info("output path:      %s", args.output_path)
 log.info("seed:             %s", args.seed)
 log.info("k_inter:          %s", args.k_inter)
+log.info("k_in:             %s", args.k_in)
 log.info("jA:               %s", jA)
 log.info("jM:               %s", jM)
 log.info("jG:               %s", jG)
@@ -294,35 +303,50 @@ if args.stimulation_type != "off":
 # ------------------------------------------------------------------------------ #
 
 alphas = dict()
-# now this is not the number of bridges,
-# 'k_in' is the number of incoming connections, per neuron.
-k_in = -1 # -1 means unconstrained, we save this to metadata below
+# I _measured_ those with an iteration process to roughly get the desired in degree
+if args.k_in == 30:
+    alphas[0] = 0.0275
+    alphas[1] = 0.02641
+    alphas[3] = 0.02521
+    alphas[5] = 0.02437
+    alphas[10] = 0.0225
+    alphas[20] = 0.02021
+    alphas[-1] = 0.00824
 
-# I _measured_ those with an iteration process to get k_in~30.
-# k_in = 30
-# alphas[-1] = 0.00824
-# alphas[0] = 0.0275
-# alphas[1] = 0.02641
-# alphas[3] = 0.02521
-# alphas[5] = 0.02437
-# alphas[10] = 0.0225
-# alphas[20] = 0.02021
+elif args.k_in == 25:
+    alphas[0] = 0.01728
+    alphas[1] = 0.01698
+    alphas[3] = 0.01667
+    alphas[5] = 0.01635
+    alphas[10] = 0.0156
+    alphas[20] = 0.01498
+    alphas[-1] = 0.00665
 
-k_in = 15
-alphas[-1] = 0.00373
-alphas[0] = 0.007448
-alphas[1] = 0.007448
-alphas[3] = 0.007344
-alphas[5] = 0.007305
-alphas[10] = 0.007266
-alphas[20] = 0.007201
+elif args.k_in == 20:
+    alphas[0] = 0.01156
+    alphas[1] = 0.01129
+    alphas[3] = 0.01125
+    alphas[5] = 0.01091
+    alphas[10] = 0.01099
+    alphas[20] = 0.01057
+    alphas[-1] = 0.00519
+
+elif args.k_in == 15:
+    alphas[0] = 0.007448
+    alphas[1] = 0.007448
+    alphas[3] = 0.007344
+    alphas[5] = 0.007305
+    alphas[10] = 0.007266
+    alphas[20] = 0.007201
+    alphas[-1] = 0.00373
+
 
 if args.k_inter in alphas.keys():
     alpha = alphas[args.k_inter]
-    log.info(f"for k={args.k_inter}, using {alpha=} to get an in-degree of ~{k_in}.")
+    log.info(f"for k={args.k_inter}, using {alpha=} to get an in-degree of ~{args.k_in}.")
 else:
     alpha = 0.0125
-    k_in = -1
+    args.k_in = -1
     log.warning(f"Not setting cusotm alpha, using default {alpha}")
 
 if args.k_inter == -1:
@@ -547,7 +571,7 @@ h5_desc["meta.dynamics_equilibration_duration"] = "in seconds"
 h5_data["meta.dynamics_bridge_weight"] = args.bridge_weight
 h5_desc["meta.dynamics_bridge_weight"] = "synaptic weight of bridging neurons. get applied as a factor to outgoing synaptic currents."
 
-h5_data["meta.topology_k_in"] = k_in
+h5_data["meta.topology_k_in"] = args.k_in
 h5_desc["meta.topology_k_in"] = "desired in-degree for which alpha was optimized"
 
 h5_data["data.neuron_g"] = G.j[t2b]
