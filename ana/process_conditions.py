@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-10-25 17:28:21
-# @Last Modified: 2022-08-16 13:05:02
+# @Last Modified: 2022-11-14 19:13:45
 # ------------------------------------------------------------------------------ #
 # Analysis script that preprocesses experiments and creates dataframes to compare
 # across condtions. Plots and more detailed analysis are in `paper_plots.py`
@@ -19,6 +19,9 @@ import warnings
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+# import enlighten
+from tqdm.auto import tqdm
+from tqdm.contrib.logging import logging_redirect_tqdm
 
 logging.basicConfig(
     format="%(asctime)s | %(levelname)-8s | %(name)-12s | %(message)s",
@@ -108,8 +111,15 @@ def main():
     elif args.etype == "sim_partial":
         # for the case where we only stimulate 2 modules instead of uniform
         # noise to all, we need a bit more tweaking below
+        conditions["k=0"] = ["0.0", "20.0"]
+        conditions["k=1"] = ["0.0", "20.0"]
+        conditions["k=3"] = ["0.0", "20.0"]
         conditions["k=5"] = ["0.0", "20.0"]
+        conditions["k=10"] = ["0.0", "20.0"]
+        conditions["k=20"] = ["0.0", "20.0"]
+        conditions["k=-1"] = ["0.0", "20.0"]
     elif args.etype == "sim_partial_no_inhib":
+        # this is the control for blocked inhibition, we only did that for k=5
         conditions["k=5"] = ["0.0", "20.0"]
     else:
         raise KeyError("type should be 'exp', 'exp_chemical' or 'sim_partial'")
@@ -121,7 +131,8 @@ def main():
     log.info(f"Reading from {args.input_base}")
     log.info(f"Writing to {output_path}")
 
-    for layout in conditions.keys():
+    for layout in tqdm(conditions.keys(), desc="Layouts"):
+
         dataframes = dict()
         for key in ["bursts", "isis", "rij", "rij_paired", "trials"]:
             dataframes[key] = []
@@ -129,7 +140,8 @@ def main():
             # we collect the correlation coefficients of synaptic resources for sim
             dataframes["drij"] = []
 
-        for cdx, condition in enumerate(conditions[layout]):
+        for cdx, condition in enumerate(tqdm(conditions[layout], leave=False, desc="Conditions")):
+
             # depending on the type of experiment, we have different naming conventions
             # where wildcards '*' should be completed
             if "exp" in args.etype:
@@ -147,16 +159,19 @@ def main():
                     f"{args.input_base}/stim=02_{layout}_jA=45.0_jG=0.0_jM=15.0_tD=20.0_rate=80.0_stimrate={condition}_rep=*.hdf5"
                 )
 
-            log.info(f"found {len(input_paths)} files for {layout} {condition}")
+            log.debug(f"found {len(input_paths)} files for {layout} {condition}")
 
             # trials / realizations
-            for path in input_paths:
+            pbar = tqdm(input_paths, desc="Files", leave=False)
+            for path in pbar:
+
                 trial = os.path.basename(path)
                 if "sim" in args.etype:
                     trial = trial.split("rep=")[-1].split(".")[0]
 
                 log.info("------------")
                 log.info(f"{args.etype} {layout} {condition} {trial}")
+                pbar.set_description(f"{args.etype} {layout} {condition} {trial}")
                 log.info("------------")
 
                 # for the dataframes, we need to tidy up some labels
@@ -436,4 +451,5 @@ def dict_of_dfs_to_hdf5(df_dict, df_path):
 
 
 if __name__ == "__main__":
-    main()
+    with logging_redirect_tqdm():
+        main()

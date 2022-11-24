@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-11-08 17:51:24
-# @Last Modified: 2022-08-23 12:02:39
+# @Last Modified: 2022-11-21 15:15:40
 # ------------------------------------------------------------------------------ #
 #
 # How to read / work this monstrosity of a file?
@@ -267,7 +267,7 @@ def fig_1(show_time_axis=False):
     # Stick plots for optogenetic vs chemical
     # ------------------------------------------------------------------------------ #
 
-    for obs in ["Functional Complexity", "Mean Fraction"]:
+    for obs in ["Functional Complexity", "Mean Fraction", "Mean Correlation"]:
         ax = exp_chemical_vs_opto(observable=obs, draw_error_bars=False)
         cc.set_size(ax, w=1.2, h=2, l=1.2, r=0.7, b=0.2, t=0.5)
         ax.set_ylim(0, 1.0)
@@ -317,13 +317,24 @@ def fig_2(skip_plots=False):
     )
 
 
-def fig_3(pd_path=None, raw_paths=None, out_suffix=""):
+def fig_3(pd_path, raw_paths=None, out_suffix=""):
     """
     Wrapper for Figure 3 on Simulations containing
     - pooled Violins that aggregate the results of all trials for
         * Event size and Correlation Coefficient
         * at 0Hz vs 20Hz additional stimulation in targeted modules (on top of 80Hz baseline)
     - Decomposition plots (scatter and bar) anaologous to Figure 2
+
+    # Parameters:
+    pd_path : str
+        e.g. f"{pp.p_sim}/lif/processed/k=5.hdf5"
+    raw_paths : list of str
+        e.g.
+        [
+            f"{pp.p_sim}/lif/raw/stim=02_k=5_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=80.0_stimrate=0.0_rep=000.hdf5",
+            f"{pp.p_sim}/lif/raw/stim=02_k=5_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=80.0_stimrate=20.0_rep=000.hdf5",
+        ]
+
     """
 
     # set the global seed once for each figure to produce consistent results, when
@@ -331,14 +342,14 @@ def fig_3(pd_path=None, raw_paths=None, out_suffix=""):
     # many panels rely on bootstrapping and drawing random samples
     np.random.seed(813)
 
-    if pd_path is None:
-        pd_path = f"{p_sim}/lif/processed/k=5.hdf5"
+    # if pd_path is None:
+    #     pd_path = f"{p_sim}/lif/processed/k=5.hdf5"
 
-    if raw_paths is None:
-        raw_paths = [
-            f"{p_sim}/lif/raw/stim=02_k=5_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=80.0_stimrate=0.0_rep=000.hdf5",
-            f"{p_sim}/lif/raw/stim=02_k=5_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=80.0_stimrate=20.0_rep=000.hdf5",
-        ]
+    # if raw_paths is None:
+    #     raw_paths = [
+    #         f"{p_sim}/lif/raw/stim=02_k=5_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=80.0_stimrate=0.0_rep=000.hdf5",
+    #         f"{p_sim}/lif/raw/stim=02_k=5_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=80.0_stimrate=20.0_rep=000.hdf5",
+    #     ]
 
     osx = out_suffix
 
@@ -392,6 +403,21 @@ def fig_3(pd_path=None, raw_paths=None, out_suffix=""):
     ax.set_xlabel("Correlation")
     ax.get_figure().savefig(f"{p_fo}/sim_partial_violins_rij{osx}.pdf", dpi=300)
 
+    log.info("")
+    ax = custom_violins(
+        dfs["bursts"],
+        category="Condition",
+        observable="Inter-burst-interval",
+        ylim=[0, 70],
+        num_swarm_points=300,
+        bw=0.2,
+        palette=colors["partial"],
+    )
+    apply_formatting(ax, ylim=False)
+    ax.set_xlabel("IBI")
+    ax.set_ylim(0, 70)
+    ax.get_figure().savefig(f"{p_fo}/sim_partial_violins_ibi{osx}.pdf", dpi=300)
+
     # ------------------------------------------------------------------------------ #
     # tests for violins
     # ------------------------------------------------------------------------------ #
@@ -422,6 +448,9 @@ def fig_3(pd_path=None, raw_paths=None, out_suffix=""):
     # raster plots for 2 module stimulation
     # ------------------------------------------------------------------------------ #
 
+    if raw_paths is None:
+        raw_paths = []
+
     for pdx, path in enumerate(raw_paths):
         h5f = ph.ah.prepare_file(path)
 
@@ -444,6 +473,183 @@ def fig_3(pd_path=None, raw_paths=None, out_suffix=""):
         ax.set_xlim(0, 180)
 
         cc.set_size(ax, 2.7, 0.9)
+
+        fig.savefig(f"{p_fo}/sim_raster_stim_02_{pdx}{osx}.pdf", dpi=900)
+
+
+def fig_3_r1(pd_path=None, raw_paths=None, out_suffix=""):
+    """
+    Wrapper for Figure 3 on Simulations containing
+    - pooled Violins that aggregate the results of all trials for
+        * Event size and Correlation Coefficient
+        * at 0Hz vs 20Hz additional stimulation in targeted modules (on top of 80Hz baseline)
+    - Decomposition plots (scatter and bar) anaologous to Figure 2
+
+    Now creates a figure with multiple panels.
+
+    # Parameters:
+    pd_path : str
+        e.g. f"{pp.p_sim}/lif/processed/k=5.hdf5"
+    raw_paths : list of str
+        e.g.
+        [
+            f"{pp.p_sim}/lif/raw/stim=02_k=5_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=80.0_stimrate=0.0_rep=000.hdf5",
+            f"{pp.p_sim}/lif/raw/stim=02_k=5_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=80.0_stimrate=20.0_rep=000.hdf5",
+        ]
+
+    """
+
+    # set the global seed once for each figure to produce consistent results, when
+    # calling repeatedly.
+    # many panels rely on bootstrapping and drawing random samples
+    np.random.seed(813)
+
+    # if pd_path is None:
+    #     pd_path = f"{p_sim}/lif/processed/k=5.hdf5"
+
+    # if raw_paths is None:
+    #     raw_paths = [
+    #         f"{p_sim}/lif/raw/stim=02_k=5_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=80.0_stimrate=0.0_rep=000.hdf5",
+    #         f"{p_sim}/lif/raw/stim=02_k=5_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=80.0_stimrate=20.0_rep=000.hdf5",
+    #     ]
+
+    osx = out_suffix
+
+    # reproducing 2 module stimulation in simulations
+
+    dfs = load_pd_hdf5(pd_path, ["bursts", "rij", "rij_paired"])
+    df = dfs["rij_paired"]
+
+    num_panels = 5
+    fig, axes = plt.subplots(ncols=1, nrows=num_panels, figsize=(2, num_panels * 1.5))
+
+    def apply_formatting(ax, ylim=True, trim=True):
+        if ylim:
+            ax.set_ylim(-0.05, 1.05)
+            ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
+            ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
+        # ax.set_frame_on(False)
+        # sns.despine(ax=ax, bottom=True, left=False, trim=trim, offset=2)
+        ax.tick_params(bottom=False)
+        ax.set_xlabel(f"")
+        ax.set_ylabel(f"")
+
+    # ------------------------------------------------------------------------------ #
+    # violins
+    # ------------------------------------------------------------------------------ #
+
+    log.info("")
+    log.info("# simulation with two targeted modules")
+    ax = axes[0]
+    ax = custom_violins(
+        dfs["bursts"],
+        category="Condition",
+        observable="Fraction",
+        ylim=[0, 1],
+        num_swarm_points=300,
+        bw=0.2,
+        palette=colors["partial"],
+        ax=ax,
+    )
+    apply_formatting(ax)
+    ax.set_xlabel("Event size")
+    # ax.get_figure().savefig(f"{p_fo}/sim_partial_violins_fraction{osx}.pdf", dpi=300)
+
+    log.info("")
+    ax = axes[1]
+    ax = custom_violins(
+        dfs["rij"],
+        category="Condition",
+        observable="Correlation Coefficient",
+        ylim=[0, 1],
+        num_swarm_points=600,
+        bw=0.2,
+        palette=colors["partial"],
+        ax=ax,
+    )
+    apply_formatting(ax)
+    ax.set_xlabel("Correlation")
+    # ax.get_figure().savefig(f"{p_fo}/sim_partial_violins_rij{osx}.pdf", dpi=300)
+
+    log.info("")
+    ax = axes[2]
+    ax = custom_violins(
+        dfs["bursts"],
+        category="Condition",
+        observable="Inter-burst-interval",
+        ylim=[0, 70],
+        num_swarm_points=300,
+        bw=0.2,
+        palette=colors["partial"],
+        ax=ax,
+    )
+    apply_formatting(ax, ylim=False)
+    ax.set_xlabel("IBI")
+    ax.set_ylim(0, 70)
+    # ax.get_figure().savefig(f"{p_fo}/sim_partial_violins_ibi{osx}.pdf", dpi=300)
+
+    # ------------------------------------------------------------------------------ #
+    # tests for violins
+    # ------------------------------------------------------------------------------ #
+
+    # sim_tests_stimulating_two_modules(observables=["Fraction"])
+    # sim_tests_stimulating_two_modules(observables=["Correlation Coefficient"])
+
+    # ------------------------------------------------------------------------------ #
+    # pairwise rij plots
+    # ------------------------------------------------------------------------------ #
+
+    log.info("barplot rij paired for simulations")
+
+    ax = axes[3]
+    ax = custom_rij_barplot(df, conditions=["0.0 Hz", "20.0 Hz"], recolor=True, ax=ax)
+    ax.set_ylim(0, 1)
+    # cc.set_size(ax, 3, 1.5)
+    # ax.get_figure().savefig(f"{p_fo}/sim_rij_barplot{osx}.pdf", dpi=300)
+
+    log.info("scattered 2d rij paired for simulations")
+    ax = axes[4]
+    ax = custom_rij_scatter(
+        df,
+        max_sample_size=2500,
+        scatter=True,
+        kde_levels=[0.9, 0.95, 0.975],
+        ax=ax,
+    )
+    # cc.set_size(ax, 3, 3)
+    # ax.get_figure().savefig(f"{p_fo}/sim_2drij{osx}.pdf", dpi=300)
+    fig.tight_layout()
+    fig.savefig(f"{p_fo}/sim_partial_violins_merged{osx}.pdf", dpi=300)
+
+    # ------------------------------------------------------------------------------ #
+    # raster plots for 2 module stimulation
+    # ------------------------------------------------------------------------------ #
+
+    if raw_paths is None:
+        raw_paths = []
+
+    for pdx, path in enumerate(raw_paths):
+        h5f = ph.ah.prepare_file(path)
+
+        fig, ax = plt.subplots()
+        ph.plot_raster(
+            h5f,
+            ax,
+            clip_on=True,
+            zorder=-2,
+            markersize=0.75,
+            alpha=0.5,
+            color="#333",
+        )
+
+        ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(180))
+        ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(60))
+        ax.xaxis.set_visible(False)
+        ax.yaxis.set_visible(False)
+        sns.despine(ax=ax, left=True, right=True, bottom=True, top=True)
+        ax.set_xlim(0, 180)
+
+        # cc.set_size(ax, 2.7, 0.9)
 
         fig.savefig(f"{p_fo}/sim_raster_stim_02_{pdx}{osx}.pdf", dpi=900)
 
@@ -533,7 +739,7 @@ def fig_4():
     ylabels["mod_mean_correlation"] = "mod rij mean"
 
     coords = reference_coordinates.copy()
-    coords["k_inter"] = [1, 5, 10, -1]
+    coords["k_inter"] = [1, 3, 5, 10, 20, -1]
 
     base_colors = [
         "#1D484F",
@@ -542,6 +748,10 @@ def fig_4():
         "#4F481D",
         "#333",
     ]
+
+    _print_modularity_for_all_k(
+        path=f"{p_sim}/lif/processed/ndim.hdf5", simulation_coordinates=coords
+    )
 
     for odx, obs in enumerate(observables):
 
@@ -556,8 +766,10 @@ def fig_4():
         except:
             base_color = "#333"
         clrs = dict()
-        for kdx, k in enumerate([1, 5, 10, -1]):
-            clrs[k] = cc.alpha_to_solid_on_bg(base_color, cc.fade(kdx, 4, invert=True))
+        for kdx, k in enumerate(coords["k_inter"]):
+            clrs[k] = cc.alpha_to_solid_on_bg(
+                base_color, cc.fade(kdx, len(coords["k_inter"]), invert=True)
+            )
 
         ax = sim_obs_vs_noise_for_all_k(
             observable=obs,
@@ -2203,7 +2415,7 @@ def exp_violins_for_layouts(remove_outlier_for_ibis=True, layouts=None, observab
             ax.set_ylabel(f"")
 
         ax.set_xticks([])
-        cc.set_size(ax, 3, 2.0)
+        cc.set_size(ax, 3, 2.0, l=1.5, b=0.5, t=0.5)
 
     # Event size, used to be called "Fraction" in the data frame
     for layout in dfs.keys():
@@ -2312,27 +2524,63 @@ def exp_rij_for_layouts():
     dfs["triple-bond"] = load_pd_hdf5(f"{p_exp}/processed/3b.hdf5", ["rij_paired"])
     dfs["merged"] = load_pd_hdf5(f"{p_exp}/processed/merged.hdf5", ["rij_paired"])
 
-    # experimentally, we need to focus on pre vs stim, instead of on vs off,
-    # to get _pairs_ of rij
-    for key in dfs.keys():
-        dfs[key]["rij_paired"] = dfs[key]["rij_paired"].query(
-            "`Condition` in ['pre', 'stim']"
-        )
-
     for layout in dfs.keys():
         log.debug(f"rijs for {layout}")
         pairings = None
-        if layout == "merged":
-            pairings = ["all"]
+        # this avoids the colorcoding for the merged layout and makes it gray
+        # if layout == "merged":
+        # pairings = ["all"]
 
-        # pairings = ["within_stim", "within_nonstim"]
-        ax = custom_rij_scatter(dfs[layout]["rij_paired"], pairings=pairings)
+        df = dfs[layout]["rij_paired"]
 
-        cc.set_size(ax, 3, 3)
-        ax.get_figure().savefig(f"{p_fo}/exp_2drij_{layout}.pdf", dpi=300)
+        # ------------------------------------------------------------------------------ #
+        # 2d Scatter
+        # ------------------------------------------------------------------------------ #
+
+        # experimentally, we need to focus on pre vs stim, instead of on vs off,
+        # to get _pairs_ of rij
+        df_for_2d = df.query("`Condition` in ['pre', 'stim']")
+        ax = custom_rij_scatter(
+            df_for_2d,
+            pairings=pairings,
+            column="Condition",
+            x="pre",
+            y="stim",
+        )
+        cc.set_size(ax, 3, 3, b=1.0, l=1.0)
+        ax.get_figure().savefig(f"{p_fo}/exp_2drij_{layout}_pre_stim.pdf", dpi=300)
+
+        # todo check low level
+        df_for_2d = df.query("`Condition` in ['post', 'stim']")
+        ax = custom_rij_scatter(
+            df_for_2d,
+            pairings=pairings,
+            column="Condition",
+            x="post",
+            y="stim",
+        )
+        cc.set_size(ax, 3, 3, b=1.0, l=1.0)
+        ax.get_figure().savefig(f"{p_fo}/exp_2drij_{layout}_post_stim.pdf", dpi=300)
+
+        # ------------------------------------------------------------------------------ #
+        # Barplots
+        # ------------------------------------------------------------------------------ #
+
+        df_for_bars = df.query("`Condition` in ['pre', 'stim', 'post']")
 
         ax = custom_rij_barplot(
-            dfs[layout]["rij_paired"], pairings=pairings, recolor=True
+            df_for_bars,
+            pairings=pairings,
+            conditions=["pre", "stim", "post"],
+            condition_alphas=dict(
+                # pre=0.8,
+                # stim=0.55,
+                # post=0.3,
+                pre=0.4,
+                stim=0.625,
+                post=0.8,
+            ),
+            recolor=True,
         )
         ax.set_ylim(0, 1)
         # ax.set_xlabel(layout)
@@ -2345,7 +2593,7 @@ def exp_rij_for_layouts():
         else:
             ax.set_xlabel("Pairing")
 
-        cc.set_size(ax, 3, 1.5)
+        cc.set_size(ax, 3, 1.5, b=0.5, l=1.0)
         ax.get_figure().savefig(f"{p_fo}/exp_rij_barplot_{layout}.pdf", dpi=300)
 
     return ax
@@ -2677,6 +2925,32 @@ def sim_vs_exp_ibi(
     return ax
 
 
+def _print_modularity_for_all_k(path, simulation_coordinates=reference_coordinates):
+    """
+    Just a helper to print the modularity index.
+    averages across repetitions and prints a value for
+    every k_inter in the datafram from `path`
+    """
+
+    log.info("Modularity index Q:")
+    ndim = nh.load_ndim_h5f(path)
+    ndim = ndim["sys_modularity"]
+    for coord in simulation_coordinates.keys():
+        try:
+            ndim = ndim.sel({coord: simulation_coordinates[coord]})
+        except:
+            log.debug(f"Could not select {coord}")
+
+    # we  do not care about the noise level, they all have the same seed, and same topo
+    ndim = ndim.mean(dim="rate")
+
+    for kdx, k_inter in enumerate(ndim.coords["k_inter"].to_numpy()):
+        Q = float(ndim.sel(k_inter=k_inter).mean(dim="repetition"))
+        log.info(f"k={k_inter} -> {Q}")
+        # log.info(f"{k_inter}")
+        # log.info()
+
+
 def sim_obs_vs_noise_for_all_k(
     path,
     observable,
@@ -2713,7 +2987,7 @@ def sim_obs_vs_noise_for_all_k(
         colors = dict()
         for kdx, k in enumerate(ndim.coords["k_inter"].to_numpy()):
             colors[k] = f"C{kdx}"
-
+        log.debug(colors)
     # burst detection for modular systems starts failing for noise >~ 100 hz
     # when the systems enters an "up state"
     # we may want to avoid plotting some observables in this range
@@ -3504,7 +3778,7 @@ def sim_out_degrees(
     return ndims
 
 
-def sim_degrees_sampled(k_inter=5, num_reps=50):
+def sim_degrees_sampled(k_inter=5, num_reps=50, **kwargs):
     """
     Sample realizations of the topology and plot the in-degree distribution
     """
@@ -3525,9 +3799,9 @@ def sim_degrees_sampled(k_inter=5, num_reps=50):
 
     for rep in tqdm(range(0, num_reps), leave=False):
         if k_inter == -1:
-            topo = MergedTopology()
+            topo = MergedTopology(**kwargs)
         else:
-            topo = ModularTopology(par_k_inter=k_inter)
+            topo = ModularTopology(par_k_inter=k_inter, **kwargs)
         res["k_out"].extend(topo.k_out)
         res["k_in_total"].extend(topo.k_in)
 
@@ -3603,7 +3877,7 @@ def sim_degrees_sampled(k_inter=5, num_reps=50):
         ax.set_xlim(0, 50)
         cc.set_size(ax, w=3.0, h=2.5)
 
-    return res
+    return ax
 
 
 # ------------------------------------------------------------------------------ #
@@ -4283,6 +4557,8 @@ def load_pd_hdf5(input_path, keys=None):
     trials : summary statistics, each row is a trial (or repetition in simulations)
     """
 
+    assert os.path.exists(input_path), f"file not found: {input_path}"
+
     single_key = False
     if keys is None:
         keys = ["bursts", "isis", "rij", "rij_paired", "drij", "trials"]
@@ -4391,6 +4667,7 @@ def custom_violins(
         # palette=light_palette,
         hue="fake_hue",
         split=True,
+        ax=ax,
     )
 
     for key in violin_defaults.keys():
@@ -4484,6 +4761,7 @@ def custom_violins(
         zorder=-1,
         edgecolor=(1.0, 1.0, 1.0, 1),
         linewidth=0.1,
+        ax=ax,
     )
 
     # so, for the swarms, we may want around the same number of points per swarm
@@ -4563,7 +4841,9 @@ def custom_pointplot(df, category, observable, hue="Trial", ax=None, **point_kwa
     return ax
 
 
-def custom_rij_barplot(df, ax=None, conditions=None, pairings=None, recolor=True):
+def custom_rij_barplot(
+    df, ax=None, conditions=None, condition_alphas=None, pairings=None, recolor=True
+):
     """
     query the layout of df first!
     provide a rij_paired dataframe
@@ -4620,12 +4900,17 @@ def custom_rij_barplot(df, ax=None, conditions=None, pairings=None, recolor=True
         for pdx, pairing in enumerate(pairings):
             for cdx, condition in enumerate(conditions):
                 base_color = colors[f"rij_{pairing}"]
+                try:
+                    face_alpha = condition_alphas[condition]
+                except:
+                    face_alpha = cc.fade(k=cdx, n=len(conditions), start=0.8, stop=0.4)
+
                 c = ax.patches[pdx + cdx * mult]
                 c.set_edgecolor(base_color)
                 if cdx % len(conditions) == 0:
-                    c.set_facecolor(cc.alpha_to_solid_on_bg(base_color, 0.7))
+                    c.set_facecolor(cc.alpha_to_solid_on_bg(base_color, face_alpha))
                 else:
-                    c.set_facecolor(cc.alpha_to_solid_on_bg(base_color, 0.3))
+                    c.set_facecolor(cc.alpha_to_solid_on_bg(base_color, face_alpha))
 
                 # three lines for error bars with caps
                 for ldx in range(0, 3):
@@ -4642,6 +4927,11 @@ def custom_rij_barplot(df, ax=None, conditions=None, pairings=None, recolor=True
 
 def custom_rij_scatter(
     df,
+    x="Off",
+    y="On",
+    column = "Stimulation",
+    # this is results in df.query("Stimulation == 'on'") for x and
+    # df.query("Stimulation == 'off'") for y
     ax=None,
     pairings=None,
     scatter=True,
@@ -4662,15 +4952,32 @@ def custom_rij_scatter(
 
     kwargs = kwargs.copy()
 
+    query_before = f"{column} == '{x}'"
+    query_after = f"{column} == '{y}'"
+
     for pdx, pairing in enumerate(pairings):
 
         df_paired = df.query(f"Pairing == '{pairing}'")
         # print(pairing)
 
+        log.debug(f"{len(df_paired)} points in {pairing} before querying")
+
+        try:
+            # just some helfpul warnings
+            unique = df_paired[column].unique()
+            if f'{x}' not in unique or f'{y}' not in unique:
+                log.warning(f"'{x}' or '{y}' does not seem to be in {column} -> {unique}")
+        except:
+            pass
+
         # for each paring, make two long lists of rij: before stim and during stim.
         # add data from all experiments
         # rij may be np.nan if one of the neurons did not have any spikes.
-        rijs = _rij_pairs_from_trials(df_paired)
+        rijs = _rij_pairs_from_trials(
+            df_paired,
+            query_before=query_before,
+            query_after=query_after,
+        )
 
         scatter_kwargs = kwargs.copy()
         try:
@@ -4716,7 +5023,9 @@ def custom_rij_scatter(
             )
 
         if kde_levels is None:
-            kde_levels = [0.5, 0.9, 0.95, 0.975]
+            # kde_levels = [0.5, 0.9, 0.95, 0.975]
+            kde_levels = [0.75, 0.9, 0.95, 0.975]
+            # kde_levels = [0.66, 0.95]
         for low_l in kde_levels:
             sns.kdeplot(
                 x=rijs["before"],
@@ -4738,14 +5047,18 @@ def custom_rij_scatter(
     ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
     ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
     ax.set_aspect(1)
-    ax.set_xlabel("Correlation pre")
-    ax.set_ylabel("Correlation stim")
+    ax.set_xlabel(f"Correlation {x}")
+    ax.set_ylabel(f"Correlation {y}")
     sns.despine(top=False, bottom=False, left=False, right=False)
 
     return ax
 
 
-def _rij_pairs_from_trials(df_paired):
+def _rij_pairs_from_trials(
+    df_paired,
+    query_before="`Stimulation` == 'Off'",
+    query_after="`Stimulation` == 'On'",
+):
     """
     For each paring, make two long lists of rij: before stim and during stim.
     add data from all experiments
@@ -4756,10 +5069,11 @@ def _rij_pairs_from_trials(df_paired):
     rijs = dict()
     rijs["before"] = []
     rijs["after"] = []
+    log.debug(f"querying {query_before} and {query_after}")
     for trial in df_paired["Trial"].unique():
         df_trial = df_paired.query(f"`Trial` == '{trial}'")
-        df_before = df_trial.query(f"`Stimulation` == 'Off'")
-        df_after = df_trial.query(f"`Stimulation` == 'On'")
+        df_before = df_trial.query(query_before)
+        df_after = df_trial.query(query_after)
         # we make sure that on == stim and off == pre by querying df before.
         # otherwise, we would get shape missmatch, anyway.
         # df_before = df_trial.query(f"`Condition` == 'pre'")

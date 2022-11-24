@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2022-08-17 16:11:17
+# @Last Modified: 2022-11-21 11:43:34
 # ------------------------------------------------------------------------------ #
 # Scans the provided (wildcarded) filenames and merges individual realizsation
 # into a single file, containing high-dimensional arrays.
@@ -68,6 +68,7 @@ d_obs["rate"] = "/meta/dynamics_rate"
 d_obs["tD"] = "/meta/dynamics_tD"
 # d_obs["alpha"] = "/meta/topology_alpha"
 d_obs["k_inter"] = "/meta/topology_k_inter"
+d_obs["k_in"] = "/meta/topology_k_in"
 # d_obs["stim_rate"] = "/meta/dynamics_stimulation_rate"
 # d_obs["k_frac"] = "/meta/dynamics_k_frac"
 
@@ -730,6 +731,8 @@ def parse_arguments():
     # through a bunch of calls. not neat but yay, scientific coding.
     global threshold_factor
     global smoothing_width
+    global time_bin_size_for_rij
+    global remove_null_sequences
 
     parser = argparse.ArgumentParser(description="Merge Multidm")
     parser.add_argument(
@@ -764,10 +767,19 @@ def parse_arguments():
         default=smoothing_width,
         type=float,
     )
+    parser.add_argument(
+        "-r",
+        dest="time_bin_size_for_rij",
+        help="bin size for spike counting, for correlation coefficients, in seconds",
+        default=time_bin_size_for_rij,
+        type=float,
+    )
 
     args = parser.parse_args()
     threshold_factor = args.threshold_factor
     smoothing_width = args.smoothing_width
+    time_bin_size_for_rij = args.time_bin_size_for_rij
+
 
     log.info(args)
 
@@ -840,22 +852,22 @@ if __name__ == "__main__":
         dask_cluster = stack.enter_context(
             # rudabeh
             # TODO: remove this before release
-            # SGECluster(
-            #     cores=32,
-            #     memory="192GB",
-            #     processes=16,
-            #     job_extra=["-pe mvapich2-zal 32"],
-            #     log_directory="/scratch01.local/pspitzner/dask/logs",
-            #     local_directory="/scratch01.local/pspitzner/dask/scratch",
-            #     interface="ib0",
-            #     walltime='02:30:00',
-            #     extra=[
-            #         '--preload \'import sys; sys.path.append("./ana/"); sys.path.append("/home/pspitzner/code/pyhelpers/");\''
-            #     ],
-            # )
+            SGECluster(
+                cores=32,
+                memory="192GB",
+                processes=16,
+                job_extra=["-pe mvapich2-sam 32"],
+                log_directory="/scratch01.local/pspitzner/dask/logs",
+                local_directory="/scratch01.local/pspitzner/dask/scratch",
+                interface="ib0",
+                walltime='02:30:00',
+                extra=[
+                    '--preload \'import sys; sys.path.append("./ana/"); sys.path.append("/home/pspitzner/code/pyhelpers/");\''
+                ],
+            )
 
             # local cluster
-            LocalCluster(local_directory=f"{tempfile.gettempdir()}/dask/")
+            # LocalCluster(local_directory=f"{tempfile.gettempdir()}/dask/")
         )
         dask_cluster.scale(cores=args.num_cores)
 
