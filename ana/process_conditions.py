@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-10-25 17:28:21
-# @Last Modified: 2022-11-29 11:38:50
+# @Last Modified: 2022-11-29 11:42:36
 # ------------------------------------------------------------------------------ #
 # Analysis script that preprocesses experiments and creates dataframes to compare
 # across condtions. Plots and more detailed analysis are in `paper_plots.py`
@@ -165,15 +165,15 @@ def main():
                 input_paths = glob.glob(f"{args.input_base}/{layout}/*")
             elif args.etype == "sim":
                 input_paths = glob.glob(
-                    f"{args.input_base}/stim=off_{layout}_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate={condition}_rep=*.hdf5"
+                    f"{args.input_base}/stim=off_{layout}_kin=30_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate={condition}_rep=*.hdf5"
                 )
             elif args.etype == "sim_partial":
                 input_paths = glob.glob(
-                    f"{args.input_base}/stim=02_{layout}_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=80.0_stimrate={condition}_rep=*.hdf5"
+                    f"{args.input_base}/stim=02_{layout}_kin=30_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=80.0_stimrate={condition}_rep=*.hdf5"
                 )
             elif args.etype == "sim_partial_no_inhib":
                 input_paths = glob.glob(
-                    f"{args.input_base}/stim=02_{layout}_jA=45.0_jG=0.0_jM=15.0_tD=20.0_rate=80.0_stimrate={condition}_rep=*.hdf5"
+                    f"{args.input_base}/stim=02_{layout}_kin=30_jA=45.0_jG=0.0_jM=15.0_tD=20.0_rate=80.0_stimrate={condition}_rep=*.hdf5"
                 )
 
             log.debug(f"found {len(input_paths)} files for {layout} {condition}")
