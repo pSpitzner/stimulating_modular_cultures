@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-10-25 17:28:21
-# @Last Modified: 2022-11-28 13:51:16
+# @Last Modified: 2022-11-29 11:38:50
 # ------------------------------------------------------------------------------ #
 # Analysis script that preprocesses experiments and creates dataframes to compare
 # across condtions. Plots and more detailed analysis are in `paper_plots.py`
@@ -294,14 +294,14 @@ def main():
                 # ------------------------------------------------------------------------------ #
 
                 # NxN matrix
-                rij = ah.find_rij(
+                neuron_rij = ah.find_rij(
                     h5f, which="neurons", time_bin_size=time_bin_size_for_rij
                 )
-                np.fill_diagonal(rij, np.nan)
-                rij_flat = rij.flatten()
+                np.fill_diagonal(neuron_rij, np.nan)
+                neuron_rij_flat = neuron_rij.flatten()
                 df = pd.DataFrame(
                     {
-                        "Correlation Coefficient": rij_flat,
+                        "Correlation Coefficient": neuron_rij_flat,
                         "Condition": condition_string,
                         "Trial": trial,
                         "Stimulation": stimulation_string,
@@ -310,7 +310,7 @@ def main():
                 )
                 # just the bunch of all rijs
                 dataframes["rij"].append(df)
-                neuron_rij_mean = np.nanmean(rij)
+                neuron_rij_mean = np.nanmean(neuron_rij)
 
                 # we also want to compare the correlation coefficients for different
                 # combinations ("parings") of neurons from certain modules
@@ -321,16 +321,16 @@ def main():
                 pair_descriptions["across_groups_2_3"] = "across"
                 pair_descriptions["all"] = "all"
                 for pairing in pair_descriptions.keys():
-                    rij_paired = ah.find_rij_pairs(
-                        h5f, rij=rij, pairing=pairing, which="neurons"
+                    neuron_rij_paired = ah.find_rij_pairs(
+                        h5f, rij=neuron_rij, pairing=pairing, which="neurons"
                     )
                     df = pd.DataFrame(
                         {
-                            "Correlation Coefficient": rij_paired,
+                            "Correlation Coefficient": neuron_rij_paired,
                             "Condition": condition_string,
                             "Trial": trial,
                             "Pairing": pair_descriptions[pairing],
-                            "Pair ID": np.arange(len(rij_paired)),
+                            "Pair ID": np.arange(len(neuron_rij_paired)),
                             "Stimulation": stimulation_string,
                             "Type": args.etype,
                         }
@@ -342,12 +342,12 @@ def main():
                 # ------------------------------------------------------------------------------ #
 
                 # 4x4 matrix
-                rij = ah.find_rij(h5f, which="modules")
-                np.fill_diagonal(rij, np.nan)
-                rij_flat = rij.flatten()
+                module_rij = ah.find_rij(h5f, which="modules")
+                np.fill_diagonal(module_rij, np.nan)
+                module_rij_flat = module_rij.flatten()
                 df = pd.DataFrame(
                     {
-                        "Correlation Coefficient": rij_flat,
+                        "Correlation Coefficient": module_rij_flat,
                         "Condition": condition_string,
                         "Trial": trial,
                         "Stimulation": stimulation_string,
@@ -356,23 +356,23 @@ def main():
                 )
                 # just the bunch of all rijs
                 dataframes["mod_rij"].append(df)
-                module_rij_mean = np.nanmean(rij)
+                module_rij_mean = np.nanmean(module_rij)
 
                 # pair descriptions as above
                 for pairing in pair_descriptions.keys():
-                    rij_paired = ah.find_rij_pairs(
+                    module_rij_paired = ah.find_rij_pairs(
                         h5f,
-                        rij=rij,
+                        rij=module_rij,
                         pairing=pairing,
                         which="modules",
                     )
                     df = pd.DataFrame(
                         {
-                            "Correlation Coefficient": rij_paired,
+                            "Correlation Coefficient": module_rij_paired,
                             "Condition": condition_string,
                             "Trial": trial,
                             "Pairing": pair_descriptions[pairing],
-                            "Pair ID": np.arange(len(rij_paired)),
+                            "Pair ID": np.arange(len(module_rij_paired)),
                             "Stimulation": stimulation_string,
                             "Type": args.etype,
                         }
@@ -403,7 +403,7 @@ def main():
                 # and some summary statistics on the trial level
                 # ------------------------------------------------------------------------------ #
 
-                fc = ah._functional_complexity(rij)
+                fc = ah._functional_complexity(neuron_rij)
                 df = pd.DataFrame(
                     {
                         "Num Bursts": [len(blen)],
