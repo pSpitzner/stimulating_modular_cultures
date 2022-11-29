@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2022-09-27 11:04:16
+# @Last Modified: 2022-11-29 16:02:04
 # ------------------------------------------------------------------------------ #
 # All the lower-level plotting is in here.
 #
@@ -44,14 +44,13 @@ matplotlib.rcParams["axes.prop_cycle"] = matplotlib.cycler("color", [
     "#5886be", "#f3a093", "#53d8c9", "#f9c192", "#f2da9c" # light
     ]) # qualitative, somewhat color-blind friendly, in mpl words 'tab5'
 
-
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 import pandas as pd
 import networkx as nx
 from tqdm import tqdm
-from brian2.units.allunits import *
+# from brian2.units.allunits import *
 from benedict import benedict
 
 sys.path.append(os.path.abspath(os.path.dirname(__file__) + "/../ana/"))
@@ -104,7 +103,6 @@ def overview_topology(h5f, filenames=None, skip_graph=False):
         axes[1, 2].autoscale()
 
     fig.tight_layout()
-
 
     return fig
 
@@ -285,11 +283,13 @@ def plot_raster(
         kwargs.setdefault("alpha", 1)
         kwargs.setdefault("markersize", 1.5)
         kwargs.setdefault("markeredgewidth", 0)
+        kwargs.setdefault("lw", 0)
     else:
         marker = "."
         kwargs.setdefault("alpha", 0.75)
         kwargs.setdefault("markersize", 2.0)
         kwargs.setdefault("markeredgewidth", 0)
+        kwargs.setdefault("lw", 0)
 
     # sort by module, access as [:] to load, in case h5 dataset
     if neurons is None:
@@ -556,6 +556,8 @@ def plot_state_variable(h5f, ax=None, apply_formatting=True, variable="D", **kwa
     else:
         fig = ax.get_figure()
 
+    log.info(h5f["ana.mod_colors"])
+
     # check if this seems to be a quantity between
     # 0 and one
     geqo = False
@@ -572,7 +574,7 @@ def plot_state_variable(h5f, ax=None, apply_formatting=True, variable="D", **kwa
         # mean across neurons
         x = h5f[f"data.state_vars_time"][:]
         y = np.nanmean(stat_vals[selects, :], axis=0)
-        ax.plot(x, y, **kwargs)
+        ax.plot(x, y, **plot_kwargs)
         if np.any(y > 1):
             geqo = True
         if np.any(y < 0):
@@ -992,7 +994,13 @@ def plot_initiation_site(h5f, ax=None, apply_formatting=True):
 
 
 def plot_resources_vs_activity(
-    h5f, ax=None, apply_formatting=True, mod_ids=None, max_traces_per_mod=100, **kwargs
+    h5f,
+    ax=None,
+    apply_formatting=True,
+    mod_ids=None,
+    max_traces_per_mod=100,
+    mark_resources_at_burst_start=True,
+    **kwargs,
 ):
     """
     Helper to illustrate the charge-and-release cycle of synaptic resources.
@@ -1008,6 +1016,8 @@ def plot_resources_vs_activity(
     if apply_formatting:
         ax.set_xlabel("Synaptic resources")
         ax.set_ylabel("Population rate (Hz)")
+        ax.set_xlim(0, 1)
+        ax.set_ylim(-5, 100)
 
     if mod_ids is None:
         mod_ids = h5f["ana.mod_ids"]
@@ -1044,6 +1054,11 @@ def plot_resources_vs_activity(
             clr = "black"
         plot_kwargs = {"color": clr, "alpha": 0.3}
         plot_kwargs.update(kwargs)
+        if mdx in [0, 2]:
+            # put the stimulated guys in the foreground
+            plot_kwargs["zorder"] = 2
+        else:
+            plot_kwargs["zorder"] = 1
 
         split_by_burst = True
         if split_by_burst and stride == 1:
@@ -1051,6 +1066,8 @@ def plot_resources_vs_activity(
             end_times = h5f["ana.bursts.system_level.end_times"]
             last_end = 0.0
             num_traces = 0
+            # lets track the resource value when bursts start
+            adapt_at_beg = []
             for bdx in range(0, len(end_times)):
                 if num_traces == max_traces_per_mod:
                     break
@@ -1059,19 +1076,37 @@ def plot_resources_vs_activity(
                 next_beg = beg_times[bdx]
                 # do we want the recharging part of the trace?
                 # idx = np.where((adap_times >= next_beg) & (adap_times <= next_end))
+                # currently we plot end to end.
                 idx = np.where((adap_times > last_end) & (adap_times <= next_end))
                 last_end = next_end
                 ax.plot(mod_adapt[idx], mod_rate[idx], **plot_kwargs)
-            log.info(f"plotted {num_traces} cycle-traces for {mod}")
+                # track the resource value when bursts start
+                beg_idx = np.argmax(adap_times > next_beg)
+                adapt_at_beg.append(mod_adapt[beg_idx])
+            med_adapt_at_beg = np.nanmedian(adapt_at_beg)
+            log.info(
+                f"plotted {num_traces} cycle-traces for {mod}. median adapt at burst"
+                f" start: {med_adapt_at_beg}"
+            )
+
+            if mark_resources_at_burst_start:
+                # assuming a yrange around 0-100 Hz
+                y = -35
+                x = med_adapt_at_beg
+                ax.plot(
+                    x,
+                    y,
+                    "^",
+                    lw=0,
+                    ms=2.0,
+                    color=clr,
+                    zorder=plot_kwargs["zorder"],
+                    clip_on=False,
+                )
 
         else:
             ax.plot(mod_adapt, mod_rate, **plot_kwargs)
             # ax.scatter(mod_rate, mod_adapt, alpha=0.6, s=0.5)
-
-        if apply_formatting:
-            ax.set_xlim(0, 1)
-            ax.set_ylim(-5, 100)
-            ax.get_figure().tight_layout()
 
     return ax
 

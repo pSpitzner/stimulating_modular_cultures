@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-11-08 17:51:24
-# @Last Modified: 2022-11-21 15:15:40
+# @Last Modified: 2022-11-29 16:39:29
 # ------------------------------------------------------------------------------ #
 #
 # How to read / work this monstrosity of a file?
@@ -62,7 +62,7 @@ logging.basicConfig(
     datefmt="%y-%m-%d %H:%M",
 )
 log = logging.getLogger(__name__)
-log.setLevel("INFO")
+log.setLevel("DEBUG")
 warnings.filterwarnings("ignore")  # suppress numpy warnings
 
 # ------------------------------------------------------------------------------ #
@@ -74,7 +74,9 @@ reference_coordinates = dict()
 reference_coordinates["jA"] = 45
 reference_coordinates["jG"] = 50
 reference_coordinates["tD"] = 20
-reference_coordinates["k_inter"] = 5
+reference_coordinates["k_inter"] = 5  # connections between modules
+reference_coordinates["k_in"] = 30  # avg. in-degree for each neuron. 15 or 30
+
 
 # we had one trial for single bond where we saw more bursts than everywhere else
 remove_outlier = True
@@ -110,6 +112,7 @@ matplotlib.rcParams["ytick.major.pad"] = 2  # default 3.5
 matplotlib.rcParams["lines.dash_capstyle"] = "round"
 matplotlib.rcParams["lines.solid_capstyle"] = "round"
 matplotlib.rcParams["font.size"] = 6
+matplotlib.rcParams["mathtext.default"] = "regular"
 matplotlib.rcParams["axes.titlesize"] = 6
 matplotlib.rcParams["axes.labelsize"] = 6
 matplotlib.rcParams["legend.fontsize"] = 6
@@ -148,6 +151,11 @@ colors["rij_within_stim"] = "#BD6B00"
 colors["rij_within_nonstim"] = "#135985"
 colors["rij_across"] = "#B31518"
 colors["rij_all"] = "#222"
+
+# colors for rasters need to be set when loading the data,
+# so its convenient to have a list
+# default_mod_colors = ['#9f7854', '#135985', '#ca8933', '#5B647B']
+default_mod_colors = ["#BD6B00", "#135985", "#ca8933", "#427A9D"]
 
 colors["k=1"] = dict()
 colors["k=1"]["75.0 Hz"] = colors["pre"]
@@ -267,9 +275,16 @@ def fig_1(show_time_axis=False):
     # Stick plots for optogenetic vs chemical
     # ------------------------------------------------------------------------------ #
 
-    for obs in ["Functional Complexity", "Mean Fraction", "Mean Correlation"]:
+    for obs in [
+        "Functional Complexity",
+        "Mean Fraction",
+        "Mean Correlation",
+        "Mean Module Correlation",
+    ]:
         ax = exp_chemical_vs_opto(observable=obs, draw_error_bars=False)
-        cc.set_size(ax, w=1.2, h=2, l=1.2, r=0.7, b=0.2, t=0.5)
+        cc.set_size(ax, w=1.2, h=1.6, l=1.2, r=0.7, b=0.2, t=0.5)
+        ax.grid(axis="y", which="both", color="0.8", lw=0.5, zorder=-1, clip_on=False)
+
         ax.set_ylim(0, 1.0)
         ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
         ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
@@ -306,7 +321,7 @@ def fig_2(skip_plots=False):
     if not skip_plots:
         exp_violins_for_layouts()
         exp_rij_for_layouts()
-        exp_sticks_across_layouts(observable="Functional Complexity", hide_labels=False)
+        exp_sticks_across_layouts(observable="Functional Complexity")
 
     log.debug("-------------------------")
     log.debug("Pairwise tests for trials")
@@ -477,7 +492,7 @@ def fig_3(pd_path, raw_paths=None, out_suffix=""):
         fig.savefig(f"{p_fo}/sim_raster_stim_02_{pdx}{osx}.pdf", dpi=900)
 
 
-def fig_3_r1(pd_path=None, raw_paths=None, out_suffix=""):
+def fig_3_r1(pd_path=None, raw_paths=None, out_suffix="", combine_panels=False):
     """
     Wrapper for Figure 3 on Simulations containing
     - pooled Violins that aggregate the results of all trials for
@@ -513,33 +528,38 @@ def fig_3_r1(pd_path=None, raw_paths=None, out_suffix=""):
     #         f"{p_sim}/lif/raw/stim=02_k=5_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=80.0_stimrate=20.0_rep=000.hdf5",
     #     ]
 
-    osx = out_suffix
-
     # reproducing 2 module stimulation in simulations
 
-    dfs = load_pd_hdf5(pd_path, ["bursts", "rij", "rij_paired"])
-    df = dfs["rij_paired"]
+    dfs = load_pd_hdf5(pd_path, ["bursts", "rij", "rij_paired", "mod_rij_paired"])
 
-    num_panels = 5
-    fig, axes = plt.subplots(ncols=1, nrows=num_panels, figsize=(2, num_panels * 1.5))
+    col_width = 2.2  # cm
+    num_panels = 6
+    if combine_panels:
+        fig, axes = plt.subplots(ncols=1, nrows=num_panels, figsize=(2, num_panels * 1.5))
+    else:
+        axes = [plt.subplots()[1] for _ in range(num_panels)]
 
     def apply_formatting(ax, ylim=True, trim=True):
         if ylim:
             ax.set_ylim(-0.05, 1.05)
             ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
             ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
-        # ax.set_frame_on(False)
-        # sns.despine(ax=ax, bottom=True, left=False, trim=trim, offset=2)
+
         ax.tick_params(bottom=False)
         ax.set_xlabel(f"")
         ax.set_ylabel(f"")
+        ax.set_xticklabels([])
+        if not combine_panels:
+            sns.despine(ax=ax, bottom=True, left=False, trim=trim, offset=2)
+            # set violin size
+            # experimental were 3.0 x 2.0, but had 3 violins
+            cc.set_size(ax, col_width, 2.0, l=1.5, b=0.5, t=0.5)
 
     # ------------------------------------------------------------------------------ #
     # violins
     # ------------------------------------------------------------------------------ #
 
-    log.info("")
-    log.info("# simulation with two targeted modules")
+    log.debug("# violins for simulation with two targeted modules")
     ax = axes[0]
     ax = custom_violins(
         dfs["bursts"],
@@ -552,8 +572,7 @@ def fig_3_r1(pd_path=None, raw_paths=None, out_suffix=""):
         ax=ax,
     )
     apply_formatting(ax)
-    ax.set_xlabel("Event size")
-    # ax.get_figure().savefig(f"{p_fo}/sim_partial_violins_fraction{osx}.pdf", dpi=300)
+    ax.set_ylabel("Event size" if show_ylabel else "")
 
     log.info("")
     ax = axes[1]
@@ -568,8 +587,7 @@ def fig_3_r1(pd_path=None, raw_paths=None, out_suffix=""):
         ax=ax,
     )
     apply_formatting(ax)
-    ax.set_xlabel("Correlation")
-    # ax.get_figure().savefig(f"{p_fo}/sim_partial_violins_rij{osx}.pdf", dpi=300)
+    ax.set_ylabel("Correlation" if show_ylabel else "")
 
     log.info("")
     ax = axes[2]
@@ -584,77 +602,69 @@ def fig_3_r1(pd_path=None, raw_paths=None, out_suffix=""):
         ax=ax,
     )
     apply_formatting(ax, ylim=False)
-    ax.set_xlabel("IBI")
+    ax.set_ylabel("IBI" if show_ylabel else "")
     ax.set_ylim(0, 70)
-    # ax.get_figure().savefig(f"{p_fo}/sim_partial_violins_ibi{osx}.pdf", dpi=300)
-
-    # ------------------------------------------------------------------------------ #
-    # tests for violins
-    # ------------------------------------------------------------------------------ #
-
-    # sim_tests_stimulating_two_modules(observables=["Fraction"])
-    # sim_tests_stimulating_two_modules(observables=["Correlation Coefficient"])
 
     # ------------------------------------------------------------------------------ #
     # pairwise rij plots
     # ------------------------------------------------------------------------------ #
 
-    log.info("barplot rij paired for simulations")
+    log.debug("barplot rij paired for simulations")
 
     ax = axes[3]
-    ax = custom_rij_barplot(df, conditions=["0.0 Hz", "20.0 Hz"], recolor=True, ax=ax)
+    ax = custom_rij_barplot(
+        dfs["rij_paired"], conditions=["0.0 Hz", "20.0 Hz"], recolor=True, ax=ax
+    )
     ax.set_ylim(0, 1)
-    # cc.set_size(ax, 3, 1.5)
-    # ax.get_figure().savefig(f"{p_fo}/sim_rij_barplot{osx}.pdf", dpi=300)
+    ax.set_ylabel("Median Neuron correlation" if show_ylabel else "")
+    ax.set_xlabel("Pairing" if show_xlabel else "")
+    ax.grid(axis="y", which="both", color="0.8", lw=0.5, zorder=-1, clip_on=False)
 
-    log.info("scattered 2d rij paired for simulations")
     ax = axes[4]
+    ax = custom_rij_barplot(
+        dfs["mod_rij_paired"], conditions=["0.0 Hz", "20.0 Hz"], recolor=True, ax=ax
+    )
+    ax.set_ylim(0, 1)
+    ax.set_ylabel("Median Module correlation" if show_ylabel else "")
+    ax.set_xlabel("Pairing" if show_xlabel else "")
+    ax.grid(axis="y", which="both", color="0.8", lw=0.5, zorder=-1, clip_on=False)
+
+    log.debug("scattered 2d rij paired for simulations")
+    ax = axes[5]
     ax = custom_rij_scatter(
-        df,
+        dfs["rij_paired"],
         max_sample_size=2500,
         scatter=True,
         kde_levels=[0.9, 0.95, 0.975],
         ax=ax,
     )
-    # cc.set_size(ax, 3, 3)
-    # ax.get_figure().savefig(f"{p_fo}/sim_2drij{osx}.pdf", dpi=300)
-    fig.tight_layout()
-    fig.savefig(f"{p_fo}/sim_partial_violins_merged{osx}.pdf", dpi=300)
+    ax.set_xlabel("$r_{ij}$ pre")
+    ax.set_ylabel("$r_{ij}$ stim")
 
     # ------------------------------------------------------------------------------ #
-    # raster plots for 2 module stimulation
+    # saving
     # ------------------------------------------------------------------------------ #
 
-    if raw_paths is None:
-        raw_paths = []
+    osx = out_suffix
+    opx = f"{p_fo}/sim_f3_"
 
-    for pdx, path in enumerate(raw_paths):
-        h5f = ph.ah.prepare_file(path)
-
-        fig, ax = plt.subplots()
-        ph.plot_raster(
-            h5f,
-            ax,
-            clip_on=True,
-            zorder=-2,
-            markersize=0.75,
-            alpha=0.5,
-            color="#333",
-        )
-
-        ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(180))
-        ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(60))
-        ax.xaxis.set_visible(False)
-        ax.yaxis.set_visible(False)
-        sns.despine(ax=ax, left=True, right=True, bottom=True, top=True)
-        ax.set_xlim(0, 180)
-
-        # cc.set_size(ax, 2.7, 0.9)
-
-        fig.savefig(f"{p_fo}/sim_raster_stim_02_{pdx}{osx}.pdf", dpi=900)
+    if combine_panels:
+        fig = ax.get_figure()
+        fig.tight_layout()
+        fig.savefig(f"{opx}combined{osx}.pdf", dpi=300)
+    else:
+        axes[0].get_figure().savefig(f"{opx}violins_event_size{osx}.pdf", dpi=300)
+        axes[1].get_figure().savefig(f"{opx}violins_neuron_rij{osx}.pdf", dpi=300)
+        axes[2].get_figure().savefig(f"{opx}violins_ibi{osx}.pdf", dpi=300)
+        cc.set_size(axes[3], col_width, 1.5, b=1.0, l=1.0)
+        cc.set_size(axes[4], col_width, 1.5, b=1.0, l=1.0)
+        axes[3].get_figure().savefig(f"{opx}barplot_neuron_rij{osx}.pdf", dpi=300)
+        axes[4].get_figure().savefig(f"{opx}barplot_module_rij{osx}.pdf", dpi=300)
+        cc.set_size(axes[5], col_width, col_width, b=1.0, l=1.0)
+        axes[5].get_figure().savefig(f"{opx}scatter_neuron_rij{osx}.pdf", dpi=300)
 
 
-def fig_4():
+def fig_4(k_in=30):
     """
     Wrapper for Figure 4 (extended) on Simulations containing
     - As a function of increasing Synaptic Noise Rate:
@@ -739,7 +749,8 @@ def fig_4():
     ylabels["mod_mean_correlation"] = "mod rij mean"
 
     coords = reference_coordinates.copy()
-    coords["k_inter"] = [1, 3, 5, 10, 20, -1]
+    coords["k_inter"] = [1, 3, 4, 5, 10, -1]
+    coords["k_in"] = k_in
 
     base_colors = [
         "#1D484F",
@@ -817,7 +828,7 @@ def fig_4():
         ax.get_figure().savefig(f"{p_fo}/sim_ksweep_{obs}.pdf", dpi=300)
 
 
-def fig_4_snapshots(skip_rasters=True, skip_cycles=True, style_for_sm=True):
+def fig_4_r1_snapshots(k_in=30, do_rasters=True, do_cycles=True, do_topo=True):
     """
     Wrapper to create the snapshots of LIF simulations in Figure 4 and the SM.
     - example raster plots
@@ -839,9 +850,160 @@ def fig_4_snapshots(skip_rasters=True, skip_cycles=True, style_for_sm=True):
     def path(k, rate, rep):
         # we additonally sampled a few simulations at higher time resolution. this gives
         # higher precision for the resource variable, but takes tons of disk space.
-        # path = f"{p_sim}/lif/raw_highres/"
-        path = f"{p_sim}/lif/raw/"
-        path += f"stim=off_k={k:d}_jA=45.0_jG=50.0_jM=15.0_tD=20.0"
+        path = f"{p_sim}/lif/raw/highres_"
+        # path += f"stim=02_k={k:d}_kin={k_in:d}_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=80.0_"
+        path += f"stim=02_k={k:d}_kin={k_in:d}_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=80.0_"
+        path += f"stimrate={rate:.1f}_rep={rep:03d}.hdf5"
+        return path
+
+    coords = []
+    times = []  # start time for the large time window of ~ 180 seconds
+    zooms = []  # start time for an interesting 250 ms time window showing a burst
+
+    # coords.append(dict(k=1, rate=0, rep=1))
+    # zooms.append(171.83)
+    # times.append(0)
+    # coords.append(dict(k=1, rate=20, rep=1))
+    # zooms.append(171.83)
+    # times.append(0)
+
+    coords.append(dict(k=3, rate=0, rep=1))
+    zooms.append(166.50)
+    times.append(0)
+    coords.append(dict(k=3, rate=20, rep=1))
+    zooms.append(166.50)
+    times.append(0)
+
+    # coords.append(dict(k=5, rate=0, rep=0))
+    # zooms.append(162.77)
+    # times.append(0)
+    # coords.append(dict(k=5, rate=20, rep=0))
+    # zooms.append(162.77)
+    # times.append(0)
+
+    # coords.append(dict(k=10, rate=0, rep=0))
+    # zooms.append(141.5)
+    # times.append(0)
+    # coords.append(dict(k=10, rate=20, rep=0))
+    # zooms.append(170.475)
+    # times.append(0)
+
+    # coords.append(dict(k=-1, rate=0, rep=1))
+    # zooms.append(143.2)
+    # times.append(0)
+    # coords.append(dict(k=-1, rate=20, rep=1))
+    # zooms.append(146.95)
+    # times.append(0)
+
+    for idx in range(0, len(coords)):
+        if not do_rasters:
+            break
+
+        cs = coords[idx]
+        if not os.path.exists(path(**cs)):
+            log.info(f"File not found, skipping {path(**cs)}")
+            continue
+
+        log.info(f"Raster for k={cs['k']} at {cs['rate']} Hz")
+
+        fig = sim_raster_plots(
+            path=path(**cs),
+            time_range=(times[idx], times[idx] + 180),
+            zoom_time=zooms[idx],
+            mark_zoomin_location=True,
+        )
+        # update to get exact axes width
+        ax = fig.axes[0]
+        ax.set_ylim(0, 120)
+
+        _set_size(ax=ax, w=3.5, h=None)
+        k_str = f"merged" if cs["k"] == -1 else f"k={cs['k']}"
+        if show_title:
+            ax.text(
+                0.5,
+                0.98,
+                f"{k_str}    {cs['rate']}Hz",
+                va="center",
+                ha="center",
+                transform=ax.transAxes,
+            )
+        fig.savefig(
+            f"{p_fo}/sim_ts_combined_k={cs['k']}_kin={k_in}_nozoom_{cs['rate']}Hz.pdf",
+            dpi=900,  # use higher res to get rasters smooth
+            transparent=False,
+        )
+
+    # ------------------------------------------------------------------------------ #
+    # Topology sketch
+    # ------------------------------------------------------------------------------ #
+
+    for idx in range(0, len(coords)):
+        if not do_topo:
+            break
+
+        cs = coords[idx]
+        if not os.path.exists(path(**cs)):
+            log.info(f"File not found, skipping {path(**cs)}")
+            continue
+
+        sim_layout_sketch(
+            in_path=path(**cs),
+            out_path=f"{p_fo}/sim_layout_sketch_{cs['k']}_kin={k_in}_{cs['rate']}Hz.png",
+            grayscale=False,
+        )
+
+    # ------------------------------------------------------------------------------ #
+    # panel h, resource cycles. this is quite slow
+    # ------------------------------------------------------------------------------ #
+
+    for idx in range(0, len(coords)):
+        if not do_cycles:
+            break
+
+        cs = coords[idx]
+        if not os.path.exists(path(**cs)):
+            log.info(f"File not found, skipping {path(**cs)}")
+            continue
+
+        k_str = f"merged" if cs["k"] == -1 else f"k={cs['k']}"
+        log.info(f"Resource cycle for k={cs['k']} at {cs['rate']} Hz")
+
+        ax = sim_resource_cyle(
+            h5f=path(**cs),
+        )
+
+        ax.get_figure().savefig(
+            f"{p_fo}/sim_resource_cycle_{k_str}_kin={k_in}_{cs['rate']}Hz.pdf",
+            transparent=False,
+            dpi=900,
+        )
+
+
+def fig_4_snapshots(k_in=30, skip_rasters=True, skip_cycles=True, style_for_sm=True):
+    """
+    Wrapper to create the snapshots of LIF simulations in Figure 4 and the SM.
+    - example raster plots
+        * A sketch of the topology
+        * Population-level rates in Hz (top)
+        * Raster, color coded by module
+        * Module-level synaptic resources available (bottom)
+        * A zoomin of the raster of a single bursting event (right)
+        Sorted by
+            - the number of connections between modules (k)
+            - and the "Synaptic Noise Rate" - a Poisson input provided to all neurons.
+    - charge-discharge cycles for the examples in the raster plots.
+    """
+
+    # ------------------------------------------------------------------------------ #
+    # raster plots
+    # ------------------------------------------------------------------------------ #
+
+    def path(k, rate, rep):
+        # we additonally sampled a few simulations at higher time resolution. this gives
+        # higher precision for the resource variable, but takes tons of disk space.
+        path = f"{p_sim}/lif/raw/highres_"
+        # path = f"{p_sim}/lif/raw/"
+        path += f"stim=off_k={k:d}_kin={k_in:02d}_jA=45.0_jG=50.0_jM=15.0_tD=20.0"
         path += f"_rate={rate:.1f}_rep={rep:03d}.hdf5"
         return path
 
@@ -938,7 +1100,7 @@ def fig_4_snapshots(skip_rasters=True, skip_cycles=True, style_for_sm=True):
             transform=ax.transAxes,
         )
         fig.savefig(
-            f"{p_fo}/sim_ts_combined_k={cs['k']}_nozoom_{cs['rate']}Hz.pdf",
+            f"{p_fo}/sim_ts_combined_k={cs['k']}_kin={k_in}_nozoom_{cs['rate']}Hz.pdf",
             dpi=900,  # use higher res to get rasters smooth
             transparent=False,
         )
@@ -946,7 +1108,7 @@ def fig_4_snapshots(skip_rasters=True, skip_cycles=True, style_for_sm=True):
         # do we want a schematic of the topology?
         sim_layout_sketch(
             in_path=path(**cs),
-            out_path=f"{p_fo}/sim_layout_sketch_{cs['k']}_{cs['rate']}Hz.png",
+            out_path=f"{p_fo}/sim_layout_sketch_{cs['k']}_kin={k_in}_{cs['rate']}Hz.png",
         )
 
     # ------------------------------------------------------------------------------ #
@@ -1007,7 +1169,7 @@ def fig_4_snapshots(skip_rasters=True, skip_cycles=True, style_for_sm=True):
                     ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(50))
 
                 ax.get_figure().savefig(
-                    f"{p_fo}/sim_resource_cycle_{k_str}_{rate}Hz.pdf",
+                    f"{p_fo}/sim_resource_cycle_{k_str}_kin={k_in}_{rate}Hz.pdf",
                     transparent=False,
                 )
 
@@ -1340,57 +1502,81 @@ def fig_sm_exp_trialwise_observables(
 
     kwargs = dict(
         save_path=None,
-        hide_labels=False,
         layouts=layouts,
         conditions=conditions,
         draw_error_bars=draw_error_bars,
+        bar_width_ratio=3.0,
+        large_dx=1.5,
+        small_dx=0.35,
     )
 
     if prefix is None:
         prefix = f"{p_fo}/exp_layouts_sticks"
 
+    try:
+        # this wont get saved but never mind. mainly for the jupyter notebook
+        xlabel = " | ".join([layout for layout in layouts])
+    except Exception as e:
+        xlabel = "layouts"
+
     axes = []
     ax = exp_sticks_across_layouts(observable="Functional Complexity", **kwargs)
+    ax.set_xlabel(xlabel if show_xlabel else "")
+    ax.set_ylabel("Functional Complexity" if show_ylabel else "")
+    ax.set_title("Functional Complexity" if show_title else "")
     ax.get_figure().savefig(f"{prefix}_functional_complexity.pdf", dpi=300)
     axes.append(ax)
 
     ax = exp_sticks_across_layouts(observable="Mean Fraction", **kwargs)
-    ax.set_ylabel("Mean Event size")
+    ax.set_xlabel(xlabel if show_xlabel else "")
+    ax.set_ylabel("Mean Event size" if show_ylabel else "")
+    ax.set_title("Mean Event size" if show_title else "")
     ax.get_figure().savefig(f"{prefix}_mean_event_size.pdf", dpi=300)
     axes.append(ax)
 
     ax = exp_sticks_across_layouts(observable="Mean Correlation", **kwargs)
+    ax.set_ylabel("Mean Correlation" if show_ylabel else "")
+    ax.set_title("Mean Correlation" if show_title else "")
+    ax.set_xlabel(xlabel if show_xlabel else "")
     ax.get_figure().savefig(f"{prefix}_mean_correlation.pdf", dpi=300)
     axes.append(ax)
 
-    ax = exp_sticks_across_layouts(observable="Mean IBI", set_ylim=[0, None], **kwargs)
-    ax.set_ylabel("Mean IEI (seconds)")
+    # this was added later
+    try:
+        ax = exp_sticks_across_layouts(observable="Mean Module Correlation", **kwargs)
+        ax.set_ylabel("Module Correlation" if show_ylabel else "")
+        ax.set_title("Module Correlation" if show_title else "")
+        ax.set_xlabel(xlabel if show_xlabel else "")
+        ax.get_figure().savefig(f"{prefix}_module_correlation_mean.pdf", dpi=300)
+        axes.append(ax)
+    except:
+        log.debug("No module correlation data")
+
+    ax = exp_sticks_across_layouts(observable="Mean IBI", set_ylim=[0, 200], **kwargs)
+    ax.set_xlabel(xlabel if show_xlabel else "")
+    ax.set_ylabel("Mean IEI (seconds)" if show_ylabel else "")
+    ax.set_title("Mean IEI (seconds)" if show_title else "")
     ax.get_figure().savefig(f"{prefix}_mean_iei.pdf", dpi=300)
     axes.append(ax)
 
-    ax = exp_sticks_across_layouts(observable="Mean Rate", set_ylim=[0, None], **kwargs)
-    ax.set_ylabel("Mean Rate (Hz)")
+    ax = exp_sticks_across_layouts(observable="Mean Rate", set_ylim=[0, 1.201], **kwargs)
+    ax.set_xlabel(xlabel if show_xlabel else "")
+    ax.set_ylabel("Mean Rate (Hz)" if show_ylabel else "")
+    ax.set_title("Mean Rate (Hz)" if show_title else "")
     ax.get_figure().savefig(f"{prefix}_mean_rate.pdf", dpi=300)
     axes.append(ax)
 
     ax = exp_sticks_across_layouts(
-        observable="Mean Core delays", set_ylim=[0, None], **kwargs
+        observable="Mean Core delays", set_ylim=[0, 0.225], **kwargs
     )
-    ax.set_ylabel("Mean Core delay\n(seconds)")
+    ax.set_xlabel(xlabel if show_xlabel else "")
+    ax.set_ylabel("Mean Core delay\n(seconds)" if show_ylabel else "")
+    ax.set_title("Mean Core delay\n(seconds)" if show_title else "")
     # ax.set_ylim(0, None)
     # sns.despine(ax=ax, bottom=True, left=False, trim=True, offset=5)
     # cc.set_size(ax, 2.2, 2)
     ax.get_figure().savefig(f"{prefix}_mean_core_delay.pdf", dpi=300)
     axes.append(ax)
-
-    if show_xlabel:
-        try:
-            # this wont get saved but never mind. mainly for the jupyter notebook
-            xlabel = " | ".join([layout for layout in layouts])
-            for ax in axes:
-                ax.set_xlabel(xlabel)
-        except:
-            pass
 
 
 def fig_sm_exp_bicuculline():
@@ -2132,7 +2318,7 @@ def exp_chemical_vs_opto(observable="Functional Complexity", draw_error_bars=Fal
                 x,
                 y,
                 label=trial,
-                zorder=0,
+                zorder=2,
                 clip_on=False,
                 **kwargs,
             )
@@ -2163,7 +2349,7 @@ def exp_chemical_vs_opto(observable="Functional Complexity", draw_error_bars=Fal
                 outliers=[df_min, df_max],
                 orientation="v",
                 color=clr,
-                zorder=2,
+                zorder=4,
             )
 
     # ax.legend()
@@ -2175,7 +2361,6 @@ def exp_chemical_vs_opto(observable="Functional Complexity", draw_error_bars=Fal
 
 def exp_sticks_across_layouts(
     observable="Functional Complexity",
-    hide_labels=True,
     set_ylim=True,
     apply_formatting=True,
     layouts=None,
@@ -2184,6 +2369,9 @@ def exp_sticks_across_layouts(
     draw_error_bars=True,
     dfs=None,
     x_offset=0,
+    small_dx=0.3,
+    large_dx=1.5,
+    bar_width_ratio=3.0,
 ):
     """
     This draws stick (error-bar) plots comparing
@@ -2193,6 +2381,13 @@ def exp_sticks_across_layouts(
     conditions the minor grouping (and color coded).
 
     Trials are drawn as faint lines from one condition to the next.
+
+    # Parameters
+    layouts : list of str
+        default None -> ["1b", "3b", "merged"]
+    conditions : list of str
+        default None -> ["pre", "stim", "post"]
+
     """
     log.info(f"")
     log.info(f"# sticks for {observable}")
@@ -2219,8 +2414,6 @@ def exp_sticks_across_layouts(
 
     fig, ax = plt.subplots()
 
-    small_dx = 0.3
-    large_dx = 1.5
     x_pos = dict()
     x_pos_sticks = dict()
     for ldx, l in enumerate(layouts):
@@ -2254,6 +2447,11 @@ def exp_sticks_across_layouts(
         clr = colors["pre"] if etype != "KCl_1b" else colors["KCl_0mM"]
         trials = dfs[etype]["Trial"].unique()
         for trial in trials:
+
+            # ------------------------------------------------------------------------------ #
+            # draw faint lines for trials
+            # ------------------------------------------------------------------------------ #
+
             df = dfs[etype].loc[dfs[etype]["Trial"] == trial]
             # assert len(df) == len(layouts)
             x = []
@@ -2281,7 +2479,7 @@ def exp_sticks_across_layouts(
                     x,
                     y,
                     label=trial,
-                    zorder=0,
+                    zorder=2,
                     clip_on=False,
                     **kwargs,
                 )
@@ -2290,6 +2488,10 @@ def exp_sticks_across_layouts(
                 # needed for number of cells
                 # or for chemical where we do not have the "post" condition.
                 log.debug(f"{e}")
+
+        # ------------------------------------------------------------------------------ #
+        # Error bars
+        # ------------------------------------------------------------------------------ #
 
         if not draw_error_bars[etype]:
             continue
@@ -2340,8 +2542,9 @@ def exp_sticks_across_layouts(
                 errors=[mid - error, mid + error],
                 outliers=[df_min, df_max],
                 orientation="v",
+                bar_width_ratio=bar_width_ratio,
                 color=clr,
-                zorder=2,
+                zorder=3,
             )
         log.info(f"")
 
@@ -2352,15 +2555,18 @@ def exp_sticks_across_layouts(
         ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
     elif isinstance(set_ylim, list):
         ax.set_ylim(*set_ylim)
-    ax.set_xlim(-0.25, 3.5)
+    ax.set_xlim(-0.5, 4.2)
     if apply_formatting:
-        sns.despine(ax=ax, bottom=True, left=False, trim=True, offset=5)
+        sns.despine(ax=ax, bottom=True, left=False, trim=True, offset=0)
+        # hide the ticks but keep the labels
+        # ax.tick_params(axis="both", which="both", length=0)
     ax.set_xticks([])
-    if not hide_labels:
-        ax.set_ylabel(f"{observable}")
+    ax.set_ylabel(f"{observable}" if show_ylabel else "")
+
+    ax.grid(axis="y", which="both", color="0.8", lw=0.5, zorder=-1, clip_on=False)
 
     if apply_formatting:
-        cc.set_size(ax, 2.2, 2)
+        cc.set_size(ax, 1.8, 2, l=1.5, b=0.5, r=0.5, t=0.7)
 
     if save_path == "automatic":
         save_path = f"{p_fo}/exp_layouts_sticks_{observable}.pdf"
@@ -2520,9 +2726,15 @@ def exp_violins_for_layouts(remove_outlier_for_ibis=True, layouts=None, observab
 
 def exp_rij_for_layouts():
     dfs = dict()
-    dfs["single-bond"] = load_pd_hdf5(f"{p_exp}/processed/1b.hdf5", ["rij_paired"])
-    dfs["triple-bond"] = load_pd_hdf5(f"{p_exp}/processed/3b.hdf5", ["rij_paired"])
-    dfs["merged"] = load_pd_hdf5(f"{p_exp}/processed/merged.hdf5", ["rij_paired"])
+    dfs["single-bond"] = load_pd_hdf5(
+        f"{p_exp}/processed/1b.hdf5", ["rij_paired", "mod_rij_paired"]
+    )
+    dfs["triple-bond"] = load_pd_hdf5(
+        f"{p_exp}/processed/3b.hdf5", ["rij_paired", "mod_rij_paired"]
+    )
+    dfs["merged"] = load_pd_hdf5(
+        f"{p_exp}/processed/merged.hdf5", ["rij_paired", "mod_rij_paired"]
+    )
 
     for layout in dfs.keys():
         log.debug(f"rijs for {layout}")
@@ -2531,34 +2743,38 @@ def exp_rij_for_layouts():
         # if layout == "merged":
         # pairings = ["all"]
 
-        df = dfs[layout]["rij_paired"]
-
         # ------------------------------------------------------------------------------ #
         # 2d Scatter
         # ------------------------------------------------------------------------------ #
 
         # experimentally, we need to focus on pre vs stim, instead of on vs off,
         # to get _pairs_ of rij
-        df_for_2d = df.query("`Condition` in ['pre', 'stim']")
+        df = dfs[layout]["rij_paired"]
+        df = df.query("`Condition` in ['pre', 'stim']")
         ax = custom_rij_scatter(
-            df_for_2d,
+            df,
             pairings=pairings,
             column="Condition",
             x="pre",
             y="stim",
         )
+        ax.set_xlabel("$r_{ij}$ pre")
+        ax.set_ylabel("$r_{ij}$ stim")
         cc.set_size(ax, 3, 3, b=1.0, l=1.0)
         ax.get_figure().savefig(f"{p_fo}/exp_2drij_{layout}_pre_stim.pdf", dpi=300)
 
         # todo check low level
-        df_for_2d = df.query("`Condition` in ['post', 'stim']")
+        df = dfs[layout]["rij_paired"]
+        df = df.query("`Condition` in ['post', 'stim']")
         ax = custom_rij_scatter(
-            df_for_2d,
+            df,
             pairings=pairings,
             column="Condition",
             x="post",
             y="stim",
         )
+        ax.set_xlabel("$r_{ij}$ post")
+        ax.set_ylabel("$r_{ij}$ stim")
         cc.set_size(ax, 3, 3, b=1.0, l=1.0)
         ax.get_figure().savefig(f"{p_fo}/exp_2drij_{layout}_post_stim.pdf", dpi=300)
 
@@ -2566,19 +2782,17 @@ def exp_rij_for_layouts():
         # Barplots
         # ------------------------------------------------------------------------------ #
 
-        df_for_bars = df.query("`Condition` in ['pre', 'stim', 'post']")
+        df = dfs[layout]["rij_paired"]
+        df = df.query("`Condition` in ['pre', 'stim', 'post']")
 
         ax = custom_rij_barplot(
-            df_for_bars,
+            df,
             pairings=pairings,
             conditions=["pre", "stim", "post"],
             condition_alphas=dict(
-                # pre=0.8,
-                # stim=0.55,
-                # post=0.3,
-                pre=0.4,
+                pre=0.8,
                 stim=0.625,
-                post=0.8,
+                post=0.4,
             ),
             recolor=True,
         )
@@ -2593,8 +2807,42 @@ def exp_rij_for_layouts():
         else:
             ax.set_xlabel("Pairing")
 
+        ax.grid(axis="y", which="both", color="0.8", lw=0.5, zorder=-1, clip_on=False)
         cc.set_size(ax, 3, 1.5, b=0.5, l=1.0)
-        ax.get_figure().savefig(f"{p_fo}/exp_rij_barplot_{layout}.pdf", dpi=300)
+        ax.get_figure().savefig(f"{p_fo}/exp_rij_neurons_barplot_{layout}.pdf", dpi=300)
+
+        # ------------------------------------------------------------------------------ #
+        # Barplots, module level
+        # ------------------------------------------------------------------------------ #
+
+        df = dfs[layout]["mod_rij_paired"]
+        df = df.query("`Condition` in ['pre', 'stim', 'post']")
+
+        ax = custom_rij_barplot(
+            df,
+            pairings=pairings,
+            conditions=["pre", "stim", "post"],
+            condition_alphas=dict(
+                pre=0.8,
+                stim=0.625,
+                post=0.4,
+            ),
+            recolor=True,
+        )
+        ax.set_ylim(0, 1)
+        # ax.set_xlabel(layout)
+        if not show_ylabel:
+            ax.set_ylabel("")
+        else:
+            ax.set_ylabel("Correlation")
+        if not show_xlabel:
+            ax.set_xlabel("")
+        else:
+            ax.set_xlabel("Pairing")
+
+        ax.grid(axis="y", which="both", color="0.8", lw=0.5, zorder=-1, clip_on=False)
+        cc.set_size(ax, 3, 1.5, b=0.5, l=1.0)
+        ax.get_figure().savefig(f"{p_fo}/exp_rij_modules_barplot_{layout}.pdf", dpi=300)
 
     return ax
 
@@ -2612,7 +2860,9 @@ def sim_raster_plots(
     **kwargs,
 ):
 
-    total_width = main_width + 0.7 + 0.8  # 7mm for labels on the left, 8mm for zoom
+    left_margin = 1.7  # 1.7cm for labels
+    # left_margin = 0.8  # or 8mm for ticks only
+    total_width = main_width + left_margin + 0.8  # 8mm for zoom on the right
     fig = plt.figure(figsize=[(total_width) / 2.54, 3.5 / 2.54])
     # fig, axes = plt.subplots(nrows=3, ncols=1, sharex=True, figsize=figsize)
     axes = []
@@ -2622,7 +2872,7 @@ def sim_raster_plots(
         width_ratios=[main_width - 1.5, 0.8],
         wspace=0.05,
         hspace=0.1,
-        left=0.7 / total_width,
+        left=left_margin / total_width,
         right=0.99,
         top=0.95,
         bottom=0.15,
@@ -2632,7 +2882,7 @@ def sim_raster_plots(
     axes.append(fig.add_subplot(gs[2, 0], sharex=axes[0]))
     axes.append(fig.add_subplot(gs[:, 1]))
 
-    h5f = ah.prepare_file(path)
+    h5f = ah.prepare_file(path, mod_colors=default_mod_colors)
 
     # ------------------------------------------------------------------------------ #
     # rates
@@ -2705,7 +2955,8 @@ def sim_raster_plots(
     ax.set_xlim(zoom_time, zoom_time + zoom_duration)
     ax.xaxis.set_visible(False)
     ax.yaxis.set_visible(False)
-    sns.despine(ax=ax, left=True, right=True, bottom=True, top=True)
+    # sns.despine(ax=ax, left=True, right=True, bottom=True, top=True)
+    sns.despine(ax=ax, left=True, right=True, bottom=False, top=True)
 
     rate_as_background_in_zoomin = False
     if rate_as_background_in_zoomin:
@@ -2742,10 +2993,10 @@ def sim_raster_plots(
 
     # re-add labels if desired
     if show_xlabel:
-        axes[2].set_xlabel("Time (s)")
+        axes[2].set_xlabel("Time (s)" if show_xlabel else "")
     if show_ylabel:
-        axes[0].set_ylabel("System\nrate (Hz)")
-        axes[2].set_ylabel("Module\nresources")
+        axes[0].set_ylabel("System\nrate (Hz)" if show_ylabel else "")
+        axes[2].set_ylabel("Module\nresources" if show_ylabel else "")
 
     bnb.hi5.close_hot()
 
@@ -2985,9 +3236,10 @@ def sim_obs_vs_noise_for_all_k(
 
     if colors is None:
         colors = dict()
-        for kdx, k in enumerate(ndim.coords["k_inter"].to_numpy()):
+        for kdx, k in enumerate(simulation_coordinates["k_inter"]):
             colors[k] = f"C{kdx}"
-        log.debug(colors)
+        log.debug(f"colors set to defaults {colors}")
+
     # burst detection for modular systems starts failing for noise >~ 100 hz
     # when the systems enters an "up state"
     # we may want to avoid plotting some observables in this range
@@ -2999,12 +3251,17 @@ def sim_obs_vs_noise_for_all_k(
         "sys_mean_core_delay",
     ]
 
-    for kdx, k in enumerate(ndim.coords["k_inter"].to_numpy()):
-        y = ndim.sel(k_inter=k).mean(dim="repetition")
-        yerr = ndim.sel(k_inter=k).std(dim="repetition") / np.sqrt(num_reps)
+    for kdx, k in enumerate(simulation_coordinates["k_inter"]):
+        log.debug(f"Plotting k={k}")
+        try:
+            y = ndim.sel(k_inter=k).mean(dim="repetition")
+            yerr = ndim.sel(k_inter=k).std(dim="repetition") / np.sqrt(num_reps)
+        except KeyError:
+            log.debug(f"Could not select k={k}, Skipping")
+            continue
 
         noise_range_to_show = (
-            [-np.inf, 100.0]
+            [-np.inf, 110.0]
             if (observable in burst_observables) and k != -1
             else [-np.inf, np.inf]
         )
@@ -3018,9 +3275,9 @@ def sim_obs_vs_noise_for_all_k(
         plot_kwargs.setdefault("color", colors[k])
         plot_kwargs.setdefault("label", f"k={k}" if k != -1 else "mrgd.")
         plot_kwargs.setdefault("fmt", "o")
-        plot_kwargs.setdefault("markersize", 1.5)
+        plot_kwargs.setdefault("markersize", 0.5)
         plot_kwargs.setdefault("elinewidth", 0.5)
-        plot_kwargs.setdefault("capsize", 1.5)
+        plot_kwargs.setdefault("capsize", 0.0)
         plot_kwargs.setdefault("zorder", kdx)
 
         if k == -1 and observable == "sys_median_any_ibis":
@@ -3315,10 +3572,18 @@ def sim_modules_participating_in_bursts(
     else:
         raise ValueError("Provide a file path or loaded xr dataArray")
 
+    simulation_coordinates = simulation_coordinates.copy()
+
     # memo from past paul: should have just used xr datasets...
     if not isinstance(data, xr.Dataset):
         for obs in data.keys():
-            data[obs] = data[obs].sel(simulation_coordinates)
+            # check that simulation_coordinates also exist in the data
+
+            for k, v in simulation_coordinates.items():
+                try:
+                    data[obs] = data[obs].sel({k: v})
+                except KeyError:
+                    log.debug(f"Could not set data to simulation coordinate {k}={v}")
     else:
         data = data.sel(simulation_coordinates)
 
@@ -3615,24 +3880,96 @@ def sim_prob_dist_rates_and_resources(k=5):
     return mod_adapts
 
 
-def sim_layout_sketch(in_path, out_path, ax_width=1.5):
+def sim_layout_sketch(in_path, out_path, grayscale=True, ax_width=1.5):
 
-    h5f = ph.ah.prepare_file(in_path)
+    h5f = ah.prepare_file(in_path, mod_colors=default_mod_colors)
     ax = ph.plot_axon_layout(
         h5f,
-        axon_kwargs=dict(color="gray", alpha=1, lw=0.1),
+        axon_kwargs=dict(color="gray", alpha=1, lw=0.1) if grayscale else None,
         soma_kwargs=dict(ec="black", lw=0.1),
     )
     k = re.search("_k=(-*\d+)", in_path, re.IGNORECASE).group(1)
     if k == "-1":
-        cc.set_size(ax, ax_width * 2 / 3, ax_width * 2 / 3)
+        cc.set_size(ax, ax_width * 2 / 3, ax_width * 2 / 3, l=0, b=0, r=0, t=0)
     else:
-        cc.set_size(ax, ax_width, ax_width)
+        cc.set_size(ax, ax_width, ax_width, l=0, b=0, r=0, t=0)
     ax.set_xlabel("")
     ax.set_xticks([])
     sns.despine(ax=ax, bottom=True, left=True)
     # ax.tick_params(axis="both", which="both", bottom=False)
     ax.get_figure().savefig(f"{out_path}", dpi=600, transparent=True)
+
+
+def sim_resource_cyle(
+    h5f,
+    bs_large=20 / 1000,
+    threshold_factor=2.5 / 100,
+    ax=None,
+    apply_formatting=True,
+    **kwargs,
+):
+    """
+    plot the resource cycle for a single simulation file
+
+    # Parameters
+    h5f : h5py.File or path
+    bs_large : float, width of the gaussian kernel for rate
+    threshold_factor : float, fraction of max peak height for burst
+    **kwargs : passed to ph.plot_resources_vs_activity
+
+    # Returns
+    ax : matplotlib.Axes
+    """
+
+    h5f = ph.ah.prepare_file(h5f, mod_colors=default_mod_colors)
+
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.get_figure()
+
+    ah.find_rates(h5f, bs_large=bs_large)
+    threshold = threshold_factor * np.nanmax(h5f["ana.rates.system_level"])
+    ah.find_system_bursts_from_global_rate(
+        h5f, rate_threshold=threshold, merge_threshold=0.1
+    )
+
+    kwargs = kwargs.copy()
+    kwargs.setdefault("ax", ax)
+    kwargs.setdefault("lw", 0.3)
+    kwargs.setdefault("alpha", 0.6)
+    kwargs.setdefault("clip_on", False)
+    # max_traces_per_mod=80 if k == -1 else 20,
+
+    ax = ph.plot_resources_vs_activity(
+        h5f,
+        apply_formatting=False,
+        **kwargs,
+    )
+
+    if apply_formatting:
+        ax.set_xlim(0.0, 1.0)
+        ax.set_ylim(0, 150)
+
+        ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1.0))
+        ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.2))
+        ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(100))
+        ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(50))
+
+        cc.set_size(ax, 1.6, 1.0, b=0.5, l=0.8, r=0.2, t=0.2)  # tight
+        # cc.set_size(ax, 1.6, 1.0, b=0.9, l=1.5, r=0.2, t=0.2)  # with labels
+        ax.set_xlabel("Resources" if show_xlabel else "")
+        ax.set_ylabel("Mod. Rate (Hz)" if show_ylabel else "")
+        sns.despine(
+            ax=ax,
+            trim=False,
+            offset=2,
+            right=True,
+            top=True,
+            bottom=False,
+        )
+
+        return ax
 
 
 def sim_resource_cycles(apply_formatting=True, k_list=None):
@@ -3778,17 +4115,15 @@ def sim_out_degrees(
     return ndims
 
 
-def sim_degrees_sampled(k_inter=5, num_reps=50, **kwargs):
+def sim_degrees_sampled(k_inter=5, num_reps=50, ax=None, **kwargs):
     """
     Sample realizations of the topology and plot the in-degree distribution
     """
 
     sys.path.append(os.path.dirname(__file__) + "/../src")
-    from topology import (
-        ModularTopology,
-        MergedTopology,
-        _get_in_degrees_by_internal_external,
-    )
+    import topology as topo
+
+    topo.log.setLevel("ERROR")
 
     res = dict(
         k_out=[],
@@ -3797,17 +4132,17 @@ def sim_degrees_sampled(k_inter=5, num_reps=50, **kwargs):
         k_in_external=[],
     )
 
-    for rep in tqdm(range(0, num_reps), leave=False):
+    for rep in tqdm(range(0, num_reps), leave=False, desc="sampling topo realizations"):
         if k_inter == -1:
-            topo = MergedTopology(**kwargs)
+            tp = topo.MergedTopology(**kwargs)
         else:
-            topo = ModularTopology(par_k_inter=k_inter, **kwargs)
-        res["k_out"].extend(topo.k_out)
-        res["k_in_total"].extend(topo.k_in)
+            tp = topo.ModularTopology(par_k_inter=k_inter, **kwargs)
+        res["k_out"].extend(tp.k_out)
+        res["k_in_total"].extend(tp.k_in)
 
         try:
-            k_int, k_ext = _get_in_degrees_by_internal_external(
-                topo.aij_nested, topo.neuron_module_ids
+            k_int, k_ext = topo._get_in_degrees_by_internal_external(
+                tp.aij_nested, tp.neuron_module_ids
             )
             res["k_in_internal"].extend(k_int)
             res["k_in_external"].extend(k_ext)
@@ -3815,7 +4150,10 @@ def sim_degrees_sampled(k_inter=5, num_reps=50, **kwargs):
             # merged topo
             pass
 
-    fig, ax = plt.subplots()
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.get_figure()
 
     def _plot(series, **kwargs):
 
@@ -3832,6 +4170,7 @@ def sim_degrees_sampled(k_inter=5, num_reps=50, **kwargs):
         element="step",
         alpha=0.25,
         bins=bins,
+        ax=ax,
     )
     _plot(
         series=res["k_in_total"],
@@ -3859,9 +4198,9 @@ def sim_degrees_sampled(k_inter=5, num_reps=50, **kwargs):
     ax.set_xlabel("Number of incoming connections")
     ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(10))
 
-    if show_legend:
-        leg = ax.legend(fontsize=6)
-        cc.apply_default_legend_style(leg)
+    # if show_legend:
+    # leg = ax.legend(fontsize=6)
+    # cc.apply_default_legend_style(leg)
 
     if not show_xlabel:
         ax.set_xlabel("")
@@ -3870,12 +4209,12 @@ def sim_degrees_sampled(k_inter=5, num_reps=50, **kwargs):
     if not show_title:
         ax.set_title("")
 
-    if k_inter == -1:
-        ax.set_xlim(0, 80)
-        cc.set_size(ax, w=3.0 * 8 / 5, h=2.5)
-    else:
-        ax.set_xlim(0, 50)
-        cc.set_size(ax, w=3.0, h=2.5)
+    # if k_inter == -1:
+    #     ax.set_xlim(0, 80)
+    #     cc.set_size(ax, w=3.0 * 8 / 5, h=2.5)
+    # else:
+    #     ax.set_xlim(0, 50)
+    #     cc.set_size(ax, w=3.0, h=2.5)
 
     return ax
 
@@ -4561,7 +4900,16 @@ def load_pd_hdf5(input_path, keys=None):
 
     single_key = False
     if keys is None:
-        keys = ["bursts", "isis", "rij", "rij_paired", "drij", "trials"]
+        keys = [
+            "bursts",
+            "isis",
+            "rij",
+            "rij_paired",
+            "mod_rij",
+            "mod_rij_paired",
+            "drij",
+            "trials",
+        ]
     elif isinstance(keys, str):
         single_key = True
         keys = [keys]
@@ -4571,6 +4919,8 @@ def load_pd_hdf5(input_path, keys=None):
             res[key] = pd.read_hdf(input_path, f"/data/df_{key}")
             if remove_outlier and "1b.hdf5" in input_path:
                 res[key] = res[key].query("`Trial` != '210405_C'")
+            # if remove_outlier and "merged.hdf5" in input_path:
+            #     res[key] = res[key].query("`Trial` != '210713_C'")
         except Exception as e:
             # log.exception(e)
             log.debug(f"/data/df_{key} not in {input_path}, skipping")
@@ -4849,13 +5199,15 @@ def custom_rij_barplot(
     provide a rij_paired dataframe
     """
     if pairings is None:
-        pairings = ["within_stim", "within_nonstim", "across"]
+        pairings = ["within_stim", "across", "within_nonstim"]
         # pairings = df["Pairing"].unique()
 
     if conditions is None:
         conditions = ["pre", "stim"]
     df = df.query("Pairing == @pairings")
     df = df.query("Condition == @conditions")
+
+    log.debug(f"rij barplot filtered df has {len(df)} rows")
 
     if ax is None:
         fig, ax = plt.subplots()
@@ -4891,6 +5243,7 @@ def custom_rij_barplot(
             ci=95,  # 2.5 and 97.5%
             n_boot=500,
             seed=815,
+            zorder=2,
         )
 
     # so either we plot manually to tweak the styl or we alter after creation
@@ -4929,7 +5282,7 @@ def custom_rij_scatter(
     df,
     x="Off",
     y="On",
-    column = "Stimulation",
+    column="Stimulation",
     # this is results in df.query("Stimulation == 'on'") for x and
     # df.query("Stimulation == 'off'") for y
     ax=None,
@@ -4965,7 +5318,7 @@ def custom_rij_scatter(
         try:
             # just some helfpul warnings
             unique = df_paired[column].unique()
-            if f'{x}' not in unique or f'{y}' not in unique:
+            if f"{x}" not in unique or f"{y}" not in unique:
                 log.warning(f"'{x}' or '{y}' does not seem to be in {column} -> {unique}")
         except:
             pass
@@ -5054,6 +5407,60 @@ def custom_rij_scatter(
     return ax
 
 
+def custom_tinker():
+
+    for layout in ["1b", "3b", "merged"]:
+        dfs = load_pd_hdf5(
+            "/Users/paul/Library/Mobile"
+            f" Documents/com~apple~CloudDocs/para/2_Projects/modular_cultures/_repo/_latest/dat.nosync/experiments/processed_mod_rij/{layout}.hdf5",
+            keys=["mod_rij", "mod_rij_paired"],
+        )
+        fig, ax = plt.subplots()
+        # sns.boxplot(
+        #     data=df,
+        #     x="Condition",
+        #     y="Correlation Coefficient",
+        #     hue="Condition",
+        #     ax=ax,
+        # )
+        # ax.set_ylim(0, 1)
+        # ax.set_title(layout)
+
+        ax = custom_violins(
+            dfs["mod_rij"],
+            category="Condition",
+            observable="Correlation Coefficient",
+            ylim=[0, 1],
+            num_swarm_points=600,
+            bw=0.2,
+            palette=colors["partial"],
+            ax=ax,
+        )
+
+        # trial wise
+        ax.set_ylim(0, 1)
+        ax.set_title(layout)
+
+        fig, ax = plt.subplots()
+        custom_rij_barplot(
+            df=dfs["mod_rij_paired"], conditions=["pre", "stim", "post"], ax=ax
+        )
+        ax.set_ylim(0, 1)
+        ax.set_title(layout)
+
+        df_for_2d = dfs["mod_rij_paired"].query("`Condition` in ['pre', 'stim']")
+        ax = custom_rij_scatter(
+            df_for_2d,
+            pairings=None,
+            column="Condition",
+            x="pre",
+            y="stim",
+        )
+        ax.set_ylim(0, 1)
+        ax.set_xlim(0, 1)
+        ax.set_title(layout)
+
+
 def _rij_pairs_from_trials(
     df_paired,
     query_before="`Stimulation` == 'Off'",
@@ -5123,6 +5530,7 @@ def _draw_error_stick(
     outliers=None,
     orientation="v",
     linewidth=1.5,
+    bar_width_ratio=3,
     **kwargs,
 ):
     """
@@ -5142,7 +5550,10 @@ def _draw_error_stick(
         thick bar corresponding to errors
     outliers : array like, length 2
         thin (longer) bar corresponding to outliers
-    orientation : "v" or "h"
+    orientation : "v" or "h",
+    bar_width_ratio : float,
+        how big the inner bar should be compared to the outer bar
+        default 3
     **kwargs are passed through to `ax.plot`
     """
 
@@ -5167,9 +5578,9 @@ def _draw_error_stick(
 
     assert len(errors) == 2
     if orientation == "h":
-        ax.plot(errors, [center, center], linewidth=linewidth * 3, **kwargs)
+        ax.plot(errors, [center, center], linewidth=linewidth * bar_width_ratio, **kwargs)
     else:
-        ax.plot([center, center], errors, linewidth=linewidth * 3, **kwargs)
+        ax.plot([center, center], errors, linewidth=linewidth * bar_width_ratio, **kwargs)
 
     kwargs["zorder"] += 1
     kwargs["edgecolor"] = kwargs["color"]
