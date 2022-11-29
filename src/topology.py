@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-05 10:37:47
-# @Last Modified: 2022-11-10 17:10:52
+# @Last Modified: 2022-11-28 16:00:22
 # ------------------------------------------------------------------------------ #
 # Helper classes to simulate axonal growth described in
 # Orlandi et al. 2013, DOI: 10.1038/nphys2686
@@ -33,6 +33,8 @@ import logging
 import functools
 import numpy as np
 
+from tqdm.contrib.logging import logging_redirect_tqdm
+from tqdm.auto import tqdm
 from benedict import benedict
 
 logging.basicConfig(
@@ -903,8 +905,160 @@ class ModularTopology(BaseTopology):
 
 
 # ------------------------------------------------------------------------------ #
+# constrained in-degrees
+# a bit of iteration to find the right alpha
+# for a desired in-degre distributions
+# ------------------------------------------------------------------------------ #
+
+# 2 levle dict, first: k_inter (topology), second: k_in (desired in-degree)
+_alpha_for_kin = dict()
+for k_inter in [0, 1, 3, 5, 10, 20, -1]:
+    _alpha_for_kin[k_inter] = dict()
+
+# k_in 30
+_alpha_for_kin[0][30] = 0.0275
+_alpha_for_kin[1][30] = 0.02641
+_alpha_for_kin[3][30] = 0.02521
+_alpha_for_kin[5][30] = 0.02437
+_alpha_for_kin[10][30] = 0.0225
+_alpha_for_kin[20][30] = 0.02021
+_alpha_for_kin[-1][30] = 0.00824
+# k_in 25
+_alpha_for_kin[0][25] = 0.01728
+_alpha_for_kin[1][25] = 0.01698
+_alpha_for_kin[3][25] = 0.01667
+_alpha_for_kin[5][25] = 0.01635
+_alpha_for_kin[10][25] = 0.0156
+_alpha_for_kin[20][25] = 0.01498
+_alpha_for_kin[-1][25] = 0.00665
+# k_in 20
+_alpha_for_kin[0][20] = 0.01156
+_alpha_for_kin[1][20] = 0.01129
+_alpha_for_kin[3][20] = 0.01125
+_alpha_for_kin[5][20] = 0.01091
+_alpha_for_kin[10][20] = 0.01099
+_alpha_for_kin[20][20] = 0.01057
+_alpha_for_kin[-1][20] = 0.00519
+# k_in 15
+_alpha_for_kin[0][15] = 0.007448
+_alpha_for_kin[1][15] = 0.007448
+_alpha_for_kin[3][15] = 0.007344
+_alpha_for_kin[5][15] = 0.007305
+_alpha_for_kin[10][15] = 0.007266
+_alpha_for_kin[20][15] = 0.007201
+_alpha_for_kin[-1][15] = 0.00373
+
+
+def find_alpha_for_target_in_degree(
+    k_inter, k_in_target, num_reps=5, rerun=True, **kwargs
+):
+    """
+    find the alpha value that leads to a desired in-degree distribution
+
+    best set the log level to error before running this function
+    `topo.log.setLevel("ERROR")`
+
+    # Paramters
+    k_inter : int
+        number of bridging axons. -1 for merged topology, otherwise modular is used
+    k_in_target : int
+        target in-degree
+    rerun : bool
+        I have saved some values for k_in = 15, 20, 25, 30.
+        By default I give you those and avoid the computation.
+    num_reps : int
+        how many independent estimates to create
+    **kwargs : dict
+        passed to `_iteration`. e.g. init, iterstep, threshold
+    """
+
+    if not rerun:
+        try:
+            log.debug("trying saved (hardcoded) alpha")
+            return _alpha_for_kin[k_inter][k_in_target]
+        except KeyError:
+            log.debug(f"No precomputed value for {k_inter=}, {k_in_target=}")
+
+    with logging_redirect_tqdm():
+        res = np.ones(num_reps) * np.nan
+        for rep in tqdm(range(num_reps), leave=False):
+            log.info(f"finding alpha for {k_inter=}")
+            res[rep] = _iteration(
+                generator=lambda alpha: _generate_series_of_kin_from_topo(alpha, k_inter),
+                target=k_in_target,
+                **kwargs,
+            )
+
+    if not np.all(np.isfinite(res)):
+        log.warning(f"some found alpha values do not make sense {res=}")
+
+    return np.nanmean(res)
+
+
+def _iteration(generator, target, init=0.0125, iterstep=0.0025, threshold=0.1):
+    """
+    yada yada standard stuff
+    """
+
+    alpha = init
+    prev_was_greater = None
+    while True:
+        series = generator(alpha)
+        # calculate the probability distribution from the series
+        pdist = np.bincount(series, minlength=100) / len(series)
+        # calculate the expectation value
+        ev = _ev(np.arange(len(pdist)), pdist)
+
+        log.debug(f"{alpha=:.4f}, {ev=:.3f}")
+
+        if np.abs(ev - target) < threshold:
+            break
+        else:
+            if prev_was_greater is None:
+                prev_was_greater = ev > target
+            else:
+                if prev_was_greater != (ev > target):
+                    iterstep /= 2
+                    prev_was_greater = ev > target
+                    log.debug(f"new {iterstep=:.3e}")
+            # increase or decrease alpha if above or below
+            if ev > target:
+                alpha -= iterstep
+            else:
+                alpha += iterstep
+    log.info(f"final {alpha=:.4f}, {ev=:.3f}")
+    return alpha
+
+
+def _generate_series_of_kin_from_topo(alpha, num_connections, num_reps=10):
+    """
+    generate a series of in-degrees (on value for each neuron)
+    from a topology specified via num_connections.
+    -1 for merged
+    """
+    series = []
+    for _ in range(num_reps):
+        if num_connections == -1:
+            tp = MergedTopology(par_alpha=alpha)
+        else:
+            tp = ModularTopology(par_alpha=alpha, par_k_inter=num_connections)
+        series.extend(tp.k_in)
+    return np.array(series)
+
+
+# ------------------------------------------------------------------------------ #
 # helpers
 # ------------------------------------------------------------------------------ #
+
+
+def _ev(x, pdist):
+    """
+    expectation value via x, p(x)
+    """
+    ev = 0
+    for idx, p in enumerate(pdist):
+        ev += x[idx] * pdist[idx]
+    return ev
 
 
 @jit(nopython=True, parallel=False, fastmath=True, cache=True)
