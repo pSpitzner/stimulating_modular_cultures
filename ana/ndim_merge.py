@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2022-11-21 11:43:34
+# @Last Modified: 2022-12-01 16:25:31
 # ------------------------------------------------------------------------------ #
 # Scans the provided (wildcarded) filenames and merges individual realizsation
 # into a single file, containing high-dimensional arrays.
@@ -164,7 +164,13 @@ def ana_for_single_rep(candidate=None):
         res["sys_mean_resources_at_burst_beg"] = 1
         res["sys_std_resources_at_burst_beg"] = 1
         res["mod_mean_correlation"] = 1
+        res["mod_mean_correlation_across"] = 1
+        res["mod_mean_correlation_within_stim"] = 1
+        res["mod_mean_correlation_within_nonstim"] = 1
         res["mod_median_correlation"] = 1
+        res["mod_median_correlation_across"] = 1
+        res["mod_median_correlation_within_stim"] = 1
+        res["mod_median_correlation_within_nonstim"] = 1
 
         # histograms, use "vec" prefix to indicate that higher dimensional data
         # hvals are the histogram values, hbins the bins ... obvio
@@ -406,6 +412,41 @@ def ana_for_single_rep(candidate=None):
     except:
         res["mod_mean_correlation"] = np.nan
         res["mod_median_correlation"] = np.nan
+
+    cases = ["within_stim", "within_nonstim", "across"]
+    for case in cases:
+        try:
+            if case == "within_stim":
+                mod_rij_paired = ah.find_rij_pairs(
+                    h5f, rij=rij_mod_level, pairing="across_groups_0_2", which="modules"
+                )
+            elif case == "within_nonstim":
+                mod_rij_paired = ah.find_rij_pairs(
+                    h5f, rij=rij_mod_level, pairing="across_groups_1_3", which="modules"
+                )
+            elif case == "across":
+                mod_rij_paired = []
+                mod_rij_paired.extend(
+                    ah.find_rij_pairs(
+                        h5f,
+                        rij=rij_mod_level,
+                        pairing="across_groups_0_1",
+                        which="modules",
+                    )
+                )
+                mod_rij_paired.extend(
+                    ah.find_rij_pairs(
+                        h5f,
+                        rij=rij_mod_level,
+                        pairing="across_groups_2_3",
+                        which="modules",
+                    )
+                )
+            res[f"mod_median_correlation_{case}"] = np.nanmedian(mod_rij_paired)
+            res[f"mod_mean_correlation_{case}"] = np.nanmean(mod_rij_paired)
+        except:
+            res[f"mod_median_correlation_{case}"] = np.nan
+            res[f"mod_mean_correlation_{case}"] = np.nan
 
     # ------------------------------------------------------------------------------ #
     # Event size
@@ -779,7 +820,6 @@ def parse_arguments():
     threshold_factor = args.threshold_factor
     smoothing_width = args.smoothing_width
     time_bin_size_for_rij = args.time_bin_size_for_rij
-
 
     log.info(args)
 
