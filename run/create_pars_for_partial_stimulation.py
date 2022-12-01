@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2022-06-22 10:12:19
-# @Last Modified: 2022-11-14 14:57:35
+# @Last Modified: 2022-12-01 17:38:06
 # ------------------------------------------------------------------------------ #
 # This creates a `parameter.tsv` where each line contains one parameter set,
 # which can be directly called from the command line (i.e. on a cluster).
@@ -19,14 +19,15 @@ from itertools import product
 
 # set directory to the location of this script file to use relative paths
 os.chdir(os.path.dirname(__file__))
-out_path = os.path.abspath("/scratch01.local/pspitzner/revision_1/simulations/lif/raw_alpha")
+out_path = os.path.abspath("/scratch01.local/pspitzner/revision_1/simulations/lif/raw_alpha_partial_sweep")
 print(f"simulation results will go to {out_path}")
 
 # seed for rank 0, will increase per thread
-seed = 7_000
+seed = 7_200
 
 # parameters to scan, noise rate, ampa strength, and a few repetitons for statistics
-l_k_inter = np.array([-1, 0, 1, 3, 5, 10, 20])
+k_in = 30
+l_k_inter = np.array([-1, 3, 10])
 l_mod = np.array(["02"])
 l_rep = np.arange(0, 50)
 l_jA = [45.0]
@@ -37,8 +38,10 @@ l_jM = [15.0]
 l_tD = [20.0]
 rate = 80
 # for 20 Hz noise extra, results seemed consistent with experiments when inhib. enabled
-l_stim_rate = [0, 20]
+# l_stim_rate = [0, 20]
+l_stim_rate = [0, 5, 10, 15, 20, 25, 30, 35]
 
+print("l_k_inter  ", l_k_inter)
 print("l_jA  ", l_jA)
 print("l_jG  ", l_jG)
 print("l_jM  ", l_jM)
@@ -69,7 +72,7 @@ with open("./parameters.tsv", "w") as f_dyn:
 
         # same seeds for all rates so that topo matches
         for stim_rate in l_stim_rate:
-            f_base = f"k={k_inter:d}_jA={jA:.1f}_jG={jG:.1f}_jM={jM:.1f}_tD={tD:.1f}_rate={rate:.1f}_stimrate={stim_rate:.1f}_rep={rep:03d}.hdf5"
+            f_base = f"k={k_inter:d}_kin={k_in:d}_jA={jA:.1f}_jG={jG:.1f}_jM={jM:.1f}_tD={tD:.1f}_rate={rate:.1f}_stimrate={stim_rate:.1f}_rep={rep:03d}.hdf5"
 
             dyn_path = f"{out_path}/stim={mod}_{f_base}"
 
@@ -83,6 +86,7 @@ with open("./parameters.tsv", "w") as f_dyn:
                 f"python ./src/quadratic_integrate_and_fire.py "
                 + f'-o {dyn_path} '
                 + f"-k {k_inter} "
+                + f"-kin {k_in} "
                 + f"-d 1800 -equil 300 -s {seed:d} "
                 + f"--bridge_weight {bridge_weight} "
                 + f"--inhibition {inh_frac} "
