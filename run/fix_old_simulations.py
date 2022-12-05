@@ -25,13 +25,13 @@ with logging_redirect_tqdm():
     for file in tqdm(files):
         log.info(file)
         # open file
-        f = h5py.File(file, "a")
+        # f = h5py.File(file, "a")
         # create dset
-        f.create_dataset("/meta/topology_k_in", data=30)
+        # f.create_dataset("/meta/topology_k_in", data=30)
         # close file
-        f.close()
+        # f.close()
 
         # change file name on disk to include the k_in
         # stim=02_k=1_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=80.0_stimrate=0.0_rep=000
 
-        os.rename(file, file.replace("_jA=", "_k_in_30_jA="))
+        os.rename(file, file.replace("_k_in_30_jA=", "_kin=30_jA="))
