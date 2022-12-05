@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2022-12-01 16:25:31
+# @Last Modified: 2022-12-05 11:37:36
 # ------------------------------------------------------------------------------ #
 # Scans the provided (wildcarded) filenames and merges individual realizsation
 # into a single file, containing high-dimensional arrays.
@@ -49,7 +49,7 @@ logging.basicConfig(
     datefmt="%y-%m-%d %H:%M",
 )
 log = logging.getLogger(__name__)
-log.setLevel("INFO")
+log.setLevel("DEBUG")
 warnings.filterwarnings("ignore")  # suppress numpy warnings
 
 import ana_helper as ah
@@ -69,8 +69,11 @@ d_obs["tD"] = "/meta/dynamics_tD"
 # d_obs["alpha"] = "/meta/topology_alpha"
 d_obs["k_inter"] = "/meta/topology_k_inter"
 d_obs["k_in"] = "/meta/topology_k_in"
-# d_obs["stim_rate"] = "/meta/dynamics_stimulation_rate"
+d_obs["stim_rate"] = "/meta/dynamics_stimulation_rate"
+d_obs["stim_mods"] = "/meta/dynamics_stimulation_mods"
 # d_obs["k_frac"] = "/meta/dynamics_k_frac"
+
+log.debug(f"d_obs: {d_obs}")
 
 # these can be set via command line arguments, see `parse_args()`
 threshold_factor = 2.5 / 100
@@ -607,12 +610,18 @@ def main(args, dask_client):
     l_valid = []
     for future in tqdm(as_completed(futures), total=len(futures)):
         res, candidate = future.result()
+        log.debug(f"{candidate} -> {res}")
         if res is None:
             log.warning(f"file seems invalid: {candidate}")
         else:
             l_valid.append(candidate)
             for odx, obs in enumerate(d_obs.keys()):
                 val = res[odx]
+
+                # somehow `is nan in [nan, nan]` is dodgy, works better with np.nan
+                if isinstance(val, float) and np.isnan(val):
+                    val = np.nan
+
                 if val not in d_axes[obs]:
                     d_axes[obs].append(val)
 
@@ -624,6 +633,8 @@ def main(args, dask_client):
         axes_size *= len(d_axes[obs])
         axes_shape += (len(d_axes[obs]),)
 
+    log.info(f"Found axes: {d_axes}")
+
     # we might have repetitions but estimating num_rep proved unreliable.
     log.info(f"Finding number of repetitions:")
     # num_rep = int(np.ceil(len(l_valid) / axes_size))
@@ -633,7 +644,11 @@ def main(args, dask_client):
         for obs in d_axes.keys():
             # get value
             temp = h5.load(candidate, d_obs[obs], silent=True)
-            temp = np.where(d_axes[obs] == temp)[0][0]
+            # same problem as above, nan == nan is dodgy
+            if isinstance(temp, float) and np.isnan(temp):
+                temp = np.where(np.isnan(d_axes[obs]))[0][0]
+            else:
+                temp = np.where(d_axes[obs] == temp)[0][0]
             index += (temp,)
 
         sampled[index] += 1
@@ -841,8 +856,10 @@ def analyse_candidate(candidate, d_axes, d_obs):
     for obs in d_axes.keys():
         # get value
         temp = h5.load(candidate, d_obs[obs], silent=True)
-        # transform to index
-        temp = np.where(d_axes[obs] == temp)[0][0]
+        if isinstance(temp, float) and np.isnan(temp):
+            temp = np.where(np.isnan(d_axes[obs]))[0][0]
+        else:
+            temp = np.where(d_axes[obs] == temp)[0][0]
         index += (temp,)
 
         # psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024
@@ -871,6 +888,7 @@ def check_candidate(candidate, d_obs):
             except:
                 # was a number already
                 pass
+
             res.append(temp)
         except:
             # something was fishy with this file, do not use it!
@@ -892,22 +910,21 @@ if __name__ == "__main__":
         dask_cluster = stack.enter_context(
             # rudabeh
             # TODO: remove this before release
-            SGECluster(
-                cores=32,
-                memory="192GB",
-                processes=16,
-                job_extra=["-pe mvapich2-sam 32"],
-                log_directory="/scratch01.local/pspitzner/dask/logs",
-                local_directory="/scratch01.local/pspitzner/dask/scratch",
-                interface="ib0",
-                walltime='02:30:00',
-                extra=[
-                    '--preload \'import sys; sys.path.append("./ana/"); sys.path.append("/home/pspitzner/code/pyhelpers/");\''
-                ],
-            )
-
+            # SGECluster(
+            #     cores=32,
+            #     memory="192GB",
+            #     processes=16,
+            #     job_extra=["-pe mvapich2-sam 32"],
+            #     log_directory="/scratch01.local/pspitzner/dask/logs",
+            #     local_directory="/scratch01.local/pspitzner/dask/scratch",
+            #     interface="ib0",
+            #     walltime='02:30:00',
+            #     extra=[
+            #         '--preload \'import sys; sys.path.append("./ana/"); sys.path.append("/home/pspitzner/code/pyhelpers/");\''
+            #     ],
+            # )
             # local cluster
-            # LocalCluster(local_directory=f"{tempfile.gettempdir()}/dask/")
+            LocalCluster(local_directory=f"{tempfile.gettempdir()}/dask/")
         )
         dask_cluster.scale(cores=args.num_cores)
 

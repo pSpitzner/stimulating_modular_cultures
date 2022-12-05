@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2022-11-28 16:14:28
+# @Last Modified: 2022-12-05 11:54:47
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Creates a connectivity matrix matching the modular cultures (see `topology.py`)
@@ -524,6 +524,10 @@ h5_desc["meta.dynamics_rate"] = "rate for the (global) poisson input (shot-noise
 
 h5_data["meta.dynamics_stimulation_rate"] = args.stimulation_rate / Hz
 h5_desc["meta.dynamics_stimulation_rate"] = "rate for the poisson input, added to stimulated modules, in Hz"
+
+h5_data["meta.dynamics_stimulation_mods"] = "off" if args.stimulation_type == "off" \
+    else ''.join([str(i) for i in args.stimulation_module])
+h5_desc["meta.dynamics_stimulation_mods"] = "string of which modules were targeted 'off' or '02'. Note that this is not 'off' even when the stimrate is 0. becomes of if NO `-stim` argument is passed"
 
 h5_data["meta.dynamics_simulation_duration"] = args.sim_duration / second
 h5_desc["meta.dynamics_simulation_duration"] = "in seconds"
