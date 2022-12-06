@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2022-12-05 11:37:36
+# @Last Modified: 2022-12-06 13:47:42
 # ------------------------------------------------------------------------------ #
 # Scans the provided (wildcarded) filenames and merges individual realizsation
 # into a single file, containing high-dimensional arrays.
@@ -145,8 +145,6 @@ def ana_for_single_rep(candidate=None):
         res["any_ibis_cv"] = 1
         res["sys_functional_complexity"] = 1
         res["any_functional_complexity"] = 1
-        res["sys_mean_correlation"] = 1
-        res["sys_median_correlation"] = 1
         res["sys_mean_depletion_correlation"] = 1
         res["sys_median_depletion_correlation"] = 1
         res["sys_mean_participating_fraction"] = 1
@@ -166,6 +164,16 @@ def ana_for_single_rep(candidate=None):
         res["sys_orderpar_dist_max"] = 1
         res["sys_mean_resources_at_burst_beg"] = 1
         res["sys_std_resources_at_burst_beg"] = 1
+        # we started with neuorn level correlation, all above is this kind.
+        res["sys_mean_correlation"] = 1
+        res["sys_mean_correlation_across"] = 1
+        res["sys_mean_correlation_within_stim"] = 1
+        res["sys_mean_correlation_within_nonstim"] = 1
+        res["sys_median_correlation"] = 1
+        res["sys_median_correlation_across"] = 1
+        res["sys_median_correlation_within_stim"] = 1
+        res["sys_median_correlation_within_nonstim"] = 1
+        # module level correlation, using the module-level firing rates
         res["mod_mean_correlation"] = 1
         res["mod_mean_correlation_across"] = 1
         res["mod_mean_correlation_within_stim"] = 1
@@ -174,6 +182,7 @@ def ana_for_single_rep(candidate=None):
         res["mod_median_correlation_across"] = 1
         res["mod_median_correlation_within_stim"] = 1
         res["mod_median_correlation_within_nonstim"] = 1
+
 
         # histograms, use "vec" prefix to indicate that higher dimensional data
         # hvals are the histogram values, hbins the bins ... obvio
@@ -416,6 +425,10 @@ def ana_for_single_rep(candidate=None):
         res["mod_mean_correlation"] = np.nan
         res["mod_median_correlation"] = np.nan
 
+    # ------------------------------------------------------------------------------ #
+    # Correlation coefficients for different pairings
+    # ------------------------------------------------------------------------------ #
+
     cases = ["within_stim", "within_nonstim", "across"]
     for case in cases:
         try:
@@ -423,10 +436,18 @@ def ana_for_single_rep(candidate=None):
                 mod_rij_paired = ah.find_rij_pairs(
                     h5f, rij=rij_mod_level, pairing="across_groups_0_2", which="modules"
                 )
+                neuron_rij_paired = ah.find_rij_pairs(
+                    h5f, rij=rij_matrix, pairing="across_groups_0_2", which="neurons"
+                )
+
             elif case == "within_nonstim":
                 mod_rij_paired = ah.find_rij_pairs(
                     h5f, rij=rij_mod_level, pairing="across_groups_1_3", which="modules"
                 )
+                neuron_rij_paired = ah.find_rij_pairs(
+                    h5f, rij=rij_matrix, pairing="across_groups_1_3", which="neurons"
+                )
+
             elif case == "across":
                 mod_rij_paired = []
                 mod_rij_paired.extend(
@@ -445,11 +466,35 @@ def ana_for_single_rep(candidate=None):
                         which="modules",
                     )
                 )
+
+                neuron_rij_paired = []
+                neuron_rij_paired.extend(
+                    ah.find_rij_pairs(
+                        h5f,
+                        rij=rij_matrix,
+                        pairing="across_groups_0_1",
+                        which="neurons",
+                    )
+                )
+                neuron_rij_paired.extend(
+                    ah.find_rij_pairs(
+                        h5f,
+                        rij=rij_matrix,
+                        pairing="across_groups_2_3",
+                        which="neurons",
+                    )
+                )
+
             res[f"mod_median_correlation_{case}"] = np.nanmedian(mod_rij_paired)
             res[f"mod_mean_correlation_{case}"] = np.nanmean(mod_rij_paired)
+            # I know, there are some variable naming inconstencies here.
+            res[f"sys_median_correlation_{case}"] = np.nanmedian(neuron_rij_paired)
+            res[f"sys_mean_correlation_{case}"] = np.nanmean(neuron_rij_paired)
         except:
             res[f"mod_median_correlation_{case}"] = np.nan
             res[f"mod_mean_correlation_{case}"] = np.nan
+            res[f"sys_median_correlation_{case}"] = np.nan
+            res[f"sys_mean_correlation_{case}"] = np.nan
 
     # ------------------------------------------------------------------------------ #
     # Event size
