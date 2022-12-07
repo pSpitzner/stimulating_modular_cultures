@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2022-11-29 16:02:04
+# @Last Modified: 2022-11-29 17:30:42
 # ------------------------------------------------------------------------------ #
 # All the lower-level plotting is in here.
 #
@@ -999,7 +999,7 @@ def plot_resources_vs_activity(
     apply_formatting=True,
     mod_ids=None,
     max_traces_per_mod=100,
-    mark_resources_at_burst_start=True,
+    mark_beg_resources_at_y=None,
     **kwargs,
 ):
     """
@@ -1008,6 +1008,7 @@ def plot_resources_vs_activity(
     # Parameters
     mod_ids : list of modules to plot e.g. `[0, 1, 2]`, default all modules in h5f
     max_traces_per_mod : only show this many traces for each module
+    mark_beg_resources_at_y : on the x-axis, mark the median value of adapatation when cylces begin with a triangle. Default None, don't mark. give the y position of the triangle.
     """
     if ax is None:
         fig, ax = plt.subplots()
@@ -1089,9 +1090,8 @@ def plot_resources_vs_activity(
                 f" start: {med_adapt_at_beg}"
             )
 
-            if mark_resources_at_burst_start:
-                # assuming a yrange around 0-100 Hz
-                y = -35
+            if mark_beg_resources_at_y is not None:
+                y = mark_beg_resources_at_y
                 x = med_adapt_at_beg
                 ax.plot(
                     x,
