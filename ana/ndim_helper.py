@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-10-19 18:20:20
-# @Last Modified: 2022-08-08 12:54:49
+# @Last Modified: 2022-12-05 15:01:33
 # ------------------------------------------------------------------------------ #
 # This is essentially a poor-mans version of xarray that only exists for
 # historic reasons. Unfortunately, some of our code still needs it.
@@ -66,19 +66,33 @@ def load_ndim_h5f(filename, exclude_pattern=None):
         Load an ndimensional hdf5 file as a dict of xarrays.
         every key of the dict is an observable and every dimension of the xarrays
         corresponds to one parameter that we investiagted (or repetitions)
+
+        # Returns
+        res : dict or xarray dataset.
+            in any case, accessing the data is done via `res["observable_name"]` to get an xarray.
     """
-    h5f = bnb.hi5.recursive_load(filename)
 
-    res = dict()
-    for obs in h5f["data"].keys():
-        if exclude_pattern is not None and exclude_pattern in obs:
-            continue
-        if "axis_" in obs or "num_samples" in obs:
-            # in the old format, axis labels were stored in data
-            continue
-        res[obs] = h5f_to_xr_array(h5f, obs)
+    # this may just be a saved xarray datset
+    try:
+        res = xr.load_dataset(filename)
+        if len(res.variables) == 0:
+            # likely not what we are after.
+            raise ValueError
+        return res
+    except:
+        # its probably my custom stuff
+        h5f = bnb.hi5.recursive_load(filename)
 
-    return res
+        res = dict()
+        for obs in h5f["data"].keys():
+            if exclude_pattern is not None and exclude_pattern in obs:
+                continue
+            if "axis_" in obs or "num_samples" in obs:
+                # in the old format, axis labels were stored in data
+                continue
+            res[obs] = h5f_to_xr_array(h5f, obs)
+
+        return res
 
 
 def h5f_to_xr_array(h5f, obs):
@@ -109,6 +123,14 @@ def h5f_to_xr_array(h5f, obs):
         # we might need to cast scalars to arrays
         try:
             len(dim_vals)
+            if isinstance(dim_vals, (str, bytes)):
+                # sometimes we get byte strings,
+                # it will be easiert to have them decoded already
+                try:
+                    dim_vals = dim_vals.decode("utf-8")
+                except:
+                    pass
+                raise TypeError
         except:
             dim_vals = np.array([dim_vals])
 
@@ -123,7 +145,9 @@ def h5f_to_xr_array(h5f, obs):
     if obs[0:3] == "vec":
         dims.append("vector_observable")
 
-    log.debug(obs)
+    log.debug(f"obs: {obs}")
+    log.debug(f"dims: {dims}")
+    log.debug(f"coords: {coords}")
 
     return xr.DataArray(h5f["data"][f"{obs}"], dims=dims, coords=coords)
 
