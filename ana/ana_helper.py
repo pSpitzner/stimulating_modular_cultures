@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2022-11-28 17:16:30
+# @Last Modified: 2022-12-14 12:08:27
 # ------------------------------------------------------------------------------ #
 # Here we collect all functions for importing and analyzing the data.
 # A central idea is that for every simulated/experimental trial, we have a
@@ -2612,7 +2612,7 @@ def get_threshold_from_logisi_distribution(list_of_isi, area_fraction=0.3):
 
 
 def pd_bootstrap(
-    df, obs, sample_size=None, num_boot=500, func=np.nanmean, percentiles=None
+    df, obs, sample_size=None, num_boot=500, f_within_sample=np.nanmean, f_across_samples=np.nanmean, percentiles=None
 ):
     """
     bootstrap across all rows of a dataframe to get the mean across
@@ -2630,8 +2630,8 @@ def pd_bootstrap(
         the percentiles to return. default is [2.5, 50, 97.5]
 
     # Returns:
-    mean : mean across all drawn bootstrap samples (mean of `func` over each sample)
-    std : std
+    mid : estimate across all drawn bootstrap samples (`f_across_samples` is applied over the estimates of `f_within_sample`)
+    std : std of the estimates from `f_within_sample`
     percentiles : list of percentiles requested
 
     """
@@ -2649,13 +2649,13 @@ def pd_bootstrap(
     for idx in range(0, num_boot):
         sample_df = df.sample(n=sample_size, replace=True, ignore_index=True)
 
-        resampled_estimates.append(func(sample_df[obs]))
+        resampled_estimates.append(f_within_sample(sample_df[obs]))
 
-    mean = np.mean(resampled_estimates)
+    mid = f_across_samples(resampled_estimates)
     std = np.std(resampled_estimates, ddof=1)
     q = np.percentile(resampled_estimates, percentiles)
 
-    return mean, std, q
+    return mid, std, q
 
 
 def pd_nested_bootstrap(

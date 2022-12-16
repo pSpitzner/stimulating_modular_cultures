@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-09 11:16:44
-# @Last Modified: 2022-11-29 17:30:42
+# @Last Modified: 2022-12-09 17:28:54
 # ------------------------------------------------------------------------------ #
 # All the lower-level plotting is in here.
 #
@@ -362,7 +362,7 @@ def plot_raster(
 
 
 def plot_module_rates(
-    h5f, ax=None, apply_formatting=True, mark_burst_threshold=False, **kwargs
+    h5f, ax=None, apply_formatting=True, mark_burst_threshold=False, zorder=None, **kwargs
 ):
 
     assert "ana" in h5f.keypaths(), "`prepare_file(h5f)` before plotting!"
@@ -377,6 +377,9 @@ def plot_module_rates(
     if not "ana.rates" in h5f.keypaths():
         ah.find_rates(h5f)
 
+    if zorder is None:
+        zorder = [None] * len(h5f["ana.mod_ids"])
+
     dt = h5f["ana.rates.dt"]
 
     for mdx, m_id in enumerate(h5f["ana.mod_ids"]):
@@ -389,7 +392,7 @@ def plot_module_rates(
         plot_kwargs.setdefault("color", h5f[f"ana.mod_colors"][m_id])
         plot_kwargs.setdefault("alpha", 0.5)
         plot_kwargs.setdefault("label", f"{m_id:d}: {mean_rate:.2f} Hz")
-        ax.plot(np.arange(0, len(pop_rate)) * dt, pop_rate, **plot_kwargs)
+        ax.plot(np.arange(0, len(pop_rate)) * dt, pop_rate, zorder=zorder[mdx], **plot_kwargs)
 
         if mark_burst_threshold:
             try:
@@ -401,9 +404,8 @@ def plot_module_rates(
             except Exception as e:
                 log.debug(e)
 
-    leg = ax.legend(loc=1)
-
     if apply_formatting:
+        leg = ax.legend(loc=1)
         leg.set_title("Module Rates")
         leg.get_frame().set_linewidth(0.0)
         leg.get_frame().set_facecolor("#e4e5e6")
@@ -2466,10 +2468,11 @@ def _plot_soma(h5f, ax, n_R_s=7.5, **soma_kwargs):
 def _plot_axons(h5f, ax, **axon_kwargs):
     # axon segments
     # zero-or-nan-padded 2d arrays
-    seg_x = h5f["data.neuron_axon_segments_x"][:]
     seg_y = h5f["data.neuron_axon_segments_y"][:]
+    seg_x = h5f["data.neuron_axon_segments_x"][:]
     seg_x = np.where(seg_x == 0, np.nan, seg_x)
     seg_y = np.where(seg_y == 0, np.nan, seg_y)
+
 
     # iterate over neurons to plot axons
     for n in range(len(seg_x)):
@@ -2485,7 +2488,16 @@ def _plot_axons(h5f, ax, **axon_kwargs):
         kwargs.setdefault("zorder", 0)
         kwargs.setdefault("alpha", 0.5)
 
-        ax.plot(seg_x[n], seg_y[n], **kwargs)
+        sx = seg_x[n]
+        sy = seg_y[n]
+
+        # make sure the path starts at soma center
+        if not sx[0] == h5f["data.neuron_pos_x"][n]:
+            # insert center
+            sx = np.insert(sx, 0, h5f["data.neuron_pos_x"][n])
+            sy = np.insert(sy, 0, h5f["data.neuron_pos_y"][n])
+
+        ax.plot(sx, sy, **kwargs)
 
 
 def _plot_dendrites(h5f, ax):

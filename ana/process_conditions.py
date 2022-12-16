@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-10-25 17:28:21
-# @Last Modified: 2022-11-29 11:42:36
+# @Last Modified: 2022-12-13 12:20:35
 # ------------------------------------------------------------------------------ #
 # Analysis script that preprocesses experiments and creates dataframes to compare
 # across condtions. Plots and more detailed analysis are in `paper_plots.py`
@@ -311,6 +311,7 @@ def main():
                 # just the bunch of all rijs
                 dataframes["rij"].append(df)
                 neuron_rij_mean = np.nanmean(neuron_rij)
+                neuron_rij_median = np.nanmedian(neuron_rij)
 
                 # we also want to compare the correlation coefficients for different
                 # combinations ("parings") of neurons from certain modules
@@ -357,6 +358,7 @@ def main():
                 # just the bunch of all rijs
                 dataframes["mod_rij"].append(df)
                 module_rij_mean = np.nanmean(module_rij)
+                module_rij_median = np.nanmedian(module_rij)
 
                 # pair descriptions as above
                 for pairing in pair_descriptions.keys():
@@ -407,8 +409,10 @@ def main():
                 df = pd.DataFrame(
                     {
                         "Num Bursts": [len(blen)],
-                        "Mean Correlation": [neuron_rij_mean],
+                        "Mean Neuron Correlation": [neuron_rij_mean],
+                        "Median Neuron Correlation": [neuron_rij_median],
                         "Mean Module Correlation": [module_rij_mean],
+                        "Median Module Correlation": [module_rij_median],
                         "Mean IBI": [np.nanmean(ibis)],
                         "Median IBI": [np.nanmedian(ibis)],
                         "Mean Rate": [np.nanmean(h5f["ana.rates.system_level"])],

@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-05 10:37:47
-# @Last Modified: 2022-11-28 16:00:22
+# @Last Modified: 2022-12-16 12:57:52
 # ------------------------------------------------------------------------------ #
 # Helper classes to simulate axonal growth described in
 # Orlandi et al. 2013, DOI: 10.1038/nphys2686
@@ -175,6 +175,7 @@ class BaseTopology(object):
         aij_sparse = _nested_lists_to_sparse(aij_nested, vals=segs_nested)
         # vanilla sparse matrix has two columns
         self.aij_sparse = aij_sparse[:, 0:2]
+        self.aij_nested = aij_nested
         # save the third column separately
         self.segs_sparse = aij_sparse[:, 2]
         self.k_in, self.k_out = _get_degrees(aij_nested)
@@ -445,6 +446,7 @@ class OpenRoundTopology(BaseTopology):
         aij_sparse = _nested_lists_to_sparse(aij_nested, vals=segs_nested)
         # vanilla sparse matrix has two columns
         self.aij_sparse = aij_sparse[:, 0:2]
+        self.aij_nested = aij_nested
         # save the third column separately
         self.segs_sparse = aij_sparse[:, 2]
         self.k_in, self.k_out = _get_degrees(aij_nested)
@@ -634,6 +636,7 @@ class ModularTopology(BaseTopology):
         aij_sparse = _nested_lists_to_sparse(aij_nested, vals=segs_nested)
         # vanilla sparse matrix has two columns
         self.aij_sparse = aij_sparse[:, 0:2]
+        self.aij_nested = aij_nested
         # save the third column separately
         self.segs_sparse = aij_sparse[:, 2]
         self.k_in, self.k_out = _get_degrees(aij_nested)
