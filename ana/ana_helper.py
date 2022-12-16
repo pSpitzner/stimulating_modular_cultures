@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2022-11-21 14:06:16
+# @Last Modified: 2022-12-14 12:08:27
 # ------------------------------------------------------------------------------ #
 # Here we collect all functions for importing and analyzing the data.
 # A central idea is that for every simulated/experimental trial, we have a
@@ -44,7 +44,6 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 log.setLevel("INFO")
 warnings.filterwarnings("ignore")  # suppress numpy warnings
-
 
 try:
     from numba import jit, prange
@@ -171,8 +170,8 @@ def prepare_file(
         h5f["ana.mod_colors"] = [f"C{x}" for x in range(0, len(h5f["ana.mods"]))]
     else:
         assert isinstance(mod_colors, list)
-        assert len(mod_colors) == len(h5f["ana.mods"])
-        h5f["ana.mod_colors"] = mod_colors
+        assert len(mod_colors) >= len(h5f["ana.mods"])
+        h5f["ana.mod_colors"] = mod_colors[: len(h5f["ana.mods"])]
 
     # ------------------------------------------------------------------------------ #
     # spikes
@@ -1039,7 +1038,12 @@ def find_rij(h5f=None, which="neurons", time_bin_size=200 / 1000):
     """
     # Paramters
     which : str, "neurons", "modules", "depletion",
+        if "neurons", we do binning at `time_bin_size` and count
+            spikes for each time bin at the neuron level
         if "modules", mod rates have to be in h5f
+            (usually calculated by convolving all spiketimes within a
+            module with a gaussian kernel, c.f.
+            `population_rate_exact_smoothing`)
         if "depletion" time_bin_size is ignored and native time resolution is used
     time_bin_size : float, if "neurons" selected this is the bin size for
         `binned_spike_count` in seconds
@@ -1079,7 +1083,7 @@ def find_rij(h5f=None, which="neurons", time_bin_size=200 / 1000):
     return rij
 
 
-def find_rij_pairs(h5f, rij=None, pairing="within_modules", **kwargs):
+def find_rij_pairs(h5f, rij=None, pairing="within_modules", which="neurons"):
     """
     get a flat list of the rij values for pairs of neurons matching a criterium,
     e.g. all neuron pairs within the same module.
@@ -1091,11 +1095,10 @@ def find_rij_pairs(h5f, rij=None, pairing="within_modules", **kwargs):
         "across_modules" : pairs spanning modules
         "within_group_02" : instead of modules, use all pairs in this group of modules
         "across_groups_02_13" : compare across the two sepcified groups
-    kwargs : passed to `find_rij()`
     """
 
     if rij is None:
-        rij = find_rij(h5f, which="neurons", time_bin_size=40 / 1000)
+        rij = find_rij(h5f, which=which, time_bin_size=40 / 1000)
 
     if "group" in pairing:
 
@@ -1104,7 +1107,12 @@ def find_rij_pairs(h5f, rij=None, pairing="within_modules", **kwargs):
             mods_b = [int(mod) for mod in pairing.split("_")[-2]]
 
     res = []
-    n = len(h5f["data.neuron_module_id"][:])
+    if which == "neurons":
+        key = "data.neuron_module_id"
+    elif which == "modules":
+        key = "ana.mod_ids"
+    n = len(h5f[key][:])
+
     for i in range(0, n):
         for j in range(0, n):
             if j >= i:
@@ -1114,27 +1122,27 @@ def find_rij_pairs(h5f, rij=None, pairing="within_modules", **kwargs):
             if pairing == "all":
                 res.append(rij[i, j])
             elif pairing == "within_modules":
-                if h5f["data.neuron_module_id"][i] == h5f["data.neuron_module_id"][j]:
+                if h5f[key][i] == h5f[key][j]:
                     res.append(rij[i, j])
 
             elif pairing == "across_modules":
-                if h5f["data.neuron_module_id"][i] != h5f["data.neuron_module_id"][j]:
+                if h5f[key][i] != h5f[key][j]:
                     res.append(rij[i, j])
 
             elif "within_group" in pairing:
                 if (
-                    h5f["data.neuron_module_id"][i] in mods_a
-                    and h5f["data.neuron_module_id"][j] in mods_a
+                    h5f[key][i] in mods_a
+                    and h5f[key][j] in mods_a
                 ):
                     res.append(rij[i, j])
 
             elif "across_groups" in pairing:
                 if (
-                    h5f["data.neuron_module_id"][i] in mods_a
-                    and h5f["data.neuron_module_id"][j] in mods_b
+                    h5f[key][i] in mods_a
+                    and h5f[key][j] in mods_b
                 ) or (
-                    h5f["data.neuron_module_id"][i] in mods_b
-                    and h5f["data.neuron_module_id"][j] in mods_a
+                    h5f[key][i] in mods_b
+                    and h5f[key][j] in mods_a
                 ):
                     res.append(rij[i, j])
 
@@ -2604,7 +2612,7 @@ def get_threshold_from_logisi_distribution(list_of_isi, area_fraction=0.3):
 
 
 def pd_bootstrap(
-    df, obs, sample_size=None, num_boot=500, func=np.nanmean, percentiles=None
+    df, obs, sample_size=None, num_boot=500, f_within_sample=np.nanmean, f_across_samples=np.nanmean, percentiles=None
 ):
     """
     bootstrap across all rows of a dataframe to get the mean across
@@ -2622,8 +2630,8 @@ def pd_bootstrap(
         the percentiles to return. default is [2.5, 50, 97.5]
 
     # Returns:
-    mean : mean across all drawn bootstrap samples (mean of `func` over each sample)
-    std : std
+    mid : estimate across all drawn bootstrap samples (`f_across_samples` is applied over the estimates of `f_within_sample`)
+    std : std of the estimates from `f_within_sample`
     percentiles : list of percentiles requested
 
     """
@@ -2641,13 +2649,13 @@ def pd_bootstrap(
     for idx in range(0, num_boot):
         sample_df = df.sample(n=sample_size, replace=True, ignore_index=True)
 
-        resampled_estimates.append(func(sample_df[obs]))
+        resampled_estimates.append(f_within_sample(sample_df[obs]))
 
-    mean = np.mean(resampled_estimates)
+    mid = f_across_samples(resampled_estimates)
     std = np.std(resampled_estimates, ddof=1)
     q = np.percentile(resampled_estimates, percentiles)
 
-    return mean, std, q
+    return mid, std, q
 
 
 def pd_nested_bootstrap(

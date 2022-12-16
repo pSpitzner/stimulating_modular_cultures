@@ -48,7 +48,7 @@ warnings.filterwarnings("ignore")  # suppress numpy warnings
 # ------------------------------------------------------------------------------ #
 
 
-def prepare_file(file_path):
+def prepare_file(file_path, mod_colors="auto"):
     """
     Reads a csv or hdf5 and formats a Benedict with our data format
     Parameters:
@@ -104,8 +104,14 @@ def prepare_file(file_path):
     h5f[f"data.state_vars_time"] = df["time"]
 
     # Prepare colors
-    h5f["ana.mod_colors"] = [f"C{x}" for x in range(0, len(h5f["ana.mods"]))]
-
+    if mod_colors is False:
+        h5f["ana.mod_colors"] = ["black"] * len(h5f["ana.mods"])
+    elif mod_colors == "auto":
+        h5f["ana.mod_colors"] = [f"C{x}" for x in range(0, len(h5f["ana.mods"]))]
+    else:
+        assert isinstance(mod_colors, list)
+        assert len(mod_colors) >= len(h5f["ana.mods"])
+        h5f["ana.mod_colors"] = mod_colors[: len(h5f["ana.mods"])]
     return h5f
 
 
@@ -315,14 +321,12 @@ def _coords_from_file(candidate):
 
 def f_correlation_coefficients(raw, return_matrix=False):
 
-    raw = _load_if_path(raw)
+    # raw = _load_if_path(raw)
+    # act = raw[["mod_0", "mod_1", "mod_2", "mod_3"]].to_numpy()
 
-    act = raw[["mod_0", "mod_1", "mod_2", "mod_3"]].to_numpy()
-
-    # plt.figure()
-    # plt.plot(act[:,0])
-    # plt.plot(act[:,1])
-    # plt.show()
+    # turns out we need the hdf5
+    h5f = prepare_file(raw)
+    act = h5f["data.raw_df"][["mod_0", "mod_1", "mod_2", "mod_3"]].to_numpy()
 
     rij = np.corrcoef(act.T)
 
@@ -337,10 +341,36 @@ def f_correlation_coefficients(raw, return_matrix=False):
     if return_matrix:
         return rij
     else:
-        return dict(
-            mean_correlation_coefficient=np.nanmean(rij),
-            median_correlation_coefficient=np.nanmedian(rij),
-        )
+        res = dict()
+        res["mean_correlation_coefficient"] = np.nanmean(rij)
+        res["median_correlation_coefficient"] = np.nanmedian(rij)
+
+        pair_descriptions = dict()
+        pair_descriptions["across_groups_0_2"] = "within_stim"
+        pair_descriptions["across_groups_1_3"] = "within_nonstim"
+        pair_descriptions["across_groups_0_1"] = "across"
+        pair_descriptions["across_groups_2_3"] = "across"
+        pair_descriptions["all"] = "all"
+
+        pairs = dict()
+        for key, val in pair_descriptions.items():
+            pairs[val] = []
+
+        for key, val in pair_descriptions.items():
+            # the keys are what we need to pass to the function
+            pairs[val].extend(
+                ah.find_rij_pairs(h5f, rij=rij, pairing=key, which="modules")
+            )
+
+        for key, val in pair_descriptions.items():
+            pairs[val] = np.nanmedian(pairs[val])
+
+        res["median_correlation_coefficient_across"] = pairs["across"]
+        res["median_correlation_coefficient_within_stim"] = pairs["within_stim"]
+        res["median_correlation_coefficient_within_nonstim"] = pairs["within_nonstim"]
+        res["median_correlation_coefficient_all"] = pairs["all"]
+
+        return res
 
 
 def f_functional_complexity(raw):

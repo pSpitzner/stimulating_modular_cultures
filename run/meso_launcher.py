@@ -13,8 +13,8 @@ import mesoscopic_model as mm
 from tqdm import tqdm
 
 
-rng_start_seed = 55436434
-n_trajectories = 15 # number of repetitons per parameter combination
+rng_start_seed = 42
+n_trajectories = 15  # number of repetitons per parameter combination
 
 gating_mechanism = True
 simulation_time = 1_000
@@ -66,7 +66,8 @@ def main():
                     # output_filename=f"{coupling_folder}/noise{j}",
                     output_filename=f"{coupling_folder}/noise_{h:0.3f}",
                     simulation_time=simulation_time,
-                    ext_str=h,
+                    # ext_str=h, # global stimulation
+                    ext_str=[h, 0.05, h, 0.05],  # partial stimulation
                     w0=c,
                     rseed=rng_start_seed + rep * 41533,
                     gating_mechanism=gating_mechanism,
@@ -75,7 +76,7 @@ def main():
                         noise=h,
                         rep=rep,
                         gating_mechanism=gating_mechanism,
-                        seed = rng_start_seed + rep * 41533,
+                        seed=rng_start_seed + rep * 41533,
                     ),
                 )
 

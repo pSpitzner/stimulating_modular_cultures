@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2022-11-23 16:25:47
+# @Last Modified: 2022-12-05 11:54:47
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Creates a connectivity matrix matching the modular cultures (see `topology.py`)
@@ -302,51 +302,14 @@ if args.stimulation_type != "off":
 # topology
 # ------------------------------------------------------------------------------ #
 
-alphas = dict()
-# I _measured_ those with an iteration process to roughly get the desired in degree
-if args.k_in == 30:
-    alphas[0] = 0.0275
-    alphas[1] = 0.02641
-    alphas[3] = 0.02521
-    alphas[5] = 0.02437
-    alphas[10] = 0.0225
-    alphas[20] = 0.02021
-    alphas[-1] = 0.00824
 
-elif args.k_in == 25:
-    alphas[0] = 0.01728
-    alphas[1] = 0.01698
-    alphas[3] = 0.01667
-    alphas[5] = 0.01635
-    alphas[10] = 0.0156
-    alphas[20] = 0.01498
-    alphas[-1] = 0.00665
-
-elif args.k_in == 20:
-    alphas[0] = 0.01156
-    alphas[1] = 0.01129
-    alphas[3] = 0.01125
-    alphas[5] = 0.01091
-    alphas[10] = 0.01099
-    alphas[20] = 0.01057
-    alphas[-1] = 0.00519
-
-elif args.k_in == 15:
-    alphas[0] = 0.007448
-    alphas[1] = 0.007448
-    alphas[3] = 0.007344
-    alphas[5] = 0.007305
-    alphas[10] = 0.007266
-    alphas[20] = 0.007201
-    alphas[-1] = 0.00373
-
-
-if args.k_inter in alphas.keys():
-    alpha = alphas[args.k_inter]
+if args.k_in != -1:
+    alpha = topo.find_alpha_for_target_in_degree(
+        k_inter=args.k_inter, k_in_target=args.k_in, rerun=False
+    )
     log.info(f"for k={args.k_inter}, using {alpha=} to get an in-degree of ~{args.k_in}.")
 else:
     alpha = 0.0125
-    args.k_in = -1
     log.warning(f"Not setting cusotm alpha, using default {alpha}")
 
 if args.k_inter == -1:
@@ -561,6 +524,10 @@ h5_desc["meta.dynamics_rate"] = "rate for the (global) poisson input (shot-noise
 
 h5_data["meta.dynamics_stimulation_rate"] = args.stimulation_rate / Hz
 h5_desc["meta.dynamics_stimulation_rate"] = "rate for the poisson input, added to stimulated modules, in Hz"
+
+h5_data["meta.dynamics_stimulation_mods"] = "off" if args.stimulation_type == "off" \
+    else ''.join([str(i) for i in args.stimulation_module])
+h5_desc["meta.dynamics_stimulation_mods"] = "string of which modules were targeted 'off' or '02'. Note that this is not 'off' even when the stimrate is 0. becomes of if NO `-stim` argument is passed"
 
 h5_data["meta.dynamics_simulation_duration"] = args.sim_duration / second
 h5_desc["meta.dynamics_simulation_duration"] = "in seconds"
