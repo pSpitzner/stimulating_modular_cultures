@@ -14,11 +14,11 @@ from tqdm import tqdm
 
 
 rng_start_seed = 42
-n_trajectories = 15  # number of repetitons per parameter combination
+n_trajectories = 25  # number of repetitons per parameter combination
 
-gating_mechanism = True
 simulation_time = 1_000
-output_folder = "./dat/simulations/meso/raw"
+gating_mechanism = True
+output_folder = "./dat/simulations/meso/raw_partial_gates_on"
 
 # ------------------------------------------------------------------------------ #
 # Note on file naming convention:
@@ -27,7 +27,7 @@ output_folder = "./dat/simulations/meso/raw"
 # - first, add `_no_gates` ot output_folder when disabling the gating mechanism
 # - second, add `_long_ts` to output_folder to use a longer simulation time, e.g.
 # ------------------------------------------------------------------------------ #
-# gating_mechanism = False
+# gating_mechanism = True
 # output_folder = "./dat/simulations/meso/raw_no_gates_long_ts"
 # simulation_time = 10_000
 # ------------------------------------------------------------------------------ #
@@ -36,7 +36,8 @@ output_folder = "./dat/simulations/meso/raw"
 # Combinations of coupling and external inputs.
 # We create a folder per coupling and a file per input step.
 # coupling_span = np.array([0.0, 0.01, 0.02, 0.05, 0.1, 1.0, 5.0])
-coupling_span = np.array([0.0, 0.025, 0.04, 0.1, 5.0])
+# coupling_span = np.array([0.0, 0.025, 0.04, 0.1, 5.0])
+coupling_span = np.arange(0, 0.1501, 0.01)
 external_inputs = np.arange(0, 0.31, 0.025)
 
 
@@ -67,7 +68,7 @@ def main():
                     output_filename=f"{coupling_folder}/noise_{h:0.3f}",
                     simulation_time=simulation_time,
                     # ext_str=h, # global stimulation
-                    ext_str=[h, 0.05, h, 0.05],  # partial stimulation
+                    ext_str=[h, 0.0, h, 0.0],  # partial stimulation
                     w0=c,
                     rseed=rng_start_seed + rep * 41533,
                     gating_mechanism=gating_mechanism,

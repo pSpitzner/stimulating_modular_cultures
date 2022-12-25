@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2022-12-05 11:54:47
+# @Last Modified: 2022-12-15 16:03:17
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Creates a connectivity matrix matching the modular cultures (see `topology.py`)
@@ -75,11 +75,11 @@ jG = 50 * mV       # GABA current strength
 
 # noise
 beta = 0.8         # D = beta*D after spike, to reduce efficacy, beta < 1
-rate = 80 * Hz     # rate for the poisson input (shot-noise), between 10 - 50 Hz
+rate = 80 * Hz     # rate for the poisson input (shot-noise), between 10 - 100 Hz
 jM   = 15 * mV     # shot noise (minis) strength, between 10 - 50 mV
                    # (sum of minis arriving at target neuron)
-# sigV = sqrt(0.06) * mV
 sigV = 0.0 * mV
+# sigV = sqrt(0.06) * mV
 # amplitude of white noise membrane fluctuations
 # Note: for 0.06^0.5 mV, membrane fluctuations are virtually zero.
 # I made a mistake when converting the notation from the original paper,
