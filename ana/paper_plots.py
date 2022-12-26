@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-11-08 17:51:24
-# @Last Modified: 2022-12-23 07:48:26
+# @Last Modified: 2022-12-25 09:48:43
 # ------------------------------------------------------------------------------ #
 #
 # How to read / work this monstrosity of a file?
@@ -279,14 +279,14 @@ def fig_1(show_time_axis=False):
         "Functional Complexity",
         "Median Fraction",
         "Median Neuron Correlation",
-        "Median Module Correlation",
-        "Mean Rate",
+        # "Median Module Correlation",
+        # "Mean Rate",
         # "Mean IBI",
     ]:
         ax = exp_chemical_vs_opto(observable=obs, draw_error_bars=False)
         cc.set_size(ax, w=1.2, h=1.6, l=1.2, r=0.7, b=0.2, t=0.5)
         ax.grid(axis="y", which="both", color="0.8", lw=0.5, zorder=-1, clip_on=False)
-        # ax.set_ylim(0, 1.0)
+        ax.set_ylim(0, 1.0)
         ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
         ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
         sns.despine(ax=ax, bottom=True, left=False, trim=True, offset=2)
