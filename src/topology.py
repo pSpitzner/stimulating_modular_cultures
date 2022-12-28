@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-02-05 10:37:47
-# @Last Modified: 2022-12-16 12:57:52
+# @Last Modified: 2022-12-28 16:40:15
 # ------------------------------------------------------------------------------ #
 # Helper classes to simulate axonal growth described in
 # Orlandi et al. 2013, DOI: 10.1038/nphys2686
@@ -185,7 +185,7 @@ class BaseTopology(object):
         res = {key: res[key] for key in res.keys() if key[0:4] == "par_"}
         return res
 
-    def get_everything_as_nested_dict(self, return_descriptions=False):
+    def to_dict(self, return_descriptions=False):
         """get most relevant details of the topology as a benedict"""
         # fmt: off
         h5_data = benedict()
@@ -474,9 +474,9 @@ class OpenRoundTopology(BaseTopology):
         if "par_center_y" in kwargs:
             self.par_center_y = kwargs["par_center_y"]
 
-    def get_everything_as_nested_dict(self, return_descriptions=False):
+    def to_dict(self, return_descriptions=False):
 
-        h5_data, h5_desc = super().get_everything_as_nested_dict(return_descriptions=True)
+        h5_data, h5_desc = super().to_dict(return_descriptions=True)
 
         h5_data["meta.topology"] = "orlandi open round topology"
         h5_data["meta.topology_center_x"] = self.par_center_x
@@ -533,9 +533,9 @@ class MergedTopology(BaseTopology):
         # to later use same code as for modular systems, use k_inter = -1 for merged
         self.par_k_inter = -1
 
-    def get_everything_as_nested_dict(self, return_descriptions=False):
+    def to_dict(self, return_descriptions=False):
 
-        h5_data, h5_desc = super().get_everything_as_nested_dict(return_descriptions=True)
+        h5_data, h5_desc = super().to_dict(return_descriptions=True)
 
         h5_data["data.neuron_module_id"] = self.neuron_module_ids[:]
         h5_data["meta.topology"] = "orlandi merged topology"
@@ -641,9 +641,9 @@ class ModularTopology(BaseTopology):
         self.segs_sparse = aij_sparse[:, 2]
         self.k_in, self.k_out = _get_degrees(aij_nested)
 
-    def get_everything_as_nested_dict(self, return_descriptions=False):
+    def to_dict(self, return_descriptions=False):
 
-        h5_data, h5_desc = super().get_everything_as_nested_dict(return_descriptions=True)
+        h5_data, h5_desc = super().to_dict(return_descriptions=True)
 
         h5_data["data.neuron_module_id"] = self.neuron_module_ids[:]
         h5_data["data.neuron_bridge_ids"] = self.neuron_bridge_ids
@@ -905,6 +905,462 @@ class ModularTopology(BaseTopology):
             connection_segments = np.array(connection_segments, dtype="int")
 
         return t_ids, connection_segments
+
+
+class ModularTopology(BaseTopology):
+    def __init__(self, **kwargs):
+        self.set_default_parameters()
+        self.update_parameters(**kwargs)
+        self.set_default_modules()
+        self.description = "Modular Topology"
+        log.info(self.description)
+        for k, v in self.get_parameters().items():
+            log.info(f"{k}: {v}")
+        self.init_topology()
+
+    def set_default_parameters(self):
+        super().set_default_parameters()
+
+        # we have 2 200um modules with 200um space inbetween
+        self.par_L = 600
+
+        # number of axons going from each module to its neighbours
+        self.par_k_inter = 5
+
+    def init_topology(self):
+        # only call this after initalizing parameters and modules!
+
+        self.set_neuron_positions()
+        self.set_neuron_module_ids()
+
+        # it is convenient to have indices sorted by modules and position
+        sort_idx = np.lexsort(
+            (
+                self.neuron_positions[:, 1],
+                self.neuron_positions[:, 0],
+                self.neuron_module_ids,
+            )
+        )
+        self.neuron_positions = self.neuron_positions[sort_idx]
+        self.neuron_module_ids = self.neuron_module_ids[sort_idx]
+
+        # dendritic trees as circles
+        self.set_dendrite_radii()
+
+        # every source neuron has a list of target neuron ids
+        aij_nested = [np.array([], dtype="int")] * self.par_N
+        # which are the axon segments that made the connections? (ids)
+        segs_nested = [np.array([], dtype="int")] * self.par_N
+
+        # paths of all axons
+        axon_paths = [np.array([])] * self.par_N
+
+        # which neurons create bridges
+        bridge_ids = []
+
+        # generate and connect bridging axons
+        # e.g. (0, 1, 2): "from 0 to 1 and 2"
+        for b_ids in [(0, 1, 2), (1, 0, 3), (2, 0, 3), (3, 1, 2)]:
+            src_mod = self.mods[b_ids[0]]
+            tar_mods = [self.mods[b_ids[1]], self.mods[b_ids[2]]]
+
+            # get the ids and axon paths of all neurons that bridge between modules
+            br_nids, br_paths = self.grow_bridging_axons(
+                source_mod=src_mod, target_mods=tar_mods
+            )
+            bridge_ids.extend(br_nids)
+
+            # get connectivity for each neuron
+            for idx, n_id in enumerate(br_nids):
+                cids, seg_ids = self.connections_for_neuron(n_id, axon_path=br_paths[idx])
+                axon_paths[n_id] = br_paths[idx]
+                argsorted = np.argsort(cids)
+                aij_nested[n_id] = cids[argsorted]
+                segs_nested[n_id] = seg_ids[argsorted]
+
+        self.neuron_bridge_ids = np.array(bridge_ids, dtype="int")
+
+        # grow axons and get connections for the remaining neurons
+        for n_id in range(0, self.par_N):
+            if n_id in bridge_ids:
+                continue
+
+            path = self.grow_axon(start=self.neuron_positions[n_id, :])
+            axon_paths[n_id] = path
+            cids, seg_ids = self.connections_for_neuron(n_id=n_id, axon_path=path)
+            argsorted = np.argsort(cids)
+            aij_nested[n_id] = cids[argsorted]
+            segs_nested[n_id] = seg_ids[argsorted]
+
+        # save the details as attributes
+        self.axon_paths = axon_paths
+        # this has three columns
+        aij_sparse = _nested_lists_to_sparse(aij_nested, vals=segs_nested)
+        # vanilla sparse matrix has two columns
+        self.aij_sparse = aij_sparse[:, 0:2]
+        self.aij_nested = aij_nested
+        # save the third column separately
+        self.segs_sparse = aij_sparse[:, 2]
+        self.k_in, self.k_out = _get_degrees(aij_nested)
+
+    def to_dict(self, return_descriptions=False):
+
+        h5_data, h5_desc = super().to_dict(return_descriptions=True)
+
+        h5_data["data.neuron_module_id"] = self.neuron_module_ids[:]
+        h5_data["data.neuron_bridge_ids"] = self.neuron_bridge_ids
+        h5_desc[
+            "data.neuron_bridge_ids"
+        ] = "list of ids of neurons connecting two modules"
+
+        h5_data["meta.topology"] = self.description
+        h5_data["meta.topology_k_inter"] = self.par_k_inter
+
+        if return_descriptions:
+            return h5_data, h5_desc
+        return h5_data
+
+    def set_default_modules(self):
+        # coordinates of rectangular modules: module_number, x | y, low | high
+        self.mods = np.ones(shape=(4, 2, 2)) * np.nan
+        self.mods[0] = np.array([[0, 200], [0, 200]])
+        self.mods[1] = np.array([[0, 200], [400, 600]])
+        self.mods[2] = np.array([[400, 600], [0, 200]])
+        self.mods[3] = np.array([[400, 600], [400, 600]])
+
+    def grow_bridging_axons(self, source_mod, target_mods):
+
+        # get the indices of neurons in the target module
+        source_idx = [
+            _is_within_rect(x, y, 0, source_mod) for x, y in self.neuron_positions
+        ]
+        source_idx = np.where(source_idx)[0]
+        source_pos = self.neuron_positions[source_idx]
+
+        # get an idea where the modules are located. assuming some clustering in space,
+        # then the center of mass is a good proxy... or we use the center of modules
+        source_cm = _center_of_rect(source_mod)
+
+        # pick the source closes to cm
+        source_distances = np.sqrt(
+            np.power(source_pos[:, 0] - source_cm[0], 2.0)
+            + np.power(source_pos[:, 1] - source_cm[1], 2.0)
+        )
+        closest_idx = source_idx[np.argsort(source_distances)]
+
+        rewired_idx = []
+        rewired_paths = []
+
+        # criteria when an axons has reached another module
+        # we need a bit of boilerplate to get preset arguments into numba functions
+        def make_criterion(mod):
+            @jit(nopython=True, parallel=False, fastmath=True, cache=True)
+            def f(x, y):
+                # r=5um so we have a bit of a margin around the border, before accepting
+                return _is_within_rect(x, y, r=5, rect=mod)
+
+            return f
+
+        termination_criteria = []
+        for mod in target_mods:
+            termination_criteria.append(make_criterion(mod))
+
+        for k in range(0, self.par_k_inter):
+            for mdx, mod in enumerate(target_mods):
+                n_offset = len(rewired_idx)
+                # ensure ~ 5um padding at module edges before terminating
+                # f_term = functools.partial(_is_within_rect, r=5, rect=mod)
+                criterion = termination_criteria[mdx]
+                n_idx = closest_idx[n_offset]
+
+                # start by growing to our target
+                path, num_segs_left, last_phi = self.grow_axon_to_target(
+                    start=self.neuron_positions[n_idx],
+                    target=_center_of_rect(mod),
+                    termination_criterion=criterion,
+                )
+
+                if num_segs_left > 0:
+                    # finish randomly
+                    last_pos = path[-num_segs_left - 1]
+                    rest_of_path = self.grow_axon(
+                        start=last_pos,
+                        num_segments=num_segs_left,
+                        start_phi=last_phi,
+                    )
+
+                    path[-num_segs_left:] = rest_of_path
+                # if not np.all(np.isfinite(path)):
+                #     print("\t", num_segs_left, len(path), len(rest_of_path))
+                #     print(path)
+                #     print(rest_of_path)
+
+                assert np.all(np.isfinite(path))
+
+                rewired_idx.append(n_idx)
+                rewired_paths.append(path)
+
+        return rewired_idx, rewired_paths
+
+    def set_neuron_positions(self):
+        """
+        make sure to set parameters correctly before calling this
+        """
+
+        rejections = 0
+
+        # a 2d np array with x, y poitions, soma_radius and dendritic_tree diameter
+        neuron_pos = np.ones(shape=(self.par_N, 2)) * -93288.0
+        neuron_rad = np.ones(shape=(self.par_N)) * self.par_R_s
+
+        # keep track of the number of neurons in every module
+        neurons_per_module = np.zeros(len(self.mods), "int")
+
+        for i in range(self.par_N):
+            placed = False
+            while not placed:
+                placed = True
+                x = np.random.uniform(0.0, self.par_L)
+                y = np.random.uniform(0.0, self.par_L)
+
+                # dont place out of bounds
+                if not self.is_within_substrate(x, y, self.par_R_s):
+                    placed = False
+                    rejections += 1
+                    continue
+
+                # dont overlap other neurons
+                if np.any(
+                    _are_intersecting_circles(
+                        neuron_pos[0:i], neuron_rad[0:i], x, y, self.par_R_s
+                    )
+                ):
+                    placed = False
+                    rejections += 1
+                    continue
+
+                # for modular topology, we want to ensure the same number of neurons
+                # in every module
+                mod_id = self.mod_id_from_coordinate(x, y)
+                if neurons_per_module[mod_id] != np.min(neurons_per_module):
+                    placed = False
+                    rejections += 1
+                    continue
+
+                neuron_pos[i, 0] = x
+                neuron_pos[i, 1] = y
+                neurons_per_module[mod_id] += 1
+
+        self.neuron_positions = neuron_pos
+
+    def set_neuron_module_ids(self):
+        """
+        assign the module id of every neuron
+        """
+        tar_mods = np.ones(self.par_N, dtype="int") * -1
+        for idx in range(0, self.par_N):
+            x, y = self.neuron_positions[idx]
+            tar_mods[idx] = self.mod_id_from_coordinate(x, y)
+        self.neuron_module_ids = tar_mods
+
+    def mod_id_from_coordinate(self, x, y):
+        num_mods = len(self.mods)
+        for i in range(0, num_mods):
+            if _is_within_rect(x, y, 0, self.mods[i]):
+                return i
+        raise Exception("Coordinate is not within any known module")
+
+    def is_within_substrate(self, x, y, r=0):
+        for m in range(0, len(self.mods)):
+            if _is_within_rect(x, y, r, self.mods[m]):
+                return True
+        return False
+
+    def connections_for_neuron(self, n_id, axon_path):
+        """
+        Get the connections due to a grown path
+        n_id : int
+            the id of the source neuron
+        axon_path : 2d array
+            positions of all axons segments growing from n_id
+
+        # Returns:
+        ids_to_connect_with : array
+            indices of neurons to form a connection with
+        """
+
+        # first, collect all dendritic trees which we intersect and how often
+        num_intersections = np.zeros(self.par_N, "int")
+        first_intersections = np.zeros(self.par_N, "int")
+
+        for seg_id, seg in enumerate(axon_path):
+            if not self.is_within_substrate(seg[0], seg[1], r=0):
+                # we dont count intersection that occur out of our substrate,
+                # because we want dendritic trees to only be "on the substrate"
+                continue
+
+            intersecting_dendrites = _are_intersecting_circles(
+                ref_pos=self.neuron_positions,
+                ref_rad=self.dendritic_radii,
+                x=seg[0],
+                y=seg[1],
+            )
+
+            # we also do not want to connect to a hypothetical super large tree
+            # that comes from another module
+            # this additioanl check is the only difference to the function in the
+            # base class.
+            # other than that, this a carbon copy of BaseTopology :/
+            seg_mod = self.mod_id_from_coordinate(*seg)
+            valid_dendrites = self.neuron_module_ids == seg_mod
+
+            # only count intersections where valid and intersecting
+            intersecting_dendrites = intersecting_dendrites & valid_dendrites
+
+            # collect
+            firsts = np.where(num_intersections == 0 & intersecting_dendrites)[0]
+            first_intersections[firsts] = seg_id
+            num_intersections += intersecting_dendrites
+
+        num_intersections[n_id] = 0  # dont create self-connections
+        t_ids = np.where(num_intersections > 0)[0]  # target neuron ids
+        connection_segments = []  # which segment forms the connection
+
+        if not self.par_alpha_path_weighted:
+            # flat probability, independent of the number of intersections
+            t_ids = t_ids[np.random.uniform(0, 1, size=len(t_ids)) < self.par_alpha]
+
+            # find the segment that causes the connection. simply the first intersecting
+            connection_segments = first_intersections[t_ids]
+
+        else:
+            # probability is applied once, for every intersecting segment
+            filtered_t_ids = []
+            for tid in t_ids:
+                intersecting = (
+                    np.random.uniform(0, 1, size=num_intersections[tid]) < self.par_alpha
+                )
+
+                if np.any(intersecting):
+                    filtered_t_ids.append(tid)
+                    # axons may grow out of trees and back in. the first index in
+                    # of intersecing segs may not actually be the right one (or in tree)
+                    ref = np.sum(intersecting)
+                    for seg_id in range(first_intersections[tid], len(axon_path)):
+                        seg = axon_path[seg_id]
+                        if _is_intersecting_circle(
+                            ref_pos=self.neuron_positions[tid],
+                            ref_rad=self.dendritic_radii[tid],
+                            x=seg[0],
+                            y=seg[1],
+                        ):
+                            if ref == 0:
+                                break
+                            ref -= 1
+                    connection_segments.append(seg_id)
+
+            t_ids = np.array(filtered_t_ids, dtype="int")
+            connection_segments = np.array(connection_segments, dtype="int")
+
+        return t_ids, connection_segments
+
+
+class TwoModulesDirected(ModularTopology):
+    def __init__(self, **kwargs):
+        self.set_default_parameters()
+        self.update_parameters(**kwargs)
+        self.set_default_modules()
+        self.description = "Two module, directed"
+        log.info(self.description)
+        for k, v in self.get_parameters().items():
+            log.info(f"{k}: {v}")
+        self.init_topology()
+
+    def set_default_parameters(self):
+        super().set_default_parameters()
+
+        self.par_N = 80
+        # we have 2 200um modules with 200um space inbetween
+        self.par_L = 600
+        # number of axons going from each module to its neighbours
+        self.par_k_inter = 5
+
+    def init_topology(self):
+        # only call this after initalizing parameters and modules!
+
+        self.set_neuron_positions()
+        self.set_neuron_module_ids()
+
+        # it is convenient to have indices sorted by modules and position
+        sort_idx = np.lexsort(
+            (
+                self.neuron_positions[:, 1],
+                self.neuron_positions[:, 0],
+                self.neuron_module_ids,
+            )
+        )
+        self.neuron_positions = self.neuron_positions[sort_idx]
+        self.neuron_module_ids = self.neuron_module_ids[sort_idx]
+
+        # dendritic trees as circles
+        self.set_dendrite_radii()
+
+        # every source neuron has a list of target neuron ids
+        aij_nested = [np.array([], dtype="int")] * self.par_N
+        # which are the axon segments that made the connections? (ids)
+        segs_nested = [np.array([], dtype="int")] * self.par_N
+
+        # paths of all axons
+        axon_paths = [np.array([])] * self.par_N
+
+        # which neurons create bridges
+        bridge_ids = []
+
+        # get the ids and axon paths of all neurons that bridge between modules
+        br_nids, br_paths = self.grow_bridging_axons(
+            source_mod=self.mods[0], target_mods=np.array([self.mods[1]])
+        )
+        bridge_ids.extend(br_nids)
+
+        # get connectivity for each neuron
+        for idx, n_id in enumerate(br_nids):
+            cids, seg_ids = self.connections_for_neuron(n_id, axon_path=br_paths[idx])
+            axon_paths[n_id] = br_paths[idx]
+            argsorted = np.argsort(cids)
+            aij_nested[n_id] = cids[argsorted]
+            segs_nested[n_id] = seg_ids[argsorted]
+
+        self.neuron_bridge_ids = np.array(bridge_ids, dtype="int")
+
+        # grow axons and get connections for the remaining neurons
+        for n_id in range(0, self.par_N):
+            if n_id in bridge_ids:
+                continue
+
+            path = self.grow_axon(start=self.neuron_positions[n_id, :])
+            axon_paths[n_id] = path
+            cids, seg_ids = self.connections_for_neuron(n_id=n_id, axon_path=path)
+            argsorted = np.argsort(cids)
+            aij_nested[n_id] = cids[argsorted]
+            segs_nested[n_id] = seg_ids[argsorted]
+
+        # save the details as attributes
+        self.axon_paths = axon_paths
+        # this has three columns
+        aij_sparse = _nested_lists_to_sparse(aij_nested, vals=segs_nested)
+        # vanilla sparse matrix has two columns
+        self.aij_sparse = aij_sparse[:, 0:2]
+        self.aij_nested = aij_nested
+        # save the third column separately
+        self.segs_sparse = aij_sparse[:, 2]
+        self.k_in, self.k_out = _get_degrees(aij_nested)
+
+    def set_default_modules(self):
+        # coordinates of rectangular modules: module_number, x | y, low | high
+        self.mods = np.ones(shape=(2, 2, 2)) * np.nan
+        self.mods[0] = np.array([[0, 200], [0, 200]])
+        # place the #1 at the postition of our usual #2 when we have 4 modules.
+        self.mods[1] = np.array([[400, 600], [0, 200]])
 
 
 # ------------------------------------------------------------------------------ #

@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2022-06-22 10:12:19
-# @Last Modified: 2022-10-15 12:25:52
+# @Last Modified: 2022-12-28 16:40:15
 # ------------------------------------------------------------------------------ #
 # This guy uses movie_business.py to create movies from hdf5 files.
 # tweak main() and run from console.
@@ -586,7 +586,7 @@ def axon_growth(
 
     # 500 neurons in a 5mm round dish
     # h5f = topo.OpenRoundTopology(par_N=5000, par_L=10000).get_everything_as_nested_dict()
-    h5f = topo.MergedTopology(par_N=5000, par_L=12000).get_everything_as_nested_dict()
+    h5f = topo.MergedTopology(par_N=5000, par_L=12000).to_dict()
     fig, ax = plt.subplots(figsize=(800 / 300, 800 / 300), dpi=300)
     ax.set_xlim(1000, 11000)
     ax.set_ylim(1000, 11000)

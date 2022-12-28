@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2022-12-15 16:03:17
+# @Last Modified: 2022-12-28 16:40:15
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Creates a connectivity matrix matching the modular cultures (see `topology.py`)
@@ -496,7 +496,7 @@ else:
 
 # these are python-benedicts (nested dictionaries) and we have a helper
 # to dump the whole strucutre to hdf5 at the end
-h5_data, h5_desc = tp.get_everything_as_nested_dict(return_descriptions=True)
+h5_data, h5_desc = tp.to_dict(return_descriptions=True)
 
 # ------------------------------------------------------------------------------ #
 # meta data of this simulation
