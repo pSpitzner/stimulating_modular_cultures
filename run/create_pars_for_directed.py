@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2022-06-22 10:12:19
-# @Last Modified: 2022-12-29 18:25:25
+# @Last Modified: 2022-12-29 18:54:48
 # ------------------------------------------------------------------------------ #
 # This creates a `parameter.tsv` where each line contains one parameter set,
 # which can be directly called from the command line (i.e. on a cluster).
@@ -32,7 +32,7 @@ l_jA = [45.0]
 l_jG = [50.0]
 l_jM = [15.0]
 l_tD = [20.0]
-l_mod = np.array(["01"])
+l_mod = np.array(["01", "0", "1"])
 rate = 80
 l_stim_rate = [0, 5, 10, 15, 20, 25, 30, 35]
 
@@ -46,7 +46,7 @@ print("l_stim_rate", l_stim_rate)
 bridge_weight = 1.0
 inh_frac = 0.20
 
-arg_list = product(l_k_inter, l_jA, l_jG, l_jM, l_tD, l_rep)
+arg_list = product(l_k_inter, l_jA, l_jG, l_jM, l_tD, l_mod, l_rep)
 
 count_dynamic = 0
 count_topo = 0
@@ -60,8 +60,8 @@ with open("./parameters.tsv", "w") as f_dyn:
         jG = args[2]
         jM = args[3]
         tD = args[4]
+        mod = args[5]
         rep = args[-1]
-        mod = l_mod[0]
 
         seed += 1
 
