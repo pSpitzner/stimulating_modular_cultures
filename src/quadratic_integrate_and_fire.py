@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2022-12-28 16:40:15
+# @Last Modified: 2022-12-28 17:03:07
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Creates a connectivity matrix matching the modular cultures (see `topology.py`)
@@ -108,8 +108,8 @@ record_state = True
 # which variables
 record_state_vars = ["D"]
 # for which neurons, True for everything, or list of indices
-record_state_idxs = True # [0, 1, 2, 3]
-record_state_idxs = np.arange(0, 160)
+record_state_idxs = True
+# record_state_idxs = np.arange(0, 160)
 
 # save state variables in steps of 25ms (the default) to save disk space
 # use 0.5 for the highres simulations needed for nice rate-resource cycles
@@ -316,7 +316,7 @@ if args.k_inter == -1:
     tp = topo.MergedTopology(assign_submodules=True, par_alpha=alpha)
     bridge_ids = np.array([], dtype="int")
 else:
-    tp = topo.ModularTopology(par_k_inter=args.k_inter, par_alpha=alpha)
+    tp = topo.TwoModulesDirected(par_k_inter=args.k_inter, par_alpha=alpha)
     bridge_ids = tp.neuron_bridge_ids
 num_n = tp.par_N
 a_ij_sparse = tp.aij_sparse
