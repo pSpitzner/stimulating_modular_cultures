@@ -37,7 +37,8 @@ import numpy as np
 # import seaborn as sns
 # import pandas as pd
 from collections import OrderedDict
-from tqdm import tqdm
+from tqdm.auto import tqdm
+from tqdm.contrib.logging import logging_redirect_tqdm
 from benedict import benedict
 
 from contextlib import nullcontext, ExitStack
@@ -70,7 +71,7 @@ d_obs["tD"] = "/meta/dynamics_tD"
 d_obs["k_inter"] = "/meta/topology_k_inter"
 d_obs["k_in"] = "/meta/topology_k_in"
 d_obs["stim_rate"] = "/meta/dynamics_stimulation_rate"
-# d_obs["stim_mods"] = "/meta/dynamics_stimulation_mods"
+d_obs["stim_mods"] = "/meta/dynamics_stimulation_mods"
 # d_obs["k_frac"] = "/meta/dynamics_k_frac"
 
 log.debug(f"d_obs: {d_obs}")
@@ -795,6 +796,7 @@ def main(args, dask_client):
         # get a reference of the keys (obersvables) we will encounter
         res_ref = ana_for_single_rep(None)
 
+        # setup data storage
         for key in res_ref.keys():
             if key[0:3] != "vec" and key[0:3] != "rag":
                 # keep repetitions always as the last axes for scalars,
@@ -829,6 +831,7 @@ def main(args, dask_client):
 
         # for some analysis, we need repetitions to be indexed consistently
         # but we have to find them from filename since I usually do not save rep to meta
+        # Note: repetitions have to go from 0=N, our indexing is rudimentary.
         reps_from_files = True
 
         # check first file, if we cannot infer there, skip ordering everywhere
@@ -856,8 +859,8 @@ def main(args, dask_client):
                     except Exception as e:
                         log.exception(f"{key} at {index} (rep {rep})")
                         log.exception(e)
-        else:
-            log.error(f"unexpected repetitions (already read {num_rep}): {index}")
+            else:
+                log.debug(f"unexpected repetition {rep} for index {index}")
 
         if not np.all(sampled == sampled.flat[0]):
             log.info(
@@ -1002,24 +1005,25 @@ if __name__ == "__main__":
         dask_cluster = stack.enter_context(
             # rudabeh
             # TODO: remove this before release
-            # SGECluster(
-            #     cores=32,
-            #     memory="192GB",
-            #     processes=16,
-            #     job_extra=["-pe mvapich2-sam 32"],
-            #     log_directory="/scratch01.local/pspitzner/dask/logs",
-            #     local_directory="/scratch01.local/pspitzner/dask/scratch",
-            #     interface="ib0",
-            #     walltime='02:30:00',
-            #     extra=[
-            #         '--preload \'import sys; sys.path.append("./ana/"); sys.path.append("/home/pspitzner/code/pyhelpers/");\''
-            #     ],
-            # )
+            SGECluster(
+               cores=32,
+                memory="192GB",
+                processes=16,
+                job_extra=["-pe mvapich2-sam 32"],
+                log_directory="/scratch01.local/pspitzner/dask/logs",
+                local_directory="/scratch01.local/pspitzner/dask/scratch",
+                interface="ib0",
+               walltime='02:30:00',
+                extra=[
+                    '--preload \'import sys; sys.path.append("./ana/"); sys.path.append("/home/pspitzner/code/pyhelpers/");\''
+                ],
+            )
             # local cluster
-            LocalCluster(local_directory=f"{tempfile.gettempdir()}/dask/")
+            # LocalCluster(local_directory=f"{tempfile.gettempdir()}/dask/")
         )
         dask_cluster.scale(cores=args.num_cores)
 
         dask_client = stack.enter_context(Client(dask_cluster))
 
-        res_ndim, d_obs, d_axes = main(args, dask_client)
+        with logging_redirect_tqdm():
+            res_ndim, d_obs, d_axes = main(args, dask_client)
