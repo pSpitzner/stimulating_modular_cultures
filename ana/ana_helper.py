@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2022-12-14 12:08:27
+# @Last Modified: 2022-12-30 01:36:47
 # ------------------------------------------------------------------------------ #
 # Here we collect all functions for importing and analyzing the data.
 # A central idea is that for every simulated/experimental trial, we have a
@@ -2746,6 +2746,47 @@ def pd_nested_bootstrap(
 # sequences
 # ------------------------------------------------------------------------------ #
 
+@jit(nopython=True, parallel=False, fastmath=False, cache=True)
+def seq_to_int(seq):
+    """
+    convert a sequence, eq. tuple into an integer.
+
+    why?
+    well. how to best store sequences? until now, I used tuples, e.g. (0, 3, 1).
+    this gets annoying when working with ragged xarrays,
+    (as it requires an extra ragged dimension)
+    currently, our module numbers are < 10, so we can use a single int
+    (0, 3, 1) -> 031 -> 142 (to avoid the leading zero)
+
+    if we ever have more than 10 modules, we can adopt another base.
+    """
+    if len(seq) == 0:
+        return 0
+
+    res = 0
+    for idx, s in enumerate(seq):
+        this_digit = int(s) + 1 # +1 to avoid leading zero
+        res += this_digit * 10**(len(seq)-idx-1)
+
+    return res
+
+@jit(nopython=True, parallel=False, fastmath=False, cache=True)
+def int_to_seq(i):
+    """
+    inverse of above
+    """
+    # lets assume we have our 1 offset, and use the 0 as a sequence of length 0
+    if i == 0:
+        res = [0]
+        res.pop(0)
+        return res
+
+    seq = []
+    while i > 0:
+        seq.append(i % 10 - 1)
+        i = i // 10
+
+    return seq[::-1]
 
 def remove_bursts_with_sequence_length_null(h5f):
     """

@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2022-12-06 13:47:42
+# @Last Modified: 2022-12-30 11:41:45
 # ------------------------------------------------------------------------------ #
 # Scans the provided (wildcarded) filenames and merges individual realizsation
 # into a single file, containing high-dimensional arrays.
@@ -70,7 +70,7 @@ d_obs["tD"] = "/meta/dynamics_tD"
 d_obs["k_inter"] = "/meta/topology_k_inter"
 d_obs["k_in"] = "/meta/topology_k_in"
 d_obs["stim_rate"] = "/meta/dynamics_stimulation_rate"
-d_obs["stim_mods"] = "/meta/dynamics_stimulation_mods"
+# d_obs["stim_mods"] = "/meta/dynamics_stimulation_mods"
 # d_obs["k_frac"] = "/meta/dynamics_k_frac"
 
 log.debug(f"d_obs: {d_obs}")
@@ -80,6 +80,9 @@ threshold_factor = 2.5 / 100
 smoothing_width = 20 / 1000
 time_bin_size_for_rij = 500 / 1000
 remove_null_sequences = False
+
+# details of single bursts, such as involved modules. this can eat a lof of ram and disk
+include_ragged_arrays = True
 
 
 def ana_for_single_rep(candidate=None):
@@ -183,7 +186,6 @@ def ana_for_single_rep(candidate=None):
         res["mod_median_correlation_within_stim"] = 1
         res["mod_median_correlation_within_nonstim"] = 1
 
-
         # histograms, use "vec" prefix to indicate that higher dimensional data
         # hvals are the histogram values, hbins the bins ... obvio
         res["vec_sys_hbins_participating_fraction"] = 21
@@ -201,6 +203,16 @@ def ana_for_single_rep(candidate=None):
         res["vec_sys_hvals_kout_no_bridge"] = 160
         res["vec_sys_hbins_kout_yes_bridge"] = 161
         res["vec_sys_hvals_kout_yes_bridge"] = 160
+
+        # ragged arrays, use "rag" prefix to indicate that higher dimensional data,
+        # of unknown length. for these guys, we do not specify the length,
+        # but the data type is inferred.
+        res["rag_burst_beg_times"] = 0.0
+        res["rag_burst_end_times"] = 0.0
+        res["rag_burst_ibis"] = 0.0
+        res["rag_burst_core_delays"] = 0.0
+        # we can now save sequences as single ints, see ana_helper seq_to_int()
+        res["rag_burst_seqs"] = 0
 
         return res
 
@@ -599,13 +611,35 @@ def ana_for_single_rep(candidate=None):
     res["vec_sys_hbins_kout_yes_bridge"] = bin_edges
     res["vec_sys_hvals_kout_yes_bridge"] = hist
 
+    # ------------------------------------------------------------------------------ #
+    # ragged arrays, for bursts
+    # ------------------------------------------------------------------------------ #
+
+    if include_ragged_arrays:
+        res["rag_burst_beg_times"] = h5f["ana.bursts.system_level.beg_times"]
+        res["rag_burst_end_times"] = h5f["ana.bursts.system_level.end_times"]
+        res["rag_burst_ibis"] = h5f["ana.ibi.system_level.any_module"]
+        # if we use the ana.bursts.system_level.core_delays, we'd have an array for each burst
+        res["rag_burst_core_delays"] = h5f["ana.bursts.system_level.core_delays_mean"]
+        # we can now save sequences as single ints, see ana_helper seq_to_int()
+        res["rag_burst_seqs"] = np.array(
+            [ah.seq_to_int(s) for s in h5f["ana.bursts.system_level.module_sequences"]],
+            dtype="int",
+        )
+    else:
+        res["rag_burst_beg_times"] = np.array([])
+        res["rag_burst_end_times"] = np.array([])
+        res["rag_burst_ibis"] = np.array([])
+        res["rag_burst_core_delays"] = np.array([])
+        res["rag_burst_seqs"] = np.array([])
+
     h5.close_hot(h5f)
     h5f.clear()
 
     return res
 
     # ------------------------------------------------------------------------------ #
-    # End of analysis
+    # End of single-file analysis
     # ------------------------------------------------------------------------------ #
 
 
@@ -674,7 +708,10 @@ def main(args, dask_client):
     axes_size = 1
     axes_shape = ()
     for obs in d_axes.keys():
-        d_axes[obs] = np.array(sorted(d_axes[obs]))
+        try:
+            d_axes[obs] = np.array(sorted(d_axes[obs]))
+        except:
+            log.debug(f"Could not sort {obs} axis, keeping as is")
         axes_size *= len(d_axes[obs])
         axes_shape += (len(d_axes[obs]),)
 
@@ -707,66 +744,7 @@ def main(args, dask_client):
     log.info(f"Repetitions: {num_rep}")
 
     # ------------------------------------------------------------------------------ #
-    # res_ndim
-    # ------------------------------------------------------------------------------ #
-    log.info(f"Analysing:")
-    res_ndim = dict()
-    # dict of key -> needed space
-    res_dict = ana_for_single_rep(None)
-    for key in res_dict.keys():
-        # keep repetitions always as the last axes for scalars,
-        # but for vectors (inconsistent length across observables), keep data-dim last
-        if key[0:3] == "vec":
-            res_ndim[key] = np.ones(shape=axes_shape + (num_rep, res_dict[key])) * np.nan
-        else:
-            res_ndim[key] = np.ones(shape=axes_shape + (num_rep,)) * np.nan
-
-    # set arguments for variables needed by every worker
-    f = functools.partial(analyse_candidate, d_axes=d_axes, d_obs=d_obs)
-
-    # dispatch
-    futures = dask_client.map(f, candidates)
-
-    # for some analysis, we need repetitions to be indexed consistently
-    # but we have to find them from filename since I usually do not save rep to meta
-    reps_from_files = True
-
-    # check first file, if we cannot infer there, skip ordering everywhere
-    if find_rep(candidates[0]) is None:
-        reps_from_files = False
-
-    # gather
-    for future in tqdm(as_completed(futures), total=len(futures)):
-        index, rep, res = future.result()
-
-        if reps_from_files:
-            assert rep is not None, "Could not infer repetition from all file names"
-        else:
-            # get rep from already counted repetitions
-            rep = sampled[index]
-
-        # consider repetitions for each data point and stack values
-        if rep <= num_rep:
-            sampled[index] += 1
-            index += (rep,)
-
-            for key in res.keys():
-                try:
-                    res_ndim[key][index] = res[key]
-                except Exception as e:
-                    log.exception(f"{key} at {index} (rep {rep})")
-                    log.exception(e)
-        else:
-            log.error(f"unexpected repetitions (already read {num_rep}): {index}")
-
-    if not np.all(sampled == sampled.flat[0]):
-        log.info(
-            f"repetitions vary across data points, from {np.min(sampled)} to"
-            f" {np.max(sampled)}"
-        )
-
-    # ------------------------------------------------------------------------------ #
-    # write to a new hdf5 file
+    # write to a new hdf5 file, meta data first
     # ------------------------------------------------------------------------------ #
 
     try:
@@ -774,49 +752,118 @@ def main(args, dask_client):
     except:
         pass
 
-    f_tar = h5py.File(merge_path, "w")
+    with h5py.File(merge_path, "w", swmr=True) as f_tar:
 
-    # contained axis in right order
-    # workaround to store a list of strings (via object array) to hdf5
-    dset = f_tar.create_dataset(
-        "/meta/axis_overview",
-        data=np.array(list(d_axes.keys()) + ["repetition"], dtype=object),
-        dtype=h5py.special_dtype(vlen=str),
-    )
-    dset.attrs["description"] = (
-        "ordered list of all coordinates (axis) spanning data."
-        + "if observable name starts with `vec`, another dim follows the repetitions."
-    )
+        # contained axis in right order
+        # workaround to store a list of strings (via object array) to hdf5
+        dset = f_tar.create_dataset(
+            "/meta/axis_overview",
+            data=np.array(list(d_axes.keys()) + ["repetition"], dtype=object),
+            dtype=h5py.special_dtype(vlen=str),
+        )
+        dset.attrs["description"] = (
+            "ordered list of all coordinates (axis) spanning data."
+            + "if observable name starts with `vec`, another dim follows the repetitions."
+        )
 
-    desc_axes = f"{len(axes_shape)+1}-dim array with axis: "
-    for obs in d_axes.keys():
-        dset = f_tar.create_dataset("/meta/axis_" + obs, data=d_axes[obs])
-        desc_axes += obs + ", "
+        desc_axes = f"{len(axes_shape)+1}-dim array with axis: "
+        for obs in d_axes.keys():
+            dset = f_tar.create_dataset("/meta/axis_" + obs, data=d_axes[obs])
+            desc_axes += obs + ", "
 
-    # desc_axes += "repetition"
-    dset = f_tar.create_dataset(
-        "/meta/axis_repetition", data=np.arange(0, num_rep), dtype="int"
-    )
+        dset = f_tar.create_dataset(
+            "/meta/axis_repetition", data=np.arange(0, num_rep), dtype="int"
+        )
 
-    for key in res_ndim.keys():
-        dset = f_tar.create_dataset(f"/data/{key}", data=res_ndim[key])
-        if "hbins" in key:
-            dset.attrs[
-                "description"
-            ] = "like scalars, but last dim are histogram bin edges"
-        elif "weights" in key:
-            dset.attrs["description"] = "like scalars, but last dim are histogram weights"
+        # meta data
+        dset = f_tar.create_dataset(
+            "/meta/ana_par/threshold_factor", data=threshold_factor
+        )
+        dset = f_tar.create_dataset("/meta/ana_par/smoothing_width", data=smoothing_width)
+        dset = f_tar.create_dataset("/meta/num_samples", compression="gzip", data=sampled)
+        dset.attrs["description"] = "measured number of repetitions"
+
+        # ------------------------------------------------------------------------------ #
+        # Main analysis loop
+        # ------------------------------------------------------------------------------ #
+
+        log.info(f"Analysing:")
+
+        # key -> h5 dsets
+        res_ndim = dict()
+
+        # get a reference of the keys (obersvables) we will encounter
+        res_ref = ana_for_single_rep(None)
+
+        for key in res_ref.keys():
+            if key[0:3] != "vec" and key[0:3] != "rag":
+                # keep repetitions always as the last axes for scalars,
+                vals = np.ones(shape=axes_shape + (num_rep,)) * np.nan
+                res_ndim[key] = f_tar.create_dataset(
+                    "/data/" + key, compression="gzip", data=vals
+                )
+            elif key[0:3] == "vec":
+                # vectors (inconsistent length across observables), keep data-dim last
+                # only floating-type data supported, thus we return only the length
+                vals = np.ones(shape=axes_shape + (num_rep, res_ref[key])) * np.nan
+                res_ndim[key] = f_tar.create_dataset(
+                    "/data/" + key, compression="gzip", data=vals
+                )
+            elif key[0:3] == "rag":
+                # ragged arrays (inconsistent length across repetitions), data-dim last
+                try:
+                    dtype = np.dtype(type(res_ref[key]))
+                except:
+                    dtype = "float64"
+                log.debug(f"ragged array {key} has dtype {dtype}")
+                shape = axes_shape + (num_rep,)
+                res_ndim[key] = f_tar.create_dataset(
+                    "/data/" + key, shape=shape, dtype=h5py.vlen_dtype(dtype)
+                )
+
+        # set arguments for variables needed by every worker
+        f = functools.partial(analyse_candidate, d_axes=d_axes, d_obs=d_obs)
+
+        # dispatch
+        futures = dask_client.map(f, candidates)
+
+        # for some analysis, we need repetitions to be indexed consistently
+        # but we have to find them from filename since I usually do not save rep to meta
+        reps_from_files = True
+
+        # check first file, if we cannot infer there, skip ordering everywhere
+        if find_rep(candidates[0]) is None:
+            reps_from_files = False
+
+        # gather
+        for future in tqdm(as_completed(futures), total=len(futures)):
+            index, rep, res = future.result()
+
+            if reps_from_files:
+                assert rep is not None, "Could not infer repetition from all file names"
+            else:
+                # get rep from already counted repetitions
+                rep = sampled[index]
+
+            # consider repetitions for each data point and stack values
+            if rep <= num_rep:
+                sampled[index] += 1
+                index += (rep,)
+
+                for key in res.keys():
+                    try:
+                        res_ndim[key][index] = res[key]
+                    except Exception as e:
+                        log.exception(f"{key} at {index} (rep {rep})")
+                        log.exception(e)
         else:
-            dset.attrs["description"] = desc_axes
+            log.error(f"unexpected repetitions (already read {num_rep}): {index}")
 
-    dset = f_tar.create_dataset("/meta/num_samples", data=sampled)
-    dset.attrs["description"] = "measured number of repetitions"
-
-    # meta data
-    dset = f_tar.create_dataset("/meta/ana_par/threshold_factor", data=threshold_factor)
-    dset = f_tar.create_dataset("/meta/ana_par/smoothing_width", data=smoothing_width)
-
-    f_tar.close()
+        if not np.all(sampled == sampled.flat[0]):
+            log.info(
+                f"repetitions vary across data points, from {np.min(sampled)} to"
+                f" {np.max(sampled)}"
+            )
 
     return res_ndim, d_obs, d_axes
 

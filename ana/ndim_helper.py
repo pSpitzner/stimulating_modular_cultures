@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-10-19 18:20:20
-# @Last Modified: 2022-12-05 15:01:33
+# @Last Modified: 2022-12-30 00:43:50
 # ------------------------------------------------------------------------------ #
 # This is essentially a poor-mans version of xarray that only exists for
 # historic reasons. Unfortunately, some of our code still needs it.
@@ -144,6 +144,9 @@ def h5f_to_xr_array(h5f, obs):
     # observables, we do not have a known axis
     if obs[0:3] == "vec":
         dims.append("vector_observable")
+
+    # Note, the "rag_" prefix for ragged arrays does not need the vector dimension,
+    # it seems.
 
     log.debug(f"obs: {obs}")
     log.debug(f"dims: {dims}")
