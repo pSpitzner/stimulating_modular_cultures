@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-11-08 17:51:24
-# @Last Modified: 2022-12-25 09:48:43
+# @Last Modified: 2023-01-02 16:01:46
 # ------------------------------------------------------------------------------ #
 #
 # How to read / work this monstrosity of a file?
@@ -6450,6 +6450,26 @@ def _unit_bins(low=0, high=1, num_bins=20):
     bw = (high - low) / num_bins
     return np.arange(low, high + 0.1 * bw, bw)
 
+def errorsticks(center, mid, thick=None, thin=None, ax=None, **kwargs):
+
+    if thick is None:
+        thick = [None]*len(center)
+    if thin is None:
+        thin = [None]*len(center)
+
+    assert len(center) == len(mid) == len(thick) == len(thin)
+
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.get_figure()
+
+    for c, m, t, i in zip(center, mid, thick, thin):
+        _draw_error_stick(ax, center=c, mid=m, thick=t, thin=i, **kwargs)
+        if "label" in kwargs:
+            kwargs.pop("label")
+
+    return ax
 
 def _draw_error_stick(
     ax,
@@ -6475,9 +6495,9 @@ def _draw_error_stick(
         seaborn uses integers 0, 1, 2, ... when plotting categorial violins.
     mid : float,
         middle data point to draw (white dot)
-    errors : array like, length 2
+    thick : array like, length 2
         thick bar corresponding to errors
-    outliers : array like, length 2
+    thin : array like, length 2
         thin (longer) bar corresponding to outliers
     orientation : "v" or "h",
     bar_width_ratio : float,
@@ -6498,6 +6518,7 @@ def _draw_error_stick(
     except:
         kwargs.setdefault("solid_capstyle", "round")
 
+    label = kwargs.pop("label", None)
     if thin is not None:
         assert len(thin) == 2
         if orientation == "h":
@@ -6527,9 +6548,9 @@ def _draw_error_stick(
     kwargs.pop("solid_capstyle")
 
     if orientation == "h":
-        ax.scatter(mid, center, **kwargs)
+        ax.scatter(mid, center, label=label, **kwargs)
     else:
-        ax.scatter(center, mid, **kwargs)
+        ax.scatter(center, mid, label=label, **kwargs)
 
 
 def _colorline(
