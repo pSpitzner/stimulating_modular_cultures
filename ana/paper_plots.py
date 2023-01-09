@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-11-08 17:51:24
-# @Last Modified: 2022-12-25 09:48:43
+# @Last Modified: 2023-01-09 15:34:10
 # ------------------------------------------------------------------------------ #
 #
 # How to read / work this monstrosity of a file?
@@ -998,6 +998,8 @@ def fig_4_r1(pd_path=None, x_dim=None, out_prefix=None):
             iters = [0, 20]
         elif x_dim == "stim_rate" or x_dim == "rate":
             iter_dim = "k_inter"
+            # iters = [0, 1, 3, 5, 10]
+            # hardcoded for a reviewer answer, comparing merged and k=0
             iters = [0,  -1]
 
         for idx, itel in enumerate(iters):
@@ -1799,12 +1801,15 @@ def fig_sm_meso_noise_and_input_flowfields():
                 "rseed": sdx * 103 + hdx,
             }
 
+            # this creates the cycles
             meso_explore(
                 activity_snapshot=False,
                 ax=ax,
+                set_size=False,
                 cycle_kwargs=dict(
                     color=cmap(norm(h)),
                     alpha=0.6,
+                    mark_beg_resources_at_y=None,
                 ),
                 **pars,
             )
@@ -4502,7 +4507,7 @@ def sim_modules_participating_in_bursts(
         # ax.spines["left"].set_position(("outward", 5))
         # ax.spines["bottom"].set_position(("outward", 5))
 
-        ax.set_xlabel(r"Synaptic noise rate (Hz)" if show_xlabel else "")
+        ax.set_xlabel(f"{dim1}" if show_xlabel else "")
         ax.set_ylabel("Fraction of events\nspanning" if show_ylabel else "")
 
     return ax
@@ -5530,6 +5535,7 @@ def meso_explore(
     ax=None,
     range_to_show=None,
     zoom_start=None,
+    set_size=True,
     **kwargs,
 ):
     """
@@ -5606,7 +5612,8 @@ def meso_explore(
         ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(15))
         ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(5))
 
-        cc.set_size(ax, w=1.2, h=0.87, b=0.5, l=0.8, r=0.2, t=0.2)  # tight
+        if set_size:
+            cc.set_size(ax, w=1.2, h=0.87, b=0.5, l=0.8, r=0.2, t=0.2)  # tight
 
         ax.set_xlim(0, 1.35)
         ax.set_ylim(0, 15)

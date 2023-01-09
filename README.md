@@ -22,6 +22,7 @@
 ## Data
 
 Raw data, preprocessed recordings and rendered movies can be downloaded [here](https://gin.g-node.org/pspitzner/stimulating_modular_cultures)
+(Note: experimental data will be published after acceptance.)
 
 ## Dependencies
 
@@ -33,6 +34,7 @@ conda activate modular_cultures
 
 ## Getting started
 We provide [interactive notebooks](notebooks) which serve as a good starting point, they showcase the models and link which parts of the code lead to which plot.
+(Note: refactoring of backed for Revision 1 needed)
 
 
 ## Code structure
