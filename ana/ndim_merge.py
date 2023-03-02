@@ -212,6 +212,8 @@ def ana_for_single_rep(candidate=None):
         res["rag_burst_end_times"] = 0.0
         res["rag_burst_ibis"] = 0.0
         res["rag_burst_core_delays"] = 0.0
+        res["rag_resources_mod_0"] = 0.0
+        res["rag_resources_mod_1"] = 0.0
         # we can now save sequences as single ints, see ana_helper seq_to_int()
         res["rag_burst_seqs"] = 0
 
@@ -256,7 +258,11 @@ def ana_for_single_rep(candidate=None):
     # fired at least one spike.
     # ------------------------------------------------------------------------------ #
     ah.find_rates(h5f, bs_large=smoothing_width)
-    threshold = threshold_factor * np.nanmax(h5f["ana.rates.system_level"])
+    # threshold = threshold_factor * np.nanmax(h5f["ana.rates.system_level"])
+    threshold = 3.0 # for the two-mod at high noise, a fixed threshold was more robust.
+    # this was not a problem when only stimulating 1/2, as we still saw high firing
+    # rates in the non-targeted modules. thus the relative threshold was fine.
+    # when targeting 2/2 and everything fluctuates, we start detecting bursts everywhere.
     res["sys_rate_threshold"] = threshold
 
     # a burst starts/stops when the rate exceeds/drops below rate_threshold
@@ -585,8 +591,16 @@ def ana_for_single_rep(candidate=None):
     # What is the amount of resources at the time of bursts starting?
     # first dim modules, second dim times, nans if not part of burst
     resources = ah.find_module_resources_at_burst_begin(
-        h5f, write_to_h5f=False, return_res=True
+        h5f, write_to_h5f=False, return_res=True, nan_if_not_participating=False
     )
+
+    if include_ragged_arrays:
+        res["rag_resources_mod_0"] = resources[0, :]
+        res["rag_resources_mod_1"] = resources[1, :]
+    else:
+        res["rag_resources_mod_0"] = np.array([])
+        res["rag_resources_mod_1"] = np.array([])
+
     # this is about module-level resource cycles, so we want to treat all modules
     # as the ensemble -> flat list and then std and mean
     resources = resources.flatten()

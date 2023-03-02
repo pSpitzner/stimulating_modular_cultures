@@ -1219,7 +1219,9 @@ def find_state_variable(h5f, variable, write_to_h5f=True, return_res=False):
     if return_res:
         return states
 
-def find_module_resources_at_burst_begin(h5f, write_to_h5f=True, return_res=False):
+def find_module_resources_at_burst_begin(
+    h5f, write_to_h5f=True, return_res=False, nan_if_not_participating=True
+):
     """
     Find what was the level of resources in every module when bursts started.
 
@@ -1235,10 +1237,11 @@ def find_module_resources_at_burst_begin(h5f, write_to_h5f=True, return_res=Fals
     mod_res = get_module_resources_at_times(h5f, times=beg_times)
 
     # dont count guys who are not participating
-    for mdx, m in enumerate(h5f["ana.mod_ids"]):
-        for tdx, t in enumerate(beg_times):
-            if m not in mod_seqs[tdx]:
-                mod_res[mdx, tdx] = np.nan
+    if nan_if_not_participating:
+        for mdx, m in enumerate(h5f["ana.mod_ids"]):
+            for tdx, t in enumerate(beg_times):
+                if m not in mod_seqs[tdx]:
+                    mod_res[mdx, tdx] = np.nan
 
     # how do we best aggregate across multiple modules?
     mod_res_flat = np.nanmedian(mod_res, axis=0)

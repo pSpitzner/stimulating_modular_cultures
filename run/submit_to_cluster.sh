@@ -5,7 +5,7 @@
 
 #$ -S /bin/bash   # which shell to use
 #$ -N brian       # name of the job
-#$ -q zal.q       # which queue to use
+#$ -q rostam.q       # which queue to use
 #$ -l h_vmem=15G  # job is killed if exceeding this
 #$ -cwd           # workers cd into current working directory first
 #$ -o ./log/      # location for log files. directory must exist
