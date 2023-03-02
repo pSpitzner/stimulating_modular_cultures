@@ -20,7 +20,7 @@ dependencies:
   - xarray
   - pytables
   - matplotlib
-  - seaborn
+  - seaborn=0.11.2 # my violin-swarm plot hack does not work on version 0.12
   - palettable
   - networkx
   - brian2

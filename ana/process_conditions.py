@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-10-25 17:28:21
-# @Last Modified: 2022-12-22 18:46:13
+# @Last Modified: 2023-03-02 12:15:19
 # ------------------------------------------------------------------------------ #
 # Analysis script that preprocesses experiments and creates dataframes to compare
 # across condtions. Plots and more detailed analysis are in `paper_plots.py`
@@ -19,6 +19,7 @@ import warnings
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import datetime
 
 # import enlighten
 from tqdm.auto import tqdm
@@ -48,6 +49,8 @@ save_analysed_h5f = False
 time_bin_size_for_rij = 500 / 1000  # in seconds
 
 # threshold for burst detection [% of max peak height]
+# we found that simulations needed different parameters due to the higher (sampled)
+# number of neurons and time resolution
 def threshold_factor(etype):
     if etype[0:3] == "exp":
         return 10 / 100
@@ -461,7 +464,18 @@ def main():
         else:
             suffix = ""
 
-        dict_of_dfs_to_hdf5(dataframes, f"{output_path}/{layout}{suffix}.hdf5")
+        meta_data = dict()
+        meta_data["remove_null_sequences"] = remove_null_sequences
+        meta_data["time_bin_size_for_rij"] = time_bin_size_for_rij
+        meta_data["bs_large"] = bs_large(args.etype)
+        meta_data["threshold_factor"] = threshold_factor(args.etype)
+        meta_data["etype"] = args.etype
+        meta_data["created"] = datetime.datetime.now().isoformat()
+        meta_data["input_base"] = args.input_base
+        meta_data["output_path"] = output_path
+        meta_data["save_analysed_h5f"] = save_analysed_h5f
+
+        dict_of_dfs_to_hdf5(dataframes, f"{output_path}/{layout}{suffix}.hdf5", meta_data)
 
 
 # ------------------------------------------------------------------------------ #
@@ -496,11 +510,18 @@ def prepare_file(etype, condition, path_prefix):
     return h5f
 
 
-def dict_of_dfs_to_hdf5(df_dict, df_path):
+def dict_of_dfs_to_hdf5(df_dict, df_path, meta=dict()):
     os.makedirs(os.path.dirname(df_path), exist_ok=True)
     for key in df_dict.keys():
         df = df_dict[key]
         df.to_hdf(df_path, f"/data/df_{key}", complevel=6)
+
+    # save some metadata
+    import h5py
+
+    with h5py.File(df_path, "a") as f:
+        for key in meta.keys():
+            f.create_dataset(f"/meta/{key}", data=meta[key])
 
 
 if __name__ == "__main__":
