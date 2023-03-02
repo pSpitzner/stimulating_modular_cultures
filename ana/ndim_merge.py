@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2022-12-06 13:47:42
+# @Last Modified: 2023-03-02 14:04:46
 # ------------------------------------------------------------------------------ #
 # Scans the provided (wildcarded) filenames and merges individual realizsation
 # into a single file, containing high-dimensional arrays.
@@ -29,6 +29,7 @@ import itertools
 import tempfile
 import psutil
 import re
+import datetime
 
 # import matplotlib as mpl
 # import matplotlib.pyplot as plt
@@ -49,7 +50,7 @@ logging.basicConfig(
     datefmt="%y-%m-%d %H:%M",
 )
 log = logging.getLogger(__name__)
-log.setLevel("DEBUG")
+log.setLevel("WARNING")
 warnings.filterwarnings("ignore")  # suppress numpy warnings
 
 import ana_helper as ah
@@ -815,6 +816,13 @@ def main(args, dask_client):
     # meta data
     dset = f_tar.create_dataset("/meta/ana_par/threshold_factor", data=threshold_factor)
     dset = f_tar.create_dataset("/meta/ana_par/smoothing_width", data=smoothing_width)
+    dset = f_tar.create_dataset(
+        "/meta/ana_par/time_bin_size_for_rij", data=time_bin_size_for_rij
+    )
+    dset = f_tar.create_dataset(
+        "/meta/ana_par/remove_null_sequences", data=remove_null_sequences
+    )
+    dset = f_tar.create_dataset("/meta/created", data=datetime.datetime.now().isoformat())
 
     f_tar.close()
 
@@ -955,21 +963,21 @@ if __name__ == "__main__":
         dask_cluster = stack.enter_context(
             # rudabeh
             # TODO: remove this before release
-            # SGECluster(
-            #     cores=32,
-            #     memory="192GB",
-            #     processes=16,
-            #     job_extra=["-pe mvapich2-sam 32"],
-            #     log_directory="/scratch01.local/pspitzner/dask/logs",
-            #     local_directory="/scratch01.local/pspitzner/dask/scratch",
-            #     interface="ib0",
-            #     walltime='02:30:00',
-            #     extra=[
-            #         '--preload \'import sys; sys.path.append("./ana/"); sys.path.append("/home/pspitzner/code/pyhelpers/");\''
-            #     ],
-            # )
+            SGECluster(
+                cores=32,
+                memory="192GB",
+                processes=16,
+                job_extra=["-pe mvapich2-sam 32"],
+                log_directory="/scratch01.local/pspitzner/dask/logs",
+                local_directory="/scratch01.local/pspitzner/dask/scratch",
+                interface="ib0",
+                walltime='04:30:00',
+                extra=[
+                    '--preload \'import sys; sys.path.append("./ana/"); sys.path.append("/home/pspitzner/code/pyhelpers/");\''
+                ],
+            )
             # local cluster
-            LocalCluster(local_directory=f"{tempfile.gettempdir()}/dask/")
+            # LocalCluster(local_directory=f"{tempfile.gettempdir()}/dask/")
         )
         dask_cluster.scale(cores=args.num_cores)
 

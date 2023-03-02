@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-10-25 17:28:21
-# @Last Modified: 2023-03-02 12:15:19
+# @Last Modified: 2023-03-02 13:58:01
 # ------------------------------------------------------------------------------ #
 # Analysis script that preprocesses experiments and creates dataframes to compare
 # across condtions. Plots and more detailed analysis are in `paper_plots.py`
@@ -126,7 +126,6 @@ def main():
         conditions["k=3"] = ["0.0", "20.0"]
         conditions["k=5"] = ["0.0", "20.0"]
         conditions["k=10"] = ["0.0", "20.0"]
-        conditions["k=20"] = ["0.0", "20.0"]
         conditions["k=-1"] = ["0.0", "20.0"]
     elif args.etype == "sim_partial_no_inhib":
         # this is the control for blocked inhibition, we only did that for k=5
