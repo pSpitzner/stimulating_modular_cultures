@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-11-08 17:51:24
-# @Last Modified: 2023-01-09 15:34:10
+# @Last Modified: 2023-03-02 11:38:32
 # ------------------------------------------------------------------------------ #
 #
 # How to read / work this monstrosity of a file?
@@ -1066,16 +1066,24 @@ def fig_4_r1(pd_path=None, x_dim=None, out_prefix=None):
         ax.get_figure().savefig(f"{opx}{obs}_vs_{x_dim}.pdf", dpi=300)
 
 
-def fig_5_r1(
+def fig_correlation_vs_noise_and_coupling(
     dset=None,
     out_path=f"{p_fo}/meso_gates_on",
+    observables = None,
 ):
-    """ """
+    """
+    In the models, how does correlation (split accoring to the pairing)
+    change with noise and coupling?
+    """
 
-    # ------------------------------------------------------------------------------ #
-    # Observables changing as a function of input
-    # ------------------------------------------------------------------------------ #
+    if observables is None:
+        observables = [
+            "median_correlation_coefficient_within_nonstim",
+            "median_correlation_coefficient_within_stim",
+            "median_correlation_coefficient_across",
+        ]
 
+    axes = []
     for x_dim in ["coupling", "noise"]:
         coords = dict()
         if x_dim == "coupling":
@@ -1100,21 +1108,19 @@ def fig_5_r1(
         elif isinstance(dset, str):
             dset = xr.load_dataset(dset)
 
-        observables = [
-            "median_correlation_coefficient_within_nonstim",
-            "median_correlation_coefficient_within_stim",
-            "median_correlation_coefficient_across",
-        ]
-
         ax = None
         for odx, obs in enumerate(observables):
             base_clr = colors["rij_all"]
+            label = obs
             if "_across" in obs:
                 base_clr = colors["rij_across"]
+                label = "across"
             elif "_within_stim" in obs:
                 base_clr = colors["rij_within_stim"]
+                label = "within stim"
             elif "_within_nonstim" in obs:
                 base_clr = colors["rij_within_nonstim"]
+                label = "within nonstim"
 
             ax = sim_plot_obs_from_ndim(
                 dset=dset,
@@ -1127,11 +1133,15 @@ def fig_5_r1(
                 ax=ax,
                 zorder=odx,
                 lw=0.8,
+                label=label,
                 # errortype = "std",
             )
 
             # ax.set_xlabel("External input" if show_xlabel else "")
             ax.set_ylabel("Module correlation" if show_ylabel else "")
+
+            if show_legend:
+                ax.legend()
 
             if "correlation_coefficient" in obs:
                 ax.set_ylim(0, 1)
@@ -1161,8 +1171,9 @@ def fig_5_r1(
         sns.despine(ax=ax, offset=3)
         cc.set_size(ax, w=3.0, h=1.41, b=1.0, l=1.2, t=0.5, r=0.2)
         # ax.get_figure().savefig(f"{out_path}_jz_rework.pdf", dpi=300, transparent=True)
+        axes.append(ax)
 
-    # return ax
+    return axes
 
 
 def fig_4_r1_snapshots(k_in=30, do_rasters=True, do_cycles=True, do_topo=True, out_prefix=None):
@@ -7183,7 +7194,7 @@ def bayesian_best_for_trials(observables, layouts=None):
         if kind is None:
             kind = "-".join(filter_vals)
 
-        for odx, obs in enumerate(tqdm(observables, desc="observables", leave=False)):
+        for odx, obs in enumerate(observables):
             # create pair-wise samples for current observable from dataframe
             pair_dict = _filter_df_for_pairwise(
                 trial_df,
@@ -7230,7 +7241,7 @@ def bayesian_best_for_trials(observables, layouts=None):
         # return dataframe consisting of the rows
         return pd.DataFrame(rows)
 
-    for layout in tqdm(layouts, desc="layouts", leave=False):
+    for layout in layouts:
         dfs = load_pd_hdf5(f"{p_exp}/processed/{layout}.hdf5")
         df = dfs["trials"]
 
