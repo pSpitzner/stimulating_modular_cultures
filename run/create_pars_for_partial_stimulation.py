@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2022-06-22 10:12:19
-# @Last Modified: 2023-03-03 17:35:28
+# @Last Modified: 2023-03-03 17:54:25
 # ------------------------------------------------------------------------------ #
 # This creates a `parameter.tsv` where each line contains one parameter set,
 # which can be directly called from the command line (i.e. on a cluster).
@@ -52,7 +52,7 @@ print("l_stim_rate", l_stim_rate)
 bridge_weight = 1.0
 inh_frac = 0.20
 
-arg_list = product(l_k_inter, l_jA, l_jG, l_jM, l_tD, l_stim_rate)
+arg_list = list(product(l_k_inter, l_jA, l_jG, l_jM, l_tD, l_stim_rate))
 
 count_dynamic = 0
 count_topo = 0
@@ -60,21 +60,20 @@ with open("./parameters.tsv", "w") as f_dyn:
     # set the cli arguments
     f_dyn.write("# commands to run, one line per realization\n")
 
-    for args in arg_list:
-        k_inter = args[0]
-        jA = args[1]
-        jG = args[2]
-        jM = args[3]
-        tD = args[4]
-        stim_rate = args[5]
-        mod = l_mod[0]
+    seed += 1
+    # same seed for everything with the same rep number.
+    for rep in l_rep:
 
-        seed += 1
-        # same seed for everything with the same rep number.
-        for rep in l_rep:
+        for args in arg_list:
+            k_inter = args[0]
+            jA = args[1]
+            jG = args[2]
+            jM = args[3]
+            tD = args[4]
+            stim_rate = args[5]
+            mod = l_mod[0]
 
             f_base = f"k={k_inter:d}_kin={k_in:d}_jA={jA:.1f}_jG={jG:.1f}_jM={jM:.1f}_tD={tD:.1f}_rate={rate:.1f}_stimrate={stim_rate:.1f}_rep={rep:03d}.hdf5"
-
             dyn_path = f"{out_path}/stim={mod}_{f_base}"
 
             if mod == "off":
