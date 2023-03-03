@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2022-06-22 10:12:19
-# @Last Modified: 2023-03-03 17:54:25
+# @Last Modified: 2023-03-03 17:57:37
 # ------------------------------------------------------------------------------ #
 # This creates a `parameter.tsv` where each line contains one parameter set,
 # which can be directly called from the command line (i.e. on a cluster).
@@ -60,9 +60,9 @@ with open("./parameters.tsv", "w") as f_dyn:
     # set the cli arguments
     f_dyn.write("# commands to run, one line per realization\n")
 
-    seed += 1
     # same seed for everything with the same rep number.
     for rep in l_rep:
+        seed += 1
 
         for args in arg_list:
             k_inter = args[0]
