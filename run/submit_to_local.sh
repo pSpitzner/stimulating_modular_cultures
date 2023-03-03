@@ -6,9 +6,8 @@
 date
 uname -n
 
-file=./run/highres_parameters_partial.tsv
+file=./run/parameters.tsv
 numlines=$(wc -l < $file)
-
 
 # run every line of the file
 while IFS= read -r line; do
@@ -16,7 +15,10 @@ while IFS= read -r line; do
     echo "----------------------------------------"
     echo "Running line             $((++i)) / $numlines"
     echo "$line"
+    # if the line is a comment, dont run
+    if [[ $line == \#* ]]; then
+        echo "Skipping comment line"
+        continue
+    fi
     $line
 done < $file
-
-date

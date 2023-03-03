@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2022-06-22 10:12:19
-# @Last Modified: 2022-12-01 17:38:06
+# @Last Modified: 2023-03-03 17:35:28
 # ------------------------------------------------------------------------------ #
 # This creates a `parameter.tsv` where each line contains one parameter set,
 # which can be directly called from the command line (i.e. on a cluster).
@@ -19,7 +19,8 @@ from itertools import product
 
 # set directory to the location of this script file to use relative paths
 os.chdir(os.path.dirname(__file__))
-out_path = os.path.abspath("/scratch01.local/pspitzner/revision_1/simulations/lif/raw_alpha_partial_sweep")
+out_path = os.path.abspath("/scratch01.local/pspitzner/revision_1/simulations/lif/raw_for_repo")
+# out_path = os.path.abspath("./dat/simulations/lif/raw")
 print(f"simulation results will go to {out_path}")
 
 # seed for rank 0, will increase per thread
@@ -27,9 +28,9 @@ seed = 7_200
 
 # parameters to scan, noise rate, ampa strength, and a few repetitons for statistics
 k_in = 30
-l_k_inter = np.array([-1, 3, 10])
+l_k_inter = np.array([-1, 0, 1, 3, 5, 10])
 l_mod = np.array(["02"])
-l_rep = np.arange(0, 50)
+l_rep = np.arange(0, 100)
 l_jA = [45.0]
 # as a control, check without inhibition
 # l_jG = [0, 50.0]
@@ -51,7 +52,7 @@ print("l_stim_rate", l_stim_rate)
 bridge_weight = 1.0
 inh_frac = 0.20
 
-arg_list = product(l_k_inter, l_jA, l_jG, l_jM, l_tD, l_rep)
+arg_list = product(l_k_inter, l_jA, l_jG, l_jM, l_tD, l_stim_rate)
 
 count_dynamic = 0
 count_topo = 0
@@ -65,13 +66,13 @@ with open("./parameters.tsv", "w") as f_dyn:
         jG = args[2]
         jM = args[3]
         tD = args[4]
-        rep = args[-1]
+        stim_rate = args[5]
         mod = l_mod[0]
 
         seed += 1
+        # same seed for everything with the same rep number.
+        for rep in l_rep:
 
-        # same seeds for all rates so that topo matches
-        for stim_rate in l_stim_rate:
             f_base = f"k={k_inter:d}_kin={k_in:d}_jA={jA:.1f}_jG={jG:.1f}_jM={jM:.1f}_tD={tD:.1f}_rate={rate:.1f}_stimrate={stim_rate:.1f}_rep={rep:03d}.hdf5"
 
             dyn_path = f"{out_path}/stim={mod}_{f_base}"
