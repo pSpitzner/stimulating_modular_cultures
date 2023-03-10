@@ -5,6 +5,7 @@ mov/*
 exe/*
 log/*
 var/*
+fig/*
 run/*.tsv
 run/dat/*
 dask-worker-space
@@ -15,6 +16,7 @@ __pycache__
 *.svg
 *.pdf
 *.png
+*.mp4
 .nfs*
 .ipynb_checkpoints
 .vscode

@@ -2,9 +2,9 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-01-24 13:43:39
-# @Last Modified: 2022-10-15 12:28:03
+# @Last Modified: 2023-03-02 19:42:33
 # ------------------------------------------------------------------------------- #
-# Classed needed to create a movie of the network.
+# Classes needed to create a movie of the network.
 # ------------------------------------------------------------------------------- #
 
 import os
@@ -31,18 +31,20 @@ from matplotlib.animation import FFMpegWriter
 
 from bitsandbobs.plt import alpha_to_solid_on_bg
 
-# theme_bg = "black"
-theme_bg = "white"
+theme_bg = "black"
+# theme_bg = "white"
 if theme_bg == "black":
     plt.style.use("dark_background")
     # use custom colors to match the paper
     matplotlib.rcParams["axes.prop_cycle"] = matplotlib.cycler("color", [
-        "#5886be", "#f3a093", "#53d8c9", "#f9c192", "#f2da9c",
+        # "#5886be", "#f3a093", "#53d8c9", "#f9c192", "#f2da9c",
+        "#F7A233", "#2F8DC8", "#DBAD70", "#77A8C6",
     ])
 else:
     plt.style.use("default")
     matplotlib.rcParams["axes.prop_cycle"] = matplotlib.cycler("color", [
-        "#233954", "#ea5e48", "#1e7d72", "#f49546", "#e8bf58",
+        # "#233954", "#ea5e48", "#1e7d72", "#f49546", "#e8bf58",
+        "#BD6B00", "#135985", "#ca8933", "#427A9D",
     ])
 matplotlib.rcParams["figure.dpi"] = 300
 matplotlib.rcParams["lines.dash_capstyle"] = "round"
@@ -415,7 +417,9 @@ class TopologyRenderer(object):
         background="black",
         show_time=False,
     ):
-
+        # check file exists
+        if not os.path.exists(input_path):
+            raise FileNotFoundError(f"File {input_path} does not exist")
         self.input_path = input_path
 
         # some styling options
