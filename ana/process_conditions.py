@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-10-25 17:28:21
-# @Last Modified: 2022-08-16 13:05:02
+# @Last Modified: 2023-03-02 13:58:01
 # ------------------------------------------------------------------------------ #
 # Analysis script that preprocesses experiments and creates dataframes to compare
 # across condtions. Plots and more detailed analysis are in `paper_plots.py`
@@ -19,6 +19,11 @@ import warnings
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import datetime
+
+# import enlighten
+from tqdm.auto import tqdm
+from tqdm.contrib.logging import logging_redirect_tqdm
 
 logging.basicConfig(
     format="%(asctime)s | %(levelname)-8s | %(name)-12s | %(message)s",
@@ -44,6 +49,8 @@ save_analysed_h5f = False
 time_bin_size_for_rij = 500 / 1000  # in seconds
 
 # threshold for burst detection [% of max peak height]
+# we found that simulations needed different parameters due to the higher (sampled)
+# number of neurons and time resolution
 def threshold_factor(etype):
     if etype[0:3] == "exp":
         return 10 / 100
@@ -51,6 +58,7 @@ def threshold_factor(etype):
         return 2.5 / 100
     else:
         raise ValueError(f"etype {etype} not recognized")
+
 
 # for pop. rate, width of gaussian placed on every spike, in seconds
 def bs_large(etype):
@@ -62,15 +70,21 @@ def bs_large(etype):
         raise ValueError(f"etype {etype} not recognized")
 
 
+dataframes = None
+
 
 def main():
+    global dataframes
     global h5f
     parser = argparse.ArgumentParser(description="Process conditions")
     parser.add_argument(
         "-t",
         dest="etype",
         required=True,
-        help="'exp', 'exp_chemical', 'exp_bic', 'sim', 'sim_partial', 'sim_partial_no_inhib'",
+        help=(
+            "'exp', 'exp_chemical', 'exp_bic', 'sim', 'sim_partial',"
+            " 'sim_partial_no_inhib'"
+        ),
     )
     parser.add_argument(
         "-i",
@@ -85,7 +99,6 @@ def main():
         help="`./dat/exp_out/`",
     )
     args = parser.parse_args()
-
 
     output_path = args.output_path
 
@@ -108,9 +121,15 @@ def main():
     elif args.etype == "sim_partial":
         # for the case where we only stimulate 2 modules instead of uniform
         # noise to all, we need a bit more tweaking below
+        conditions["k=0"] = ["0.0", "20.0"]
+        conditions["k=1"] = ["0.0", "20.0"]
+        conditions["k=3"] = ["0.0", "20.0"]
         conditions["k=5"] = ["0.0", "20.0"]
+        conditions["k=10"] = ["0.0", "20.0"]
+        conditions["k=-1"] = ["0.0", "20.0"]
     elif args.etype == "sim_partial_no_inhib":
-        conditions["k=5"] = ["0.0", "20.0"]
+        # this is the control for blocked inhibition, we only did that for k=5
+        conditions["k=3"] = ["0.0", "20.0"]
     else:
         raise KeyError("type should be 'exp', 'exp_chemical' or 'sim_partial'")
 
@@ -121,50 +140,63 @@ def main():
     log.info(f"Reading from {args.input_base}")
     log.info(f"Writing to {output_path}")
 
-    for layout in conditions.keys():
+    for layout in tqdm(conditions.keys(), desc="Layouts"):
+
         dataframes = dict()
-        for key in ["bursts", "isis", "rij", "rij_paired", "trials"]:
+        for key in [
+            "bursts",
+            "isis",
+            "rij",
+            "rij_paired",
+            "mod_rij",
+            "mod_rij_paired",
+            "trials",
+        ]:
             dataframes[key] = []
         if "sim" in args.etype:
             # we collect the correlation coefficients of synaptic resources for sim
             dataframes["drij"] = []
 
-        for cdx, condition in enumerate(conditions[layout]):
+        for cdx, condition in enumerate(
+            tqdm(conditions[layout], leave=False, desc="Conditions")
+        ):
+
             # depending on the type of experiment, we have different naming conventions
             # where wildcards '*' should be completed
             if "exp" in args.etype:
                 input_paths = glob.glob(f"{args.input_base}/{layout}/*")
             elif args.etype == "sim":
                 input_paths = glob.glob(
-                    f"{args.input_base}/stim=off_{layout}_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate={condition}_rep=*.hdf5"
+                    f"{args.input_base}/stim=off_{layout}_kin=30_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate={condition}_rep=*.hdf5"
                 )
             elif args.etype == "sim_partial":
                 input_paths = glob.glob(
-                    f"{args.input_base}/stim=02_{layout}_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=80.0_stimrate={condition}_rep=*.hdf5"
+                    f"{args.input_base}/stim=02_{layout}_kin=30_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=80.0_stimrate={condition}_rep=*.hdf5"
                 )
             elif args.etype == "sim_partial_no_inhib":
                 input_paths = glob.glob(
-                    f"{args.input_base}/stim=02_{layout}_jA=45.0_jG=0.0_jM=15.0_tD=20.0_rate=80.0_stimrate={condition}_rep=*.hdf5"
+                    f"{args.input_base}/stim=02_{layout}_kin=30_jA=45.0_jG=0.0_jM=15.0_tD=20.0_rate=80.0_stimrate={condition}_rep=*.hdf5"
                 )
 
-            log.info(f"found {len(input_paths)} files for {layout} {condition}")
+            log.debug(f"found {len(input_paths)} files for {layout} {condition}")
 
             # trials / realizations
-            for path in input_paths:
+            pbar = tqdm(input_paths, desc="Files", leave=False)
+            for path in pbar:
+
                 trial = os.path.basename(path)
                 if "sim" in args.etype:
                     trial = trial.split("rep=")[-1].split(".")[0]
 
                 log.info("------------")
                 log.info(f"{args.etype} {layout} {condition} {trial}")
+                pbar.set_description(f"{args.etype} {layout} {condition} {trial}")
                 log.info("------------")
 
                 # for the dataframes, we need to tidy up some labels
                 if "exp" in args.etype:
                     condition_string = condition[2:]
-                    stimulation_string = (
-                        "On" if condition[0:2] == "2_" else "Off"
-                    )
+                    stimulation_string = "On" if condition[0:2] == "2_" else "Off"
                 elif "sim" in args.etype:
                     condition_string = f"{condition} Hz"
                     # here we should be a bit more careful, maybe
@@ -179,9 +211,7 @@ def main():
 
                 # plot overview panels for experiments
                 if "exp" in args.etype:
-                    os.makedirs(
-                        f"{output_path}/{layout}/{trial}", exist_ok=True
-                    )
+                    os.makedirs(f"{output_path}/{layout}/{trial}", exist_ok=True)
                     fig = ph.overview_dynamic(h5f)
                     fig.savefig(
                         f"{output_path}/{layout}/{trial}/{condition}_overview.pdf"
@@ -196,9 +226,7 @@ def main():
                         beg = 0
                     beg = np.fmax(0, beg - 10)
                     fig.get_axes()[-2].set_xlim(beg, beg + 20)
-                    fig.savefig(
-                        f"{output_path}/{layout}/{trial}/{condition}_zoom.pdf"
-                    )
+                    fig.savefig(f"{output_path}/{layout}/{trial}/{condition}_zoom.pdf")
                     plt.close(fig)
 
                 # ------------------------------------------------------------------------------ #
@@ -206,17 +234,12 @@ def main():
                 # ------------------------------------------------------------------------------ #
 
                 # we have already done a bunch of analysis in `prepare_file`
-                fracs = np.array(
-                    h5f["ana.bursts.system_level.participating_fraction"]
+                fracs = np.array(h5f["ana.bursts.system_level.participating_fraction"])
+                blen = np.array(h5f["ana.bursts.system_level.end_times"]) - np.array(
+                    h5f["ana.bursts.system_level.beg_times"]
                 )
-                blen = np.array(
-                    h5f["ana.bursts.system_level.end_times"]
-                ) - np.array(h5f["ana.bursts.system_level.beg_times"])
                 slen = np.array(
-                    [
-                        len(x)
-                        for x in h5f["ana.bursts.system_level.module_sequences"]
-                    ]
+                    [len(x) for x in h5f["ana.bursts.system_level.module_sequences"]]
                 )
                 olen = ah.find_onset_durations(h5f, return_res=True)
 
@@ -229,10 +252,7 @@ def main():
                 # population rate
                 ah.find_burst_core_delays(h5f)
                 delays = np.array(
-                    [
-                        np.mean(x)
-                        for x in h5f["ana.bursts.system_level.core_delays_mean"]
-                    ]
+                    [np.mean(x) for x in h5f["ana.bursts.system_level.core_delays_mean"]]
                 )
 
                 df = pd.DataFrame(
@@ -276,12 +296,14 @@ def main():
                 # ------------------------------------------------------------------------------ #
 
                 # NxN matrix
-                rij = ah.find_rij(h5f, which="neurons", time_bin_size=time_bin_size_for_rij)
-                np.fill_diagonal(rij, np.nan)
-                rij_flat = rij.flatten()
+                neuron_rij = ah.find_rij(
+                    h5f, which="neurons", time_bin_size=time_bin_size_for_rij
+                )
+                np.fill_diagonal(neuron_rij, np.nan)
+                neuron_rij_flat = neuron_rij.flatten()
                 df = pd.DataFrame(
                     {
-                        "Correlation Coefficient": rij_flat,
+                        "Correlation Coefficient": neuron_rij_flat,
                         "Condition": condition_string,
                         "Trial": trial,
                         "Stimulation": stimulation_string,
@@ -290,6 +312,8 @@ def main():
                 )
                 # just the bunch of all rijs
                 dataframes["rij"].append(df)
+                neuron_rij_mean = np.nanmean(neuron_rij)
+                neuron_rij_median = np.nanmedian(neuron_rij)
 
                 # we also want to compare the correlation coefficients for different
                 # combinations ("parings") of neurons from certain modules
@@ -300,21 +324,64 @@ def main():
                 pair_descriptions["across_groups_2_3"] = "across"
                 pair_descriptions["all"] = "all"
                 for pairing in pair_descriptions.keys():
-                    rij_paired = ah.find_rij_pairs(
-                        h5f, rij=rij, pairing=pairing
+                    neuron_rij_paired = ah.find_rij_pairs(
+                        h5f, rij=neuron_rij, pairing=pairing, which="neurons"
                     )
                     df = pd.DataFrame(
                         {
-                            "Correlation Coefficient": rij_paired,
+                            "Correlation Coefficient": neuron_rij_paired,
                             "Condition": condition_string,
                             "Trial": trial,
                             "Pairing": pair_descriptions[pairing],
-                            "Pair ID": np.arange(len(rij_paired)),
+                            "Pair ID": np.arange(len(neuron_rij_paired)),
                             "Stimulation": stimulation_string,
                             "Type": args.etype,
                         }
                     )
                     dataframes["rij_paired"].append(df)
+
+                # ------------------------------------------------------------------------------ #
+                # module level correlation coefficients
+                # ------------------------------------------------------------------------------ #
+
+                # 4x4 matrix
+                module_rij = ah.find_rij(h5f, which="modules")
+                np.fill_diagonal(module_rij, np.nan)
+                module_rij_flat = module_rij.flatten()
+                df = pd.DataFrame(
+                    {
+                        "Correlation Coefficient": module_rij_flat,
+                        "Condition": condition_string,
+                        "Trial": trial,
+                        "Stimulation": stimulation_string,
+                        "Type": args.etype,
+                    }
+                )
+                # just the bunch of all rijs
+                dataframes["mod_rij"].append(df)
+                module_rij_mean = np.nanmean(module_rij)
+                module_rij_median = np.nanmedian(module_rij)
+
+                # pair descriptions as above
+                for pairing in pair_descriptions.keys():
+                    module_rij_paired = ah.find_rij_pairs(
+                        h5f,
+                        rij=module_rij,
+                        pairing=pairing,
+                        which="modules",
+                    )
+                    df = pd.DataFrame(
+                        {
+                            "Correlation Coefficient": module_rij_paired,
+                            "Condition": condition_string,
+                            "Trial": trial,
+                            "Pairing": pair_descriptions[pairing],
+                            "Pair ID": np.arange(len(module_rij_paired)),
+                            "Stimulation": stimulation_string,
+                            "Type": args.etype,
+                        }
+                    )
+                    dataframes["mod_rij_paired"].append(df)
 
                 # ------------------------------------------------------------------------------ #
                 # Correlation of the depletion variable, for simulations
@@ -340,12 +407,14 @@ def main():
                 # and some summary statistics on the trial level
                 # ------------------------------------------------------------------------------ #
 
-                fc = ah._functional_complexity(rij)
-                mean_rij = np.nanmean(rij)
+                fc = ah._functional_complexity(neuron_rij)
                 df = pd.DataFrame(
                     {
                         "Num Bursts": [len(blen)],
-                        "Mean Correlation": [mean_rij],
+                        "Mean Neuron Correlation": [neuron_rij_mean],
+                        "Median Neuron Correlation": [neuron_rij_median],
+                        "Mean Module Correlation": [module_rij_mean],
+                        "Median Module Correlation": [module_rij_median],
                         "Mean IBI": [np.nanmean(ibis)],
                         "Median IBI": [np.nanmedian(ibis)],
                         "Mean Rate": [np.nanmean(h5f["ana.rates.system_level"])],
@@ -371,7 +440,9 @@ def main():
 
                 if "exp" in args.etype and save_analysed_h5f:
                     bnb.hi5.recursive_write(
-                        filename=f"{output_path}/{layout}/{trial}/{condition}_analyzed.hdf5",
+                        filename=(
+                            f"{output_path}/{layout}/{trial}/{condition}_analyzed.hdf5"
+                        ),
                         h5_data=h5f,
                     )
 
@@ -392,7 +463,18 @@ def main():
         else:
             suffix = ""
 
-        dict_of_dfs_to_hdf5(dataframes, f"{output_path}/{layout}{suffix}.hdf5")
+        meta_data = dict()
+        meta_data["remove_null_sequences"] = remove_null_sequences
+        meta_data["time_bin_size_for_rij"] = time_bin_size_for_rij
+        meta_data["bs_large"] = bs_large(args.etype)
+        meta_data["threshold_factor"] = threshold_factor(args.etype)
+        meta_data["etype"] = args.etype
+        meta_data["created"] = datetime.datetime.now().isoformat()
+        meta_data["input_base"] = args.input_base
+        meta_data["output_path"] = output_path
+        meta_data["save_analysed_h5f"] = save_analysed_h5f
+
+        dict_of_dfs_to_hdf5(dataframes, f"{output_path}/{layout}{suffix}.hdf5", meta_data)
 
 
 # ------------------------------------------------------------------------------ #
@@ -411,8 +493,7 @@ def prepare_file(etype, condition, path_prefix):
     ah.find_rates(h5f, bs_large=bs_large(etype))
     ah.find_system_bursts_from_global_rate(
         h5f,
-        rate_threshold=threshold_factor(etype)
-        * np.nanmax(h5f["ana.rates.system_level"]),
+        rate_threshold=threshold_factor(etype) * np.nanmax(h5f["ana.rates.system_level"]),
         merge_threshold=0.1,
         skip_sequences=False,
     )
@@ -428,12 +509,20 @@ def prepare_file(etype, condition, path_prefix):
     return h5f
 
 
-def dict_of_dfs_to_hdf5(df_dict, df_path):
+def dict_of_dfs_to_hdf5(df_dict, df_path, meta=dict()):
     os.makedirs(os.path.dirname(df_path), exist_ok=True)
     for key in df_dict.keys():
         df = df_dict[key]
         df.to_hdf(df_path, f"/data/df_{key}", complevel=6)
 
+    # save some metadata
+    import h5py
+
+    with h5py.File(df_path, "a") as f:
+        for key in meta.keys():
+            f.create_dataset(f"/meta/{key}", data=meta[key])
+
 
 if __name__ == "__main__":
-    main()
+    with logging_redirect_tqdm():
+        main()

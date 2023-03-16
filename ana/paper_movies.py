@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2022-06-22 10:12:19
-# @Last Modified: 2022-10-15 12:25:52
+# @Last Modified: 2023-03-02 22:16:45
 # ------------------------------------------------------------------------------ #
 # This guy uses movie_business.py to create movies from hdf5 files.
 # tweak main() and run from console.
@@ -40,12 +40,13 @@ clr_fg = "white" if clr_bg == "black" else "black"
 def main():
 
     # experiments, place the mp4s next to the hdf5s...
-    candidates = glob.glob("./dat/exp_out/**/**/*.hdf5")
+    candidates = glob.glob("./dat/experiments/raw/**/**/*.hdf5")
     for input_path in candidates:
         regex = re.search("exp_out/(.*?)/(.*?)/", input_path, re.IGNORECASE)
         title = regex.groups()[0] + "\n" + regex.groups()[1]
         log.info("\n" + title + "\n")
-        # continue
+
+        continue  # skipping in revisions
         make_a_movie(
             input_path=input_path,
             input_type="experiment",
@@ -57,24 +58,25 @@ def main():
         )
 
     # simulations
-    for k in [1, 5, 10, -1]:
-        for noise in [80, 90]:
+    for k in [1, 3, 5, 10]:
+        for noise in [0, 20]:
             title = f"k={k}, {noise}Hz"
             if k == -1:
                 title = f"merged, {noise}Hz"
             log.info("\n" + title + "\n")
 
             make_a_movie(
-                input_path=f"./dat/the_last_one/dyn/highres_stim=off_k={k}_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate={noise}.0_rep=001.hdf5",
+                input_path=f"./dat/simulations/lif/raw/highres_stim=02_k={k}_kin=30_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=80.0_stimrate={noise}.0_rep=001.hdf5",
                 input_type="simulation",
                 title=title,
-                output_path=f"./mov/{title.replace(', ', '_')}.mp4",
+                output_path=f"./mov2/{title.replace(', ', '_')}.mp4",
                 tbeg=0,
                 tend=610,
                 movie_duration=60,
             )
 
     # axon growth
+    return
     axon_growth(output_path="./mov/axon_growth.mp4", focus_single=False)
     axon_growth(output_path="./mov/axon_growth_zoom.mp4", focus_single=True)
 
@@ -353,9 +355,9 @@ def make_a_movie(
 
 
 def comparison_simulation(
-    input_top="./dat/simulations/lif/raw/highres_stim=off_k=5_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=80.0_rep=001.hdf5",
-    input_bot="./dat/simulations/lif/raw/highres_stim=off_k=5_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=90.0_rep=001.hdf5",
-    output_path="./mov/simulation_test.mp4",
+    input_top="../dat/simulations/lif/raw/highres_stim=02_k=3_kin=30_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=80.0_stimrate=0.0_rep=001.hdf5",
+    input_bot="../dat/simulations/lif/raw/highres_stim=02_k=3_kin=30_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=80.0_stimrate=20.0_rep=001.hdf5",
+    output_path="../mov/simulation_test.mp4",
     title=None,
     show_time=False,
     movie_duration=20,
@@ -566,7 +568,7 @@ def axon_growth(
     movie_duration=28,
     tbeg=0,
     tend=841,
-    focus_single = False,
+    focus_single=False,
 ):
     """
     This illustrates the growht of axons.
@@ -593,7 +595,7 @@ def axon_growth(
     ax.set_aspect("equal")
     ax.axis("off")
     ax.set_clip_on(True)
-    fig.subplots_adjust(left=0, right=1, bottom=0, top=1) # remove padding around axis
+    fig.subplots_adjust(left=0, right=1, bottom=0, top=1)  # remove padding around axis
 
     cr = CultureGrowthRenderer(h5f, ax=ax)
 

@@ -14,6 +14,7 @@ import warnings
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)-8s [%(name)s] %(message)s")
 log = logging.getLogger(__name__)
+log.setLevel("WARNING")
 warnings.filterwarnings("ignore")  # suppress numpy warnings
 
 try:
@@ -116,8 +117,8 @@ def simulate_model(simulation_time, **kwargs):
         Timescale of gate becoming inactive, thus not letting activity go through
     tau_connect : float, optional
         Timescale of gate recovery
-    ext_str : float, optional
-        Stimulation strength
+    ext_str : float or np array of floats, optional
+        Stimulation strength (for each module)
     k_inpt : float, optional
         Knee of the input sigmoid
     thrs_inpt: float, optional
@@ -149,6 +150,19 @@ def simulate_model(simulation_time, **kwargs):
     for key, value in kwargs.items():
         assert key in default_pars.keys(), f"unknown kwarg for mesoscopic model: '{key}'"
         pars[key] = value
+    # make sure ext_str is upcast from float to vector of floats
+    try:
+        len(pars["ext_str"])
+    except TypeError:
+        log.debug("ext_str is a float, upcasting to array")
+        pars["ext_str"] = np.array([pars["ext_str"]])
+    if len(pars["ext_str"]) == 1:
+        pars["ext_str"] = pars["ext_str"] * np.ones(4)
+    elif len(pars["ext_str"]) == 4:
+        pass
+    else:
+        raise ValueError("ext_str must be a float or a vector of length 4")
+    log.debug(f"ext_str: {pars['ext_str']}")
     return _simulate_model(simulation_time, **pars)
 
 
@@ -164,6 +178,8 @@ def _simulate_model(
     w0,
     tau_disconnect,
     tau_connect,
+    # to do partial stimulation, we need this to be a vector.
+    # wrap correctly on the python side.
     ext_str,
     k_inpt,
     thrs_inpt,
@@ -247,7 +263,7 @@ def _simulate_model(
             term1 = dt * (-rate[tar, t] / tau_rate)
 
             # Input from all sources, recurrent, neighbours, external
-            total_input = rsrc[tar, t] * rate[tar, t] + module_input + ext_str
+            total_input = rsrc[tar, t] * rate[tar, t] + module_input + ext_str[tar]
 
             term2 = dt * transfer_function(
                 total_input,

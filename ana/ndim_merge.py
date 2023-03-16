@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-07-16 11:54:20
-# @Last Modified: 2022-08-17 16:11:17
+# @Last Modified: 2023-03-02 14:04:46
 # ------------------------------------------------------------------------------ #
 # Scans the provided (wildcarded) filenames and merges individual realizsation
 # into a single file, containing high-dimensional arrays.
@@ -29,6 +29,7 @@ import itertools
 import tempfile
 import psutil
 import re
+import datetime
 
 # import matplotlib as mpl
 # import matplotlib.pyplot as plt
@@ -49,7 +50,7 @@ logging.basicConfig(
     datefmt="%y-%m-%d %H:%M",
 )
 log = logging.getLogger(__name__)
-log.setLevel("INFO")
+log.setLevel("WARNING")
 warnings.filterwarnings("ignore")  # suppress numpy warnings
 
 import ana_helper as ah
@@ -68,8 +69,12 @@ d_obs["rate"] = "/meta/dynamics_rate"
 d_obs["tD"] = "/meta/dynamics_tD"
 # d_obs["alpha"] = "/meta/topology_alpha"
 d_obs["k_inter"] = "/meta/topology_k_inter"
-# d_obs["stim_rate"] = "/meta/dynamics_stimulation_rate"
+d_obs["k_in"] = "/meta/topology_k_in"
+d_obs["stim_rate"] = "/meta/dynamics_stimulation_rate"
+d_obs["stim_mods"] = "/meta/dynamics_stimulation_mods"
 # d_obs["k_frac"] = "/meta/dynamics_k_frac"
+
+log.debug(f"d_obs: {d_obs}")
 
 # these can be set via command line arguments, see `parse_args()`
 threshold_factor = 2.5 / 100
@@ -141,8 +146,6 @@ def ana_for_single_rep(candidate=None):
         res["any_ibis_cv"] = 1
         res["sys_functional_complexity"] = 1
         res["any_functional_complexity"] = 1
-        res["sys_mean_correlation"] = 1
-        res["sys_median_correlation"] = 1
         res["sys_mean_depletion_correlation"] = 1
         res["sys_median_depletion_correlation"] = 1
         res["sys_mean_participating_fraction"] = 1
@@ -162,8 +165,25 @@ def ana_for_single_rep(candidate=None):
         res["sys_orderpar_dist_max"] = 1
         res["sys_mean_resources_at_burst_beg"] = 1
         res["sys_std_resources_at_burst_beg"] = 1
+        # we started with neuorn level correlation, all above is this kind.
+        res["sys_mean_correlation"] = 1
+        res["sys_mean_correlation_across"] = 1
+        res["sys_mean_correlation_within_stim"] = 1
+        res["sys_mean_correlation_within_nonstim"] = 1
+        res["sys_median_correlation"] = 1
+        res["sys_median_correlation_across"] = 1
+        res["sys_median_correlation_within_stim"] = 1
+        res["sys_median_correlation_within_nonstim"] = 1
+        # module level correlation, using the module-level firing rates
         res["mod_mean_correlation"] = 1
+        res["mod_mean_correlation_across"] = 1
+        res["mod_mean_correlation_within_stim"] = 1
+        res["mod_mean_correlation_within_nonstim"] = 1
         res["mod_median_correlation"] = 1
+        res["mod_median_correlation_across"] = 1
+        res["mod_median_correlation_within_stim"] = 1
+        res["mod_median_correlation_within_nonstim"] = 1
+
 
         # histograms, use "vec" prefix to indicate that higher dimensional data
         # hvals are the histogram values, hbins the bins ... obvio
@@ -407,6 +427,77 @@ def ana_for_single_rep(candidate=None):
         res["mod_median_correlation"] = np.nan
 
     # ------------------------------------------------------------------------------ #
+    # Correlation coefficients for different pairings
+    # ------------------------------------------------------------------------------ #
+
+    cases = ["within_stim", "within_nonstim", "across"]
+    for case in cases:
+        try:
+            if case == "within_stim":
+                mod_rij_paired = ah.find_rij_pairs(
+                    h5f, rij=rij_mod_level, pairing="across_groups_0_2", which="modules"
+                )
+                neuron_rij_paired = ah.find_rij_pairs(
+                    h5f, rij=rij_matrix, pairing="across_groups_0_2", which="neurons"
+                )
+
+            elif case == "within_nonstim":
+                mod_rij_paired = ah.find_rij_pairs(
+                    h5f, rij=rij_mod_level, pairing="across_groups_1_3", which="modules"
+                )
+                neuron_rij_paired = ah.find_rij_pairs(
+                    h5f, rij=rij_matrix, pairing="across_groups_1_3", which="neurons"
+                )
+
+            elif case == "across":
+                mod_rij_paired = []
+                mod_rij_paired.extend(
+                    ah.find_rij_pairs(
+                        h5f,
+                        rij=rij_mod_level,
+                        pairing="across_groups_0_1",
+                        which="modules",
+                    )
+                )
+                mod_rij_paired.extend(
+                    ah.find_rij_pairs(
+                        h5f,
+                        rij=rij_mod_level,
+                        pairing="across_groups_2_3",
+                        which="modules",
+                    )
+                )
+
+                neuron_rij_paired = []
+                neuron_rij_paired.extend(
+                    ah.find_rij_pairs(
+                        h5f,
+                        rij=rij_matrix,
+                        pairing="across_groups_0_1",
+                        which="neurons",
+                    )
+                )
+                neuron_rij_paired.extend(
+                    ah.find_rij_pairs(
+                        h5f,
+                        rij=rij_matrix,
+                        pairing="across_groups_2_3",
+                        which="neurons",
+                    )
+                )
+
+            res[f"mod_median_correlation_{case}"] = np.nanmedian(mod_rij_paired)
+            res[f"mod_mean_correlation_{case}"] = np.nanmean(mod_rij_paired)
+            # I know, there are some variable naming inconstencies here.
+            res[f"sys_median_correlation_{case}"] = np.nanmedian(neuron_rij_paired)
+            res[f"sys_mean_correlation_{case}"] = np.nanmean(neuron_rij_paired)
+        except:
+            res[f"mod_median_correlation_{case}"] = np.nan
+            res[f"mod_mean_correlation_{case}"] = np.nan
+            res[f"sys_median_correlation_{case}"] = np.nan
+            res[f"sys_mean_correlation_{case}"] = np.nan
+
+    # ------------------------------------------------------------------------------ #
     # Event size
     # This is the fraction of neurons (in the whole system) involved in a
     # (bursting) event. I started off simply calling it "fraction",
@@ -565,12 +656,18 @@ def main(args, dask_client):
     l_valid = []
     for future in tqdm(as_completed(futures), total=len(futures)):
         res, candidate = future.result()
+        log.debug(f"{candidate} -> {res}")
         if res is None:
             log.warning(f"file seems invalid: {candidate}")
         else:
             l_valid.append(candidate)
             for odx, obs in enumerate(d_obs.keys()):
                 val = res[odx]
+
+                # somehow `is nan in [nan, nan]` is dodgy, works better with np.nan
+                if isinstance(val, float) and np.isnan(val):
+                    val = np.nan
+
                 if val not in d_axes[obs]:
                     d_axes[obs].append(val)
 
@@ -582,6 +679,8 @@ def main(args, dask_client):
         axes_size *= len(d_axes[obs])
         axes_shape += (len(d_axes[obs]),)
 
+    log.info(f"Found axes: {d_axes}")
+
     # we might have repetitions but estimating num_rep proved unreliable.
     log.info(f"Finding number of repetitions:")
     # num_rep = int(np.ceil(len(l_valid) / axes_size))
@@ -591,7 +690,11 @@ def main(args, dask_client):
         for obs in d_axes.keys():
             # get value
             temp = h5.load(candidate, d_obs[obs], silent=True)
-            temp = np.where(d_axes[obs] == temp)[0][0]
+            # same problem as above, nan == nan is dodgy
+            if isinstance(temp, float) and np.isnan(temp):
+                temp = np.where(np.isnan(d_axes[obs]))[0][0]
+            else:
+                temp = np.where(d_axes[obs] == temp)[0][0]
             index += (temp,)
 
         sampled[index] += 1
@@ -713,6 +816,13 @@ def main(args, dask_client):
     # meta data
     dset = f_tar.create_dataset("/meta/ana_par/threshold_factor", data=threshold_factor)
     dset = f_tar.create_dataset("/meta/ana_par/smoothing_width", data=smoothing_width)
+    dset = f_tar.create_dataset(
+        "/meta/ana_par/time_bin_size_for_rij", data=time_bin_size_for_rij
+    )
+    dset = f_tar.create_dataset(
+        "/meta/ana_par/remove_null_sequences", data=remove_null_sequences
+    )
+    dset = f_tar.create_dataset("/meta/created", data=datetime.datetime.now().isoformat())
 
     f_tar.close()
 
@@ -730,6 +840,8 @@ def parse_arguments():
     # through a bunch of calls. not neat but yay, scientific coding.
     global threshold_factor
     global smoothing_width
+    global time_bin_size_for_rij
+    global remove_null_sequences
 
     parser = argparse.ArgumentParser(description="Merge Multidm")
     parser.add_argument(
@@ -764,10 +876,18 @@ def parse_arguments():
         default=smoothing_width,
         type=float,
     )
+    parser.add_argument(
+        "-r",
+        dest="time_bin_size_for_rij",
+        help="bin size for spike counting, for correlation coefficients, in seconds",
+        default=time_bin_size_for_rij,
+        type=float,
+    )
 
     args = parser.parse_args()
     threshold_factor = args.threshold_factor
     smoothing_width = args.smoothing_width
+    time_bin_size_for_rij = args.time_bin_size_for_rij
 
     log.info(args)
 
@@ -789,8 +909,10 @@ def analyse_candidate(candidate, d_axes, d_obs):
     for obs in d_axes.keys():
         # get value
         temp = h5.load(candidate, d_obs[obs], silent=True)
-        # transform to index
-        temp = np.where(d_axes[obs] == temp)[0][0]
+        if isinstance(temp, float) and np.isnan(temp):
+            temp = np.where(np.isnan(d_axes[obs]))[0][0]
+        else:
+            temp = np.where(d_axes[obs] == temp)[0][0]
         index += (temp,)
 
         # psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024
@@ -819,6 +941,7 @@ def check_candidate(candidate, d_obs):
             except:
                 # was a number already
                 pass
+
             res.append(temp)
         except:
             # something was fishy with this file, do not use it!
@@ -840,22 +963,21 @@ if __name__ == "__main__":
         dask_cluster = stack.enter_context(
             # rudabeh
             # TODO: remove this before release
-            # SGECluster(
-            #     cores=32,
-            #     memory="192GB",
-            #     processes=16,
-            #     job_extra=["-pe mvapich2-zal 32"],
-            #     log_directory="/scratch01.local/pspitzner/dask/logs",
-            #     local_directory="/scratch01.local/pspitzner/dask/scratch",
-            #     interface="ib0",
-            #     walltime='02:30:00',
-            #     extra=[
-            #         '--preload \'import sys; sys.path.append("./ana/"); sys.path.append("/home/pspitzner/code/pyhelpers/");\''
-            #     ],
-            # )
-
+            SGECluster(
+                cores=32,
+                memory="192GB",
+                processes=16,
+                job_extra=["-pe mvapich2-sam 32"],
+                log_directory="/scratch01.local/pspitzner/dask/logs",
+                local_directory="/scratch01.local/pspitzner/dask/scratch",
+                interface="ib0",
+                walltime='04:30:00',
+                extra=[
+                    '--preload \'import sys; sys.path.append("./ana/"); sys.path.append("/home/pspitzner/code/pyhelpers/");\''
+                ],
+            )
             # local cluster
-            LocalCluster(local_directory=f"{tempfile.gettempdir()}/dask/")
+            # LocalCluster(local_directory=f"{tempfile.gettempdir()}/dask/")
         )
         dask_cluster.scale(cores=args.num_cores)
 

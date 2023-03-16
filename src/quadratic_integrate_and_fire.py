@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-02-20 09:35:48
-# @Last Modified: 2022-08-22 15:27:47
+# @Last Modified: 2022-12-15 16:03:17
 # ------------------------------------------------------------------------------ #
 # Dynamics described in Orlandi et al. 2013, DOI: 10.1038/nphys2686
 # Creates a connectivity matrix matching the modular cultures (see `topology.py`)
@@ -75,10 +75,12 @@ jG = 50 * mV       # GABA current strength
 
 # noise
 beta = 0.8         # D = beta*D after spike, to reduce efficacy, beta < 1
-rate = 80 * Hz     # rate for the poisson input (shot-noise), between 10 - 50 Hz
+rate = 80 * Hz     # rate for the poisson input (shot-noise), between 10 - 100 Hz
 jM   = 15 * mV     # shot noise (minis) strength, between 10 - 50 mV
                    # (sum of minis arriving at target neuron)
-sigV = sqrt(0.06) * mV # amplitude of white noise membrane fluctuations
+sigV = 0.0 * mV
+# sigV = sqrt(0.06) * mV
+# amplitude of white noise membrane fluctuations
 # Note: for 0.06^0.5 mV, membrane fluctuations are virtually zero.
 # I made a mistake when converting the notation from the original paper,
 # using a much lower noise amplitude.
@@ -169,6 +171,14 @@ parser.add_argument(
 parser.add_argument("-s", dest="seed", help="RNG seed", default=42, metavar=42, type=int)
 parser.add_argument(
     "-k", dest="k_inter", help="Number of bridging axons", default=5, metavar=5, type=int
+)
+parser.add_argument(
+    "-kin",
+    dest="k_in",
+    help="Number of incoming connections per Neuron",
+    default=30,
+    metavar=30,
+    type=int,
 )
 parser.add_argument(
     "-d",
@@ -269,6 +279,7 @@ print(f'#{"":#^75}#\n#{"running dynamics in brian":^75}#\n#{"":#^75}#')
 log.info("output path:      %s", args.output_path)
 log.info("seed:             %s", args.seed)
 log.info("k_inter:          %s", args.k_inter)
+log.info("k_in:             %s", args.k_in)
 log.info("jA:               %s", jA)
 log.info("jM:               %s", jM)
 log.info("jG:               %s", jG)
@@ -291,11 +302,21 @@ if args.stimulation_type != "off":
 # topology
 # ------------------------------------------------------------------------------ #
 
+
+if args.k_in != -1:
+    alpha = topo.find_alpha_for_target_in_degree(
+        k_inter=args.k_inter, k_in_target=args.k_in, rerun=False
+    )
+    log.info(f"for k={args.k_inter}, using {alpha=} to get an in-degree of ~{args.k_in}.")
+else:
+    alpha = 0.0125
+    log.warning(f"Not setting cusotm alpha, using default {alpha}")
+
 if args.k_inter == -1:
-    tp = topo.MergedTopology()
+    tp = topo.MergedTopology(assign_submodules=True, par_alpha=alpha)
     bridge_ids = np.array([], dtype="int")
 else:
-    tp = topo.ModularTopology(par_k_inter=args.k_inter)
+    tp = topo.ModularTopology(par_k_inter=args.k_inter, par_alpha=alpha)
     bridge_ids = tp.neuron_bridge_ids
 num_n = tp.par_N
 a_ij_sparse = tp.aij_sparse
@@ -492,6 +513,9 @@ h5_desc["meta.dynamics_jG"] = "GABA current strength, in mV"
 h5_data["meta.dynamics_jM"] = jM / mV
 h5_desc["meta.dynamics_jM"] = "shot noise (minis) strength, in mV"
 
+h5_data["meta.dynamics_sigV"] = sigV / mV
+h5_desc["meta.dynamics_sigV"] = "amplitude of white noise membrane fluctuations, in mV"
+
 h5_data["meta.dynamics_tD"] = tD / second
 h5_desc["meta.dynamics_tD"] = "characteristic decay time, in seconds"
 
@@ -501,6 +525,10 @@ h5_desc["meta.dynamics_rate"] = "rate for the (global) poisson input (shot-noise
 h5_data["meta.dynamics_stimulation_rate"] = args.stimulation_rate / Hz
 h5_desc["meta.dynamics_stimulation_rate"] = "rate for the poisson input, added to stimulated modules, in Hz"
 
+h5_data["meta.dynamics_stimulation_mods"] = "off" if args.stimulation_type == "off" \
+    else ''.join([str(i) for i in args.stimulation_module])
+h5_desc["meta.dynamics_stimulation_mods"] = "string of which modules were targeted 'off' or '02'. Note that this is not 'off' even when the stimrate is 0. becomes of if NO `-stim` argument is passed"
+
 h5_data["meta.dynamics_simulation_duration"] = args.sim_duration / second
 h5_desc["meta.dynamics_simulation_duration"] = "in seconds"
 
@@ -509,6 +537,9 @@ h5_desc["meta.dynamics_equilibration_duration"] = "in seconds"
 
 h5_data["meta.dynamics_bridge_weight"] = args.bridge_weight
 h5_desc["meta.dynamics_bridge_weight"] = "synaptic weight of bridging neurons. get applied as a factor to outgoing synaptic currents."
+
+h5_data["meta.topology_k_in"] = args.k_in
+h5_desc["meta.topology_k_in"] = "desired in-degree for which alpha was optimized"
 
 h5_data["data.neuron_g"] = G.j[t2b]
 h5_desc["data.neuron_g"] = "synaptic weight that was ultimately used for each neuron in the dynamic simulation"
