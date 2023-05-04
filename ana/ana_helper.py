@@ -183,14 +183,54 @@ def prepare_file(
     h5f["ana.neuron_ids"] = neuron_ids
 
     # make sure that the 2d_spikes representation is nan-padded, requires loading!
-    try:
-        spikes = h5f["data.spiketimes"][:]
-        if spikes is None:
-            raise ValueError
-        spikes[spikes == 0] = np.nan
-        h5f["data.spiketimes"] = spikes
-    except:
-        log.info("No spikes in file, plotting and analysing dynamics will not work.")
+    spikes = h5f["data.spiketimes"][:]
+    if spikes is None:
+        log.warning("No spikes in file, plotting and analysing dynamics won't work.")
+    elif np.any(np.isnan(spikes)):
+        log.debug("spikes seem to be nan-padded, no conversion needed.")
+    else:
+        # make sure the format matches
+        # from simulations, I had a hard time padding with nans in the hdf5 files.
+        # but needs a workaround, because in rare cases, we might have 0 as a real spike time.
+
+        # in essence, this is what we want to do, but it is not as robust:
+        # spikes[spikes == 0] = np.nan
+        try:
+            # new approach: what we expect is that spiketimes always increase,
+            # until they are padded. detect padding by looking for non-increasing values.
+            diff = np.diff(spikes, axis=1) < 0
+
+            # use scipy label to find consecutive patches, has to be done for each neuron,
+            # otherwise it connects patches across neurons.
+            from scipy.ndimage import label
+
+            for n_id in range(0, num_n):
+                patches, _ = label(diff[n_id, :])
+                _, change_pt_indices = np.unique(patches, return_index=True)
+                if len(change_pt_indices) == 1:
+                    if spikes[n_id, 0] == 0:
+                        # edge-case, everything zero
+                        spikes[n_id, :] = np.nan
+                    else:
+                        # all consecutive, and non-zero all good
+                        continue
+                elif len(change_pt_indices) == 2:
+                    # second half needs padding
+                    spikes[n_id, change_pt_indices[1] + 1 :] = np.nan
+                elif len(change_pt_indices) > 2:
+                    # this should not happen
+                    log.error(
+                        f"More than two change points found for spikes of neuron {n_id}"
+                    )
+                    raise ValueError
+
+            h5f["data.spiketimes"] = spikes
+
+        except Exception as e:
+            log.error(e)
+            log.warning(
+                "Spike conversion failed, plotting and analysing dynamics won't work."
+            )
 
     # # now we need to load things. [:] loads to ram and makes everything else faster
     # # convert spikes in the convenient nested (2d) format, first dim neuron,
