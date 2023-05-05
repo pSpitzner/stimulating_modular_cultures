@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-10-25 17:28:21
-# @Last Modified: 2023-05-02 09:45:04
+# @Last Modified: 2023-05-05 13:30:08
 # ------------------------------------------------------------------------------ #
 # Analysis script that preprocesses experiments and creates dataframes to compare
 # across condtions. Plots and more detailed analysis are in `paper_plots.py`
@@ -116,6 +116,10 @@ def main():
         conditions["partial_5u"] = ["1_pre", "2_stim2", "3_post", "4_stim1"]
         conditions["global_2u"] = ["1_pre", "2_stim", "3_post"]
         conditions["global_5u"] = ["1_pre", "2_stim", "3_post"]
+        # thicker channels
+        conditions["partial_thick"] = ["1_pre", "2_stim2", "3_stim1"]
+        conditions["global_thick"] = ["1_pre", "2_stim", "3_post"]
+
     elif args.etype == "sim":
         # number of axons between modules as layouts
         # first rate gets stimulated "off" value assigned, second becomes "on"
