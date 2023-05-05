@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-11-08 17:51:24
-# @Last Modified: 2023-03-10 09:47:05
+# @Last Modified: 2023-05-05 12:33:31
 # ------------------------------------------------------------------------------ #
 #
 # How to read / work this monstrosity of a file?
@@ -140,6 +140,10 @@ colors["Off"] = colors["pre"]
 colors["stim"] = "#BD6B00"
 colors["On"] = colors["stim"]
 colors["90 Hz"] = colors["stim"]
+
+# new experimental conditions
+colors["stim2"] = "#BD6B00" # stimulating two modules asynchronously, same as stim
+colors["stim1"] = "#777"    # stimulating one module with full-module pulses
 
 
 colors["KCl_0mM"] = "gray"
@@ -2897,6 +2901,7 @@ def exp_sticks_across_layouts(
     layouts=None,
     conditions=None,
     draw_error_bars=True,
+    draw_trials=True,
     dfs=None,
     x_offset=0,
     small_dx=0.3,
@@ -2906,6 +2911,8 @@ def exp_sticks_across_layouts(
     """
     This draws stick (error-bar) plots comparing
     `conditions` for each `layout`.
+    Error bars from bootstrapping, the estimator for bs-samples is the mean,
+    bars indicate the std of the bootstrap samples (thus, the SEM)
 
     Layouts are the major grouping (left to right)
     conditions the minor grouping (and color coded).
@@ -2932,11 +2939,17 @@ def exp_sticks_across_layouts(
         pd_folder = f"{p_exp}/processed"
 
     if layouts is None:
-        layouts = ["1b", "3b", "merged"]
+        try:
+            layouts = list(conditions.keys())
+        except:
+            layouts = ["1b", "3b", "merged"]
     if conditions is None:
         conditions = dict()
-        for etype in layouts:
-            conditions[etype] = ["pre", "stim", "post"]
+        for layout in layouts:
+            conditions[layout] = ["pre", "stim", "post"]
+
+
+
 
     # cast up if bool
     if not isinstance(draw_error_bars, dict):
@@ -2949,18 +2962,25 @@ def exp_sticks_across_layouts(
         for key in layouts:
             df = load_pd_hdf5(f"{pd_folder}/{key}.hdf5")
             local_conditions = conditions[key]
+            log.debug(f"{df['trials'].columns}")
             dfs[key] = df["trials"].query("Condition == @local_conditions")
 
     fig, ax = plt.subplots()
 
     x_pos = dict()
     x_pos_sticks = dict()
+    xlim = [0,0]
     for ldx, l in enumerate(layouts):
         x_pos[l] = dict()
         x_pos_sticks[l] = dict()
         for cdx, c in enumerate(conditions[l]):
             x_pos[l][c] = x_offset + ldx * large_dx + cdx * small_dx
             x_pos_sticks[l][c] = x_offset + ldx * large_dx + cdx * small_dx
+            xlim[0] = min(xlim[0], x_pos[l][c])
+            xlim[1] = max(xlim[1], x_pos[l][c])
+
+    xlim[0] -= small_dx
+    xlim[1] += small_dx
 
     # x_pos["1b"] = {"pre" : 0.0, "stim" : 1.0, "post" :  2.0 }
     # x_pos["3b"] = {"pre" : 0.25, "stim" : 1.25, "post"  :  2.25 }
@@ -2970,9 +2990,9 @@ def exp_sticks_across_layouts(
     # x_pos_sticks["merged"] = {"pre" : 0.5, "stim" : 1.5, "post" :  2.5 }
 
     # opto
-    for edx, etype in enumerate(layouts):
+    for edx, layout in enumerate(layouts):
         # clr = f"C{edx}"
-        log.info(f"## {etype}")
+        log.info(f"## {layout}")
 
         log.info(
             f"| Condition | Mean (across trials) | Standard error of the mean | min"
@@ -2983,25 +3003,24 @@ def exp_sticks_across_layouts(
             f" ------------ | ------------ |"
         )
 
-        clr = colors["pre"] if etype != "KCl_1b" else colors["KCl_0mM"]
-        trials = dfs[etype]["Trial"].unique()
+
+        clr = colors["pre"] if layout != "KCl_1b" else colors["KCl_0mM"]
+        trials = dfs[layout]["Trial"].unique()
         for trial in trials:
+
+            if not draw_trials:
+                continue
 
             # ------------------------------------------------------------------------------ #
             # draw faint lines for trials
             # ------------------------------------------------------------------------------ #
 
-            df = dfs[etype].loc[dfs[etype]["Trial"] == trial]
+            df = dfs[layout].loc[dfs[layout]["Trial"] == trial]
             # assert len(df) == len(layouts)
             x = []
             y = []
             try:
-                for idx, row in df.iterrows():
-                    cond = row["Condition"]
-                    x.append(x_pos[etype][cond])
-                    y.append(row[observable])
-
-                if draw_error_bars[etype]:
+                if draw_error_bars[layout]:
                     kwargs = dict(
                         lw=0.6,
                         color=cc.alpha_to_solid_on_bg(clr, 0.4),
@@ -3013,6 +3032,11 @@ def exp_sticks_across_layouts(
                         markersize=1.5,
                         color=cc.alpha_to_solid_on_bg(clr, 1.0),
                     )
+
+                # create x, y coordinates, matching order of conditions
+                for cond in conditions[layout]:
+                    x.append(x_pos_sticks[layout][cond])
+                    y.append(df.query(f"Condition == '{cond}'")[observable].values[0])
 
                 ax.plot(
                     x,
@@ -3032,10 +3056,10 @@ def exp_sticks_across_layouts(
         # Error bars
         # ------------------------------------------------------------------------------ #
 
-        if not draw_error_bars[etype]:
+        if not draw_error_bars[layout]:
             continue
 
-        for cond in conditions[etype]:
+        for cond in conditions[layout]:
 
             try:
                 clr = colors[cond]
@@ -3043,12 +3067,12 @@ def exp_sticks_across_layouts(
                 clr = "#808080"
 
             # skip post condition for chemical and set clrs differently
-            if etype == "KCl_1b":
+            if layout == "KCl_1b":
                 clr = colors["KCl_0mM"]
             try:
-                df = dfs[etype].query(f"Condition == '{cond}'")
+                df = dfs[layout].query(f"Condition == '{cond}'")
             except Exception as e:
-                df = dfs[etype]
+                df = dfs[layout]
 
             # sticklike error bar
             mid, std, percentiles = ah.pd_bootstrap(
@@ -3075,7 +3099,7 @@ def exp_sticks_across_layouts(
 
             _draw_error_stick(
                 ax,
-                center=x_pos_sticks[etype][cond],
+                center=x_pos_sticks[layout][cond],
                 # mid=percentiles[1],
                 # errors=[percentiles[0], percentiles[2]],
                 mid=mid,
@@ -3095,7 +3119,8 @@ def exp_sticks_across_layouts(
         ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
     elif isinstance(set_ylim, list):
         ax.set_ylim(*set_ylim)
-    ax.set_xlim(-0.5, 4.2)
+    # ax.set_xlim(-0.5, 4.2)
+    ax.set_xlim(*xlim)
     if apply_formatting:
         sns.despine(ax=ax, bottom=True, left=False, trim=True, offset=0)
         # hide the ticks but keep the labels
@@ -3105,13 +3130,17 @@ def exp_sticks_across_layouts(
 
     ax.grid(axis="y", which="both", color="0.8", lw=0.5, zorder=-1, clip_on=False)
 
+    if show_xlabel:
+        ax.set_xlabel(" | ".join([f"{l}" for l in layouts]))
+    else:
+        ax.set_xlabel("")
+
     if apply_formatting:
         cc.set_size(ax, 1.8, 2, l=1.5, b=0.5, r=0.5, t=0.7)
 
     return ax
 
 
-# Fig 2
 def exp_violins_for_layouts(
     pd_folder=None,
     out_prefix=None,
@@ -3147,16 +3176,20 @@ def exp_violins_for_layouts(
         observables = ["event_size", "rij", "iei", "core_delay"]
 
     dfs = dict()
-    if "single-bond" in layouts:
-        dfs["single-bond"] = load_pd_hdf5(f"{pd_folder}/1b.hdf5")
-    if "triple-bond" in layouts:
-        dfs["triple-bond"] = load_pd_hdf5(f"{pd_folder}/3b.hdf5")
-    if "merged" in layouts:
-        dfs["merged"] = load_pd_hdf5(f"{pd_folder}/merged.hdf5")
-    if "chem" in layouts:
-        dfs["chem"] = load_pd_hdf5(f"{pd_folder}/KCl_1b.hdf5")
-    if "bic" in layouts:
-        dfs["bic"] = load_pd_hdf5(f"{pd_folder}/Bicuculline_1b.hdf5")
+    for layout in layouts:
+        # fix some historic naming inconsistencies
+        if "single-bond" == layout:
+            dfs["single-bond"] = load_pd_hdf5(f"{pd_folder}/1b.hdf5")
+        elif "triple-bond" == layout:
+            dfs["triple-bond"] = load_pd_hdf5(f"{pd_folder}/3b.hdf5")
+        elif "chem" == layout:
+            dfs["chem"] = load_pd_hdf5(f"{pd_folder}/KCl_1b.hdf5")
+        elif "bic" == layout:
+            dfs["bic"] = load_pd_hdf5(f"{pd_folder}/Bicuculline_1b.hdf5")
+        else:
+            # sensible default
+            dfs[layout] = load_pd_hdf5(f"{pd_folder}/{layout}.hdf5")
+
 
     if filter_trials is None:
         filter_trials = dict()
@@ -3176,9 +3209,6 @@ def exp_violins_for_layouts(
         # ax.set_xlabel(f"{layout}")
         if not show_xlabel:
             ax.set_xlabel(f"")
-        else:
-            # dirty dirty hack
-            ax.set_xlabel(f"pre → stim → post")
         if not show_ylabel:
             ax.set_ylabel(f"")
 
@@ -5793,14 +5823,16 @@ def load_pd_hdf5(input_path, keys=None):
     for key in keys:
         try:
             res[key] = pd.read_hdf(input_path, f"/data/df_{key}")
-            if remove_outlier and "1b.hdf5" in input_path:
-                res[key] = res[key].query("`Trial` != '210405_C'")
-            #     res[key] = res[key].query("`Trial` == '210719_B'")
-            # else:
-            #     exp = res[key]["Trial"].unique()[0]
-            #     res[key] = res[key].query("`Trial` == @exp")
-            # if remove_outlier and "merged.hdf5" in input_path:
-            #     res[key] = res[key].query("`Trial` != '210713_C'")
+            if remove_outlier:
+                # in 1b this had a very short ibi
+                if "1b.hdf5" in input_path:
+                    res[key] = res[key].query("`Trial` != '210405_C'")
+
+                # crazy high fireing 70 events without stimulation, global_5u
+                # res[key] = res[key].query("`Trial` != '230420_1bE_5u'")
+
+                # 2 um case where first half of exp single module bursts.
+                # res[key] = res[key].query("`Trial` != '230424_1bB_2u'")
         except Exception as e:
             # log.exception(e)
             log.debug(f"/data/df_{key} not in {input_path}, skipping")
@@ -6064,6 +6096,12 @@ def custom_violins(
         log.debug(f"{cat}: {len(offsets)} points survived")
 
     ax.get_legend().set_visible(False)
+
+    if show_xlabel:
+        xlabel = " → ".join([f"{c}" for c in categories])
+    else:
+        xlabel = ""
+    ax.set_xlabel(xlabel)
 
     # log.info(f'|{"":-^65}|')
 
