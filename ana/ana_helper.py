@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2023-05-04 13:35:42
+# @Last Modified: 2023-05-05 14:05:08
 # ------------------------------------------------------------------------------ #
 # Here we collect all functions for importing and analyzing the data.
 # A central idea is that for every simulated/experimental trial, we have a
@@ -364,7 +364,13 @@ def load_experimental_files(path_prefix, condition="1_pre_"):
         log.error(f"No fluorescence data found for {path_prefix} {condition}")
         # log.exception(e)
 
-    return prepare_file(h5f)
+    # default preprocessing
+    h5f = prepare_file(h5f)
+
+    # overwrite some details
+    # we overwrite the stimulation description, maybe even as an potional argument
+
+    return h5f
 
 
 def prepare_minimal(spikes):
@@ -2653,6 +2659,7 @@ def pd_bootstrap(
     f_within_sample=np.nanmean,
     f_across_samples=np.nanmean,
     percentiles=None,
+    return_samples=False,
 ):
     """
     bootstrap across all rows of a dataframe to get the mean across
@@ -2664,8 +2671,13 @@ def pd_bootstrap(
     sample_size: int or None, default (None) for samples that are as large
         as the original dataframe (number of rows)
     num_boot : int, how many bootstrap samples to generate
-    func : function, default np.nanmean is used to calculate the estimate
+    f_within_sample : function, default np.nanmean is used to calculate the estimate
         for each sample
+    f_across_samples : function, default np.nanmean is used to calculate the estimate
+        (mid) across samples
+    return_samples : bool, default False,
+        if True, return the sample results instead of the across-sample estimates.
+        (f_within_sample is still applied to each sample.)
     percentiles : list of floats
         the percentiles to return. default is [2.5, 50, 97.5]
 
@@ -2690,6 +2702,9 @@ def pd_bootstrap(
         sample_df = df.sample(n=sample_size, replace=True, ignore_index=True)
 
         resampled_estimates.append(f_within_sample(sample_df[obs]))
+
+    if return_samples:
+        return resampled_estimates
 
     mid = f_across_samples(resampled_estimates)
     std = np.std(resampled_estimates, ddof=1)
