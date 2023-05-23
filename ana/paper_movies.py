@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2022-06-22 10:12:19
-# @Last Modified: 2023-03-02 22:16:45
+# @Last Modified: 2023-05-11 10:55:26
 # ------------------------------------------------------------------------------ #
 # This guy uses movie_business.py to create movies from hdf5 files.
 # tweak main() and run from console.
@@ -357,7 +357,7 @@ def make_a_movie(
 def comparison_simulation(
     input_top="../dat/simulations/lif/raw/highres_stim=02_k=3_kin=30_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=80.0_stimrate=0.0_rep=001.hdf5",
     input_bot="../dat/simulations/lif/raw/highres_stim=02_k=3_kin=30_jA=45.0_jG=50.0_jM=15.0_tD=20.0_rate=80.0_stimrate=20.0_rep=001.hdf5",
-    output_path="../mov/simulation_test.mp4",
+    output_path="../mov/simulation_comparison_k3_rep1.mp4",
     title=None,
     show_time=False,
     movie_duration=20,

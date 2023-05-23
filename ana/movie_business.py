@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2020-01-24 13:43:39
-# @Last Modified: 2023-03-02 19:42:33
+# @Last Modified: 2023-05-11 10:55:48
 # ------------------------------------------------------------------------------- #
 # Classes needed to create a movie of the network.
 # ------------------------------------------------------------------------------- #
@@ -31,8 +31,8 @@ from matplotlib.animation import FFMpegWriter
 
 from bitsandbobs.plt import alpha_to_solid_on_bg
 
-theme_bg = "black"
-# theme_bg = "white"
+# theme_bg = "black"
+theme_bg = "white"
 if theme_bg == "black":
     plt.style.use("dark_background")
     # use custom colors to match the paper

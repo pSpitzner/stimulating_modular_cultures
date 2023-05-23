@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-10-25 17:28:21
-# @Last Modified: 2023-03-02 13:58:01
+# @Last Modified: 2023-05-15 20:12:15
 # ------------------------------------------------------------------------------ #
 # Analysis script that preprocesses experiments and creates dataframes to compare
 # across condtions. Plots and more detailed analysis are in `paper_plots.py`
@@ -110,6 +110,15 @@ def main():
         conditions["KCl_1b"] = ["1_KCl_0mM", "2_KCl_2mM"]
     elif args.etype == "exp_bic":
         conditions["Bicuculline_1b"] = ["1_spon_Bic_20uM", "2_stim_Bic_20uM"]
+    elif args.etype == "exp_mod_comp":
+        # comparison between different targeted regions
+        conditions["partial_s"] = ["1_pre", "2_stim2", "3_post", "4_stim1"] # 2um
+        conditions["partial_m"] = ["1_pre", "2_stim2", "3_post", "4_stim1"] # 5um
+        conditions["partial_l"] = ["1_pre", "2_stim2", "3_stim1"] # 5um wide and higher
+        conditions["global_s"] = ["1_pre", "2_stim", "3_post"]
+        conditions["global_m"] = ["1_pre", "2_stim", "3_post"]
+        conditions["global_l"] = ["1_pre", "2_stim", "3_post"]
+
     elif args.etype == "sim":
         # number of axons between modules as layouts
         # first rate gets stimulated "off" value assigned, second becomes "on"

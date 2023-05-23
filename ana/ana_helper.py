@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-03-10 13:23:16
-# @Last Modified: 2022-12-14 12:08:27
+# @Last Modified: 2023-05-05 14:05:08
 # ------------------------------------------------------------------------------ #
 # Here we collect all functions for importing and analyzing the data.
 # A central idea is that for every simulated/experimental trial, we have a
@@ -14,7 +14,6 @@
 # This way, plot functions etc. can rely on the structure of the dictionary,
 # and we only have to pass a single argument to later functions.
 # ------------------------------------------------------------------------------ #
-
 
 
 import os
@@ -183,14 +182,54 @@ def prepare_file(
     h5f["ana.neuron_ids"] = neuron_ids
 
     # make sure that the 2d_spikes representation is nan-padded, requires loading!
-    try:
-        spikes = h5f["data.spiketimes"][:]
-        if spikes is None:
-            raise ValueError
-        spikes[spikes == 0] = np.nan
-        h5f["data.spiketimes"] = spikes
-    except:
-        log.info("No spikes in file, plotting and analysing dynamics will not work.")
+    spikes = h5f["data.spiketimes"][:]
+    if spikes is None:
+        log.warning("No spikes in file, plotting and analysing dynamics won't work.")
+    elif np.any(np.isnan(spikes)):
+        log.debug("spikes seem to be nan-padded, no conversion needed.")
+    else:
+        # make sure the format matches
+        # from simulations, I had a hard time padding with nans in the hdf5 files.
+        # but needs a workaround, because in rare cases, we might have 0 as a real spike time.
+
+        # in essence, this is what we want to do, but it is not as robust:
+        # spikes[spikes == 0] = np.nan
+        try:
+            # new approach: what we expect is that spiketimes always increase,
+            # until they are padded. detect padding by looking for non-increasing values.
+            diff = np.diff(spikes, axis=1) < 0
+
+            # use scipy label to find consecutive patches, has to be done for each neuron,
+            # otherwise it connects patches across neurons.
+            from scipy.ndimage import label
+
+            for n_id in range(0, num_n):
+                patches, _ = label(diff[n_id, :])
+                _, change_pt_indices = np.unique(patches, return_index=True)
+                if len(change_pt_indices) == 1:
+                    if spikes[n_id, 0] == 0:
+                        # edge-case, everything zero
+                        spikes[n_id, :] = np.nan
+                    else:
+                        # all consecutive, and non-zero all good
+                        continue
+                elif len(change_pt_indices) == 2:
+                    # second half needs padding
+                    spikes[n_id, change_pt_indices[1] + 1 :] = np.nan
+                elif len(change_pt_indices) > 2:
+                    # this should not happen
+                    log.error(
+                        f"More than two change points found for spikes of neuron {n_id}"
+                    )
+                    raise ValueError
+
+            h5f["data.spiketimes"] = spikes
+
+        except Exception as e:
+            log.error(e)
+            log.warning(
+                "Spike conversion failed, plotting and analysing dynamics won't work."
+            )
 
     # # now we need to load things. [:] loads to ram and makes everything else faster
     # # convert spikes in the convenient nested (2d) format, first dim neuron,
@@ -325,7 +364,13 @@ def load_experimental_files(path_prefix, condition="1_pre_"):
         log.error(f"No fluorescence data found for {path_prefix} {condition}")
         # log.exception(e)
 
-    return prepare_file(h5f)
+    # default preprocessing
+    h5f = prepare_file(h5f)
+
+    # overwrite some details
+    # we overwrite the stimulation description, maybe even as an potional argument
+
+    return h5f
 
 
 def prepare_minimal(spikes):
@@ -345,7 +390,7 @@ def prepare_minimal(spikes):
     h5f["data.spiketimes"] = spikes
     h5f["data.neuron_module_id"] = np.zeros(num_n, dtype=int)
 
-    prepare_file(h5f);
+    prepare_file(h5f)
     return h5f
 
 
@@ -1130,19 +1175,12 @@ def find_rij_pairs(h5f, rij=None, pairing="within_modules", which="neurons"):
                     res.append(rij[i, j])
 
             elif "within_group" in pairing:
-                if (
-                    h5f[key][i] in mods_a
-                    and h5f[key][j] in mods_a
-                ):
+                if h5f[key][i] in mods_a and h5f[key][j] in mods_a:
                     res.append(rij[i, j])
 
             elif "across_groups" in pairing:
-                if (
-                    h5f[key][i] in mods_a
-                    and h5f[key][j] in mods_b
-                ) or (
-                    h5f[key][i] in mods_b
-                    and h5f[key][j] in mods_a
+                if (h5f[key][i] in mods_a and h5f[key][j] in mods_b) or (
+                    h5f[key][i] in mods_b and h5f[key][j] in mods_a
                 ):
                     res.append(rij[i, j])
 
@@ -1219,6 +1257,7 @@ def find_state_variable(h5f, variable, write_to_h5f=True, return_res=False):
     if return_res:
         return states
 
+
 def find_module_resources_at_burst_begin(h5f, write_to_h5f=True, return_res=False):
     """
     Find what was the level of resources in every module when bursts started.
@@ -1255,7 +1294,7 @@ def get_module_resources_at_times(h5f, times):
     if "ana.adaptation" not in h5f.keypaths():
         find_module_level_adaptation(h5f)
 
-    res = np.ones((len(h5f["ana.mods"]), len(times)))*np.nan
+    res = np.ones((len(h5f["ana.mods"]), len(times))) * np.nan
 
     dt = h5f["ana.adaptation.dt"]
 
@@ -1294,6 +1333,7 @@ def find_module_level_adaptation(h5f):
             dt = h5f["data.state_vars_time"][1] - h5f["data.state_vars_time"][0]
 
         h5f[f"ana.adaptation.dt"] = dt
+
 
 def find_rij_within_across(h5f):
     """
@@ -2612,7 +2652,14 @@ def get_threshold_from_logisi_distribution(list_of_isi, area_fraction=0.3):
 
 
 def pd_bootstrap(
-    df, obs, sample_size=None, num_boot=500, f_within_sample=np.nanmean, f_across_samples=np.nanmean, percentiles=None
+    df,
+    obs,
+    sample_size=None,
+    num_boot=500,
+    f_within_sample=np.nanmean,
+    f_across_samples=np.nanmean,
+    percentiles=None,
+    return_samples=False,
 ):
     """
     bootstrap across all rows of a dataframe to get the mean across
@@ -2624,8 +2671,13 @@ def pd_bootstrap(
     sample_size: int or None, default (None) for samples that are as large
         as the original dataframe (number of rows)
     num_boot : int, how many bootstrap samples to generate
-    func : function, default np.nanmean is used to calculate the estimate
+    f_within_sample : function, default np.nanmean is used to calculate the estimate
         for each sample
+    f_across_samples : function, default np.nanmean is used to calculate the estimate
+        (mid) across samples
+    return_samples : bool, default False,
+        if True, return the sample results instead of the across-sample estimates.
+        (f_within_sample is still applied to each sample.)
     percentiles : list of floats
         the percentiles to return. default is [2.5, 50, 97.5]
 
@@ -2650,6 +2702,9 @@ def pd_bootstrap(
         sample_df = df.sample(n=sample_size, replace=True, ignore_index=True)
 
         resampled_estimates.append(f_within_sample(sample_df[obs]))
+
+    if return_samples:
+        return resampled_estimates
 
     mid = f_across_samples(resampled_estimates)
     std = np.std(resampled_estimates, ddof=1)
@@ -2868,6 +2923,7 @@ def sequences_from_area(h5f, area_threshold=0.1):
     h5f["ana.bursts.areas"] = areas
     h5f["ana.bursts.system_level.module_sequences"] = sequences
     h5f["ana.bursts.event_sizes"] = event_sizes
+
 
 def sequence_histogram(ids, sequences=None):
 

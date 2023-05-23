@@ -2,7 +2,7 @@
 # @Author:        F. Paul Spitzner
 # @Email:         paul.spitzner@ds.mpg.de
 # @Created:       2021-11-08 17:51:24
-# @Last Modified: 2023-03-10 09:47:05
+# @Last Modified: 2023-05-16 14:11:34
 # ------------------------------------------------------------------------------ #
 #
 # How to read / work this monstrosity of a file?
@@ -140,6 +140,10 @@ colors["Off"] = colors["pre"]
 colors["stim"] = "#BD6B00"
 colors["On"] = colors["stim"]
 colors["90 Hz"] = colors["stim"]
+
+# new experimental conditions
+colors["stim2"] = "#BD6B00"  # stimulating two modules asynchronously, same as stim
+colors["stim1"] = "#777"  # stimulating one module with full-module pulses
 
 
 colors["KCl_0mM"] = "gray"
@@ -1441,6 +1445,7 @@ def fig_rev0_4_snapshots(k_in=30, skip_rasters=True, skip_cycles=True, style_for
                     f"{p_fo}/sim_resource_cycle_{k_str}_kin={k_in}_{rate}Hz.pdf",
                     transparent=False,
                 )
+
 
 # dont delete, we still use this for blocked inhibition plot. 23-03-10
 def fig_rev0_3(pd_path, raw_paths=None, out_prefix=None, out_suffix=""):
@@ -2897,15 +2902,21 @@ def exp_sticks_across_layouts(
     layouts=None,
     conditions=None,
     draw_error_bars=True,
+    draw_trials=True,
     dfs=None,
     x_offset=0,
     small_dx=0.3,
     large_dx=1.5,
     bar_width_ratio=3.0,
+    color_trials_by_obs=None,
+    color_trials_cbar_ax=None,
+    color_trials_vlim=None,
 ):
     """
     This draws stick (error-bar) plots comparing
     `conditions` for each `layout`.
+    Error bars from bootstrapping, the estimator for bs-samples is the mean,
+    bars indicate the std of the bootstrap samples (thus, the SEM)
 
     Layouts are the major grouping (left to right)
     conditions the minor grouping (and color coded).
@@ -2920,6 +2931,11 @@ def exp_sticks_across_layouts(
         default None -> ["1b", "3b", "merged"]
     conditions : list of str
         default None -> ["pre", "stim", "post"]
+    color_trials_by_obs : str
+        optionally use another observable to colorcode the trials.
+        default None -> all trials have the same color
+    color_trials_cbar_ax : matplotlib axis
+        if color_trials_by_obs is not None, this is the axis for the colorbar
 
     # Returns
     ax : matplotlib axis
@@ -2932,11 +2948,14 @@ def exp_sticks_across_layouts(
         pd_folder = f"{p_exp}/processed"
 
     if layouts is None:
-        layouts = ["1b", "3b", "merged"]
+        try:
+            layouts = list(conditions.keys())
+        except:
+            layouts = ["1b", "3b", "merged"]
     if conditions is None:
         conditions = dict()
-        for etype in layouts:
-            conditions[etype] = ["pre", "stim", "post"]
+        for layout in layouts:
+            conditions[layout] = ["pre", "stim", "post"]
 
     # cast up if bool
     if not isinstance(draw_error_bars, dict):
@@ -2949,18 +2968,25 @@ def exp_sticks_across_layouts(
         for key in layouts:
             df = load_pd_hdf5(f"{pd_folder}/{key}.hdf5")
             local_conditions = conditions[key]
+            log.debug(f"{df['trials'].columns}")
             dfs[key] = df["trials"].query("Condition == @local_conditions")
 
     fig, ax = plt.subplots()
 
     x_pos = dict()
     x_pos_sticks = dict()
+    xlim = [0, 0]
     for ldx, l in enumerate(layouts):
         x_pos[l] = dict()
         x_pos_sticks[l] = dict()
         for cdx, c in enumerate(conditions[l]):
             x_pos[l][c] = x_offset + ldx * large_dx + cdx * small_dx
             x_pos_sticks[l][c] = x_offset + ldx * large_dx + cdx * small_dx
+            xlim[0] = min(xlim[0], x_pos[l][c])
+            xlim[1] = max(xlim[1], x_pos[l][c])
+
+    xlim[0] -= small_dx
+    xlim[1] += small_dx
 
     # x_pos["1b"] = {"pre" : 0.0, "stim" : 1.0, "post" :  2.0 }
     # x_pos["3b"] = {"pre" : 0.25, "stim" : 1.25, "post"  :  2.25 }
@@ -2969,10 +2995,35 @@ def exp_sticks_across_layouts(
     # x_pos_sticks["3b"] = {"pre" : 0.25, "stim" : 1.25, "post"  :  2.25 }
     # x_pos_sticks["merged"] = {"pre" : 0.5, "stim" : 1.5, "post" :  2.5 }
 
+    # trial coloring should likely be consistant across conditions and layouts
+    if color_trials_by_obs is not None:
+
+        trial_cmap = _cmap_from_list(["#4471B2", "#FFBE0D","#A00343"])
+        # trial_cmap = plt.cm.get_cmap("Spectral")
+
+        # import scicomap
+        # sc_map = scicomap.SciCoMap(cmap="nuuk")
+        # trial_cmap = sc_map.get_mpl_color_map()
+
+        trial_clr_vmin = np.infty
+        trial_clr_vmax = -np.infty
+        for layout in layouts:
+            try:
+                df = dfs[layout].query("Condition in ['pre', '1_pre']")
+                trial_clr_vmin = min(trial_clr_vmin, df[color_trials_by_obs].min())
+                trial_clr_vmax = max(trial_clr_vmax, df[color_trials_by_obs].max())
+            except Exception as e:
+                log.error(f"could not get trial color vmin/vmax for {layout} {e}")
+
+        # overwrite if specified
+        if color_trials_vlim is not None:
+            trial_clr_vmin, trial_clr_vmax = color_trials_vlim
+
     # opto
-    for edx, etype in enumerate(layouts):
+    for edx, layout in enumerate(layouts):
+
         # clr = f"C{edx}"
-        log.info(f"## {etype}")
+        log.info(f"## {layout}")
 
         log.info(
             f"| Condition | Mean (across trials) | Standard error of the mean | min"
@@ -2983,36 +3034,76 @@ def exp_sticks_across_layouts(
             f" ------------ | ------------ |"
         )
 
-        clr = colors["pre"] if etype != "KCl_1b" else colors["KCl_0mM"]
-        trials = dfs[etype]["Trial"].unique()
+        default_clr = colors["pre"] if layout != "KCl_1b" else colors["KCl_0mM"]
+        trials = dfs[layout]["Trial"].unique()
+
+        if color_trials_by_obs is not None:
+            # get the value for each trial and create a dict mapping trial to color
+            # and we use the 'pre' condition to color the trials
+
+            try:
+                # query for condition, this is fragile
+                df = dfs[layout].query("Condition in ['pre', '1_pre']")
+                assert len(df) > 0
+                assert len(df["Condition"].unique()) == 1
+
+                # trials should be unique now
+                assert len(df["Trial"].unique()) == len(df)
+
+                # create a dict trial id -> value
+                trial_clr_values = dict()
+                for trial in df["Trial"].unique():
+                    trial_clr_values[trial] = df.query("Trial == @trial")[
+                        color_trials_by_obs
+                    ].values[0]
+
+                # create a dict trial id -> color
+                trial_clrs = dict()
+                for trial in trial_clr_values.keys():
+                    trial_clrs[trial] = trial_cmap(
+                        (trial_clr_values[trial] - trial_clr_vmin)
+                        / (trial_clr_vmax - trial_clr_vmin)
+                    )
+
+            except Exception as e:
+                trial_clrs = None
+                log.error(f"could not find '1_pre' condition in {layout}: {e}")
+
         for trial in trials:
+
+            if not draw_trials:
+                continue
 
             # ------------------------------------------------------------------------------ #
             # draw faint lines for trials
             # ------------------------------------------------------------------------------ #
 
-            df = dfs[etype].loc[dfs[etype]["Trial"] == trial]
+            df = dfs[layout].loc[dfs[layout]["Trial"] == trial]
             # assert len(df) == len(layouts)
             x = []
             y = []
-            try:
-                for idx, row in df.iterrows():
-                    cond = row["Condition"]
-                    x.append(x_pos[etype][cond])
-                    y.append(row[observable])
 
-                if draw_error_bars[etype]:
+            try:
+                if draw_error_bars[layout]:
                     kwargs = dict(
                         lw=0.6,
-                        color=cc.alpha_to_solid_on_bg(clr, 0.4),
+                        color=default_clr if trial_clrs is None else trial_clrs[trial],
+                        alpha=0.8,
                     )
                 else:
                     kwargs = dict(
                         lw=1.0,
                         marker="o",
-                        markersize=1.5,
-                        color=cc.alpha_to_solid_on_bg(clr, 1.0),
+                        markersize=0.0,
+                        markeredgewidth=0.0,
+                        color=default_clr if trial_clrs is None else trial_clrs[trial],
+                        alpha=0.8,
                     )
+
+                # create x, y coordinates, matching order of conditions
+                for cond in conditions[layout]:
+                    x.append(x_pos_sticks[layout][cond])
+                    y.append(df.query(f"Condition == '{cond}'")[observable].values[0])
 
                 ax.plot(
                     x,
@@ -3029,26 +3120,44 @@ def exp_sticks_across_layouts(
                 log.debug(f"{e}")
 
         # ------------------------------------------------------------------------------ #
+        # make a colorbar if we have colored trials
+        # ------------------------------------------------------------------------------ #
+
+        if color_trials_by_obs is not None and color_trials_cbar_ax is not None:
+
+            if edx == 0:
+                # create a matplotlib colorbar for our given cmap, vmin, vmax
+                # and add it to the figure
+                ax.get_figure().colorbar(
+                    plt.cm.ScalarMappable(
+                        norm=plt.Normalize(vmin=trial_clr_vmin, vmax=trial_clr_vmax),
+                        cmap=trial_cmap,
+                    ),
+                    ax=color_trials_cbar_ax,
+                    label=color_trials_by_obs,
+                )
+
+        # ------------------------------------------------------------------------------ #
         # Error bars
         # ------------------------------------------------------------------------------ #
 
-        if not draw_error_bars[etype]:
+        if not draw_error_bars[layout]:
             continue
 
-        for cond in conditions[etype]:
+        for cond in conditions[layout]:
 
             try:
-                clr = colors[cond]
+                default_clr = colors[cond]
             except:
-                clr = "#808080"
+                default_clr = "#808080"
 
             # skip post condition for chemical and set clrs differently
-            if etype == "KCl_1b":
-                clr = colors["KCl_0mM"]
+            if layout == "KCl_1b":
+                default_clr = colors["KCl_0mM"]
             try:
-                df = dfs[etype].query(f"Condition == '{cond}'")
+                df = dfs[layout].query(f"Condition == '{cond}'")
             except Exception as e:
-                df = dfs[etype]
+                df = dfs[layout]
 
             # sticklike error bar
             mid, std, percentiles = ah.pd_bootstrap(
@@ -3075,7 +3184,7 @@ def exp_sticks_across_layouts(
 
             _draw_error_stick(
                 ax,
-                center=x_pos_sticks[etype][cond],
+                center=x_pos_sticks[layout][cond],
                 # mid=percentiles[1],
                 # errors=[percentiles[0], percentiles[2]],
                 mid=mid,
@@ -3083,7 +3192,7 @@ def exp_sticks_across_layouts(
                 thin=[df_min, df_max],
                 orientation="v",
                 bar_width_ratio=bar_width_ratio,
-                color=clr,
+                color=default_clr,
                 zorder=3,
             )
         log.info(f"")
@@ -3095,7 +3204,8 @@ def exp_sticks_across_layouts(
         ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
     elif isinstance(set_ylim, list):
         ax.set_ylim(*set_ylim)
-    ax.set_xlim(-0.5, 4.2)
+    # ax.set_xlim(-0.5, 4.2)
+    ax.set_xlim(*xlim)
     if apply_formatting:
         sns.despine(ax=ax, bottom=True, left=False, trim=True, offset=0)
         # hide the ticks but keep the labels
@@ -3105,13 +3215,17 @@ def exp_sticks_across_layouts(
 
     ax.grid(axis="y", which="both", color="0.8", lw=0.5, zorder=-1, clip_on=False)
 
+    if show_xlabel:
+        ax.set_xlabel(" | ".join([f"{l}" for l in layouts]))
+    else:
+        ax.set_xlabel("")
+
     if apply_formatting:
         cc.set_size(ax, 1.8, 2, l=1.5, b=0.5, r=0.5, t=0.7)
 
     return ax
 
 
-# Fig 2
 def exp_violins_for_layouts(
     pd_folder=None,
     out_prefix=None,
@@ -3147,16 +3261,19 @@ def exp_violins_for_layouts(
         observables = ["event_size", "rij", "iei", "core_delay"]
 
     dfs = dict()
-    if "single-bond" in layouts:
-        dfs["single-bond"] = load_pd_hdf5(f"{pd_folder}/1b.hdf5")
-    if "triple-bond" in layouts:
-        dfs["triple-bond"] = load_pd_hdf5(f"{pd_folder}/3b.hdf5")
-    if "merged" in layouts:
-        dfs["merged"] = load_pd_hdf5(f"{pd_folder}/merged.hdf5")
-    if "chem" in layouts:
-        dfs["chem"] = load_pd_hdf5(f"{pd_folder}/KCl_1b.hdf5")
-    if "bic" in layouts:
-        dfs["bic"] = load_pd_hdf5(f"{pd_folder}/Bicuculline_1b.hdf5")
+    for layout in layouts:
+        # fix some historic naming inconsistencies
+        if "single-bond" == layout:
+            dfs["single-bond"] = load_pd_hdf5(f"{pd_folder}/1b.hdf5")
+        elif "triple-bond" == layout:
+            dfs["triple-bond"] = load_pd_hdf5(f"{pd_folder}/3b.hdf5")
+        elif "chem" == layout:
+            dfs["chem"] = load_pd_hdf5(f"{pd_folder}/KCl_1b.hdf5")
+        elif "bic" == layout:
+            dfs["bic"] = load_pd_hdf5(f"{pd_folder}/Bicuculline_1b.hdf5")
+        else:
+            # sensible default
+            dfs[layout] = load_pd_hdf5(f"{pd_folder}/{layout}.hdf5")
 
     if filter_trials is None:
         filter_trials = dict()
@@ -3176,9 +3293,6 @@ def exp_violins_for_layouts(
         # ax.set_xlabel(f"{layout}")
         if not show_xlabel:
             ax.set_xlabel(f"")
-        else:
-            # dirty dirty hack
-            ax.set_xlabel(f"pre → stim → post")
         if not show_ylabel:
             ax.set_ylabel(f"")
 
@@ -5793,14 +5907,16 @@ def load_pd_hdf5(input_path, keys=None):
     for key in keys:
         try:
             res[key] = pd.read_hdf(input_path, f"/data/df_{key}")
-            if remove_outlier and "1b.hdf5" in input_path:
-                res[key] = res[key].query("`Trial` != '210405_C'")
-            #     res[key] = res[key].query("`Trial` == '210719_B'")
-            # else:
-            #     exp = res[key]["Trial"].unique()[0]
-            #     res[key] = res[key].query("`Trial` == @exp")
-            # if remove_outlier and "merged.hdf5" in input_path:
-            #     res[key] = res[key].query("`Trial` != '210713_C'")
+            if remove_outlier:
+                # in 1b this had a very short ibi
+                if "1b.hdf5" in input_path:
+                    res[key] = res[key].query("`Trial` != '210405_C'")
+
+                # crazy high fireing 70 events without stimulation, global_5u
+                # res[key] = res[key].query("`Trial` != '230420_1bE_5u'")
+
+                # 2 um case where first half of exp single module bursts.
+                # res[key] = res[key].query("`Trial` != '230424_1bB_2u'")
         except Exception as e:
             # log.exception(e)
             log.debug(f"/data/df_{key} not in {input_path}, skipping")
@@ -5989,7 +6105,7 @@ def custom_violins(
             thick=[percentiles[0], percentiles[2]],
             orientation="v",
             color=palette[cat],
-            bar_width_ratio=2.5,
+            bar_width_ratio=1.5,
             zorder=2,
         )
 
@@ -6064,6 +6180,12 @@ def custom_violins(
         log.debug(f"{cat}: {len(offsets)} points survived")
 
     ax.get_legend().set_visible(False)
+
+    if show_xlabel:
+        xlabel = " → ".join([f"{c}" for c in categories])
+    else:
+        xlabel = ""
+    ax.set_xlabel(xlabel)
 
     # log.info(f'|{"":-^65}|')
 
@@ -6629,6 +6751,66 @@ def _set_size(ax, w, h=None):
     else:
         figh = float(h / 2.54) / (t - b)
         ax.figure.set_size_inches(figw, figh)
+
+
+def _cmap_from_list(colors, anchors=None, n_steps=256):
+    """
+    create a colormap from a list of hex color strings,
+    interpolating inbetween them to get n_steps
+    """
+
+    if anchors is None:
+        anchors = np.linspace(0, 1, len(colors))
+
+    # convert to list of tuples for LinearSegmentedColormap.from_list
+    colors = [matplotlib.colors.hex2color(c) for c in colors]
+
+    # create a list of tuples of the form (anchor, color)
+    anchors = np.array(anchors)
+    anchors = anchors / anchors.max()
+    anchors = [(a, c) for a, c in zip(anchors, colors)]
+
+    # create a colormap from the list of tuples
+    cmap = matplotlib.colors.LinearSegmentedColormap.from_list(
+        "custom", anchors, N=n_steps,
+    )
+
+    return cmap
+
+def _fix_cmap_lightness(cmap, lightness=0.5, n_steps = 256):
+
+    """
+    takes an existing matplotlib colormap, extracts the colors,
+    converts them to hsv, and updates all colors to a constant
+    lightness value.
+    """
+
+    colors = cmap(np.linspace(0, 1, n_steps))
+    colors = matplotlib.colors.rgb_to_hsv(colors[:, :3])
+    colors[:, 2] = lightness
+    colors = matplotlib.colors.hsv_to_rgb(colors)
+
+    # recreate original anchors
+    anchors = np.linspace(0, 1, len(colors))
+
+    # create a list of tuples of the form (anchor, color)
+    anchors = np.array(anchors)
+    anchors = anchors / anchors.max()
+    anchors = [(a, c) for a, c in zip(anchors, colors)]
+
+    # create a colormap from the list of tuples
+    cmap = matplotlib.colors.LinearSegmentedColormap.from_list(
+        "custom", anchors, N=n_steps
+    )
+
+    return cmap
+
+
+
+
+
+
+
 
 
 # ------------------------------------------------------------------------------ #
